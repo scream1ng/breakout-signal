@@ -1,43 +1,34 @@
 """
 exit.py — Trade simulation (money management)
-  simulate(df, signal_bars, cfg)
-      -> (trades, buys, sells)
+  simulate(df, signal_bars, cfg) -> (trades, buys, sells)
 
-Money management rules
-  ─────────────────────────────────────────────────────────
-  Entry     : fill AT break price (same bar close crosses level)
-  SL        : entry - 1x ATR  (sl_mult from cfg)
-  Breakeven : after be_days bars move SL to entry price
-  TP1       : entry + 2x ATR  → exit 30 pct of position  (tp1_mult)
-  TP2       : entry + 4x ATR  → exit 30 pct of position  (tp2_mult)
-  Final     : remaining 40 pct exits when Close < EMA10
-  End       : still open at last bar — exit at close
-  Commission: per-side rate applied on every fill
-
-  Multiple positions: all signals enter independently, each managed
-  with its own SL/TP/breakeven. No limit on concurrent positions.
-  Position sizing uses capital / risk_pct per trade (fixed).
-  ─────────────────────────────────────────────────────────
-
-Each trade dict keys
-  entry_bar, signal_bar, entry_price, entry_level
-  shares, shares_remaining
-  sl, tp1, tp2
-  atr_val, rsm_at_entry
-  tp1_hit, tp1_bar, tp2_hit, tp2_bar
-  realized_pnl, total_pnl, pnl_pct
-  exit_bar, exit_price, exit_reason  ('SL' | 'EMA10' | 'End')
+Entry    : break price + 1 SET tick
+SL       : entry − 1×ATR  → exit at close when close ≤ SL
+Breakeven: after be_days bars SL moves to entry → exit at close
+TP1      : entry + 2×ATR  → exit 30%  (limit order, fills at TP1)
+TP2      : entry + 4×ATR  → exit 30%  (limit order, fills at TP2)
+Final    : remaining 40% exits when close < EMA10 → exit at close
+End      : still open at last bar → exit at close
+Commission: per-side on every fill
 """
 
 import numpy as np
 import pandas as pd
 
 
-def simulate(
-    df:           pd.DataFrame,
-    signal_bars:  list,          # list of (bar_index, break_price) from entry.py
-    cfg:          dict,
-) -> tuple[list, list, list]:
+def set_tick(price: float) -> float:
+    """Thai SET tick size by price range."""
+    if   price <   2: return 0.01
+    elif price <   5: return 0.02
+    elif price <  10: return 0.05
+    elif price <  25: return 0.10
+    elif price < 100: return 0.25
+    elif price < 200: return 0.50
+    elif price < 400: return 1.00
+    else:             return 2.00
+
+
+def simulate(df, signal_bars, cfg):
     capital    = cfg['capital']
     risk_pct   = cfg['risk_pct']
     commission = cfg['commission']
@@ -51,16 +42,15 @@ def simulate(
     trades = []
     buys   = []
     sells  = []
-    open_positions = []   # list of active trade dicts (multiple allowed)
+    open_positions = []
 
     for i in range(N):
         ci      = float(df['Close'].iloc[i])
-        lo      = float(df['Low'].iloc[i])
         e10     = float(df['EMA10'].iloc[i])
         atr_raw = df['ATR'].iloc[i]
         atr     = float(atr_raw) if not pd.isna(atr_raw) else 0.0
 
-        # ── Manage all open positions ──────────────────────────────────────
+        # ── Manage open positions ─────────────────────────────────────────
         still_open = []
         for pos in open_positions:
             days = i - pos['entry_bar']
@@ -69,7 +59,7 @@ def simulate(
             if days == be_days:
                 pos['sl'] = pos['entry_price']
 
-            # TP1
+            # TP1 — limit order, fills at TP1 level
             if not pos['tp1_hit'] and ci >= pos['tp1']:
                 sh = pos['shares'] * 0.30
                 pos['realized_pnl'] += ((pos['tp1'] - pos['entry_price']) * sh
@@ -78,7 +68,7 @@ def simulate(
                 pos['tp1_hit'] = True
                 pos['tp1_bar'] = i
 
-            # TP2
+            # TP2 — limit order, fills at TP2 level
             if pos['tp1_hit'] and not pos['tp2_hit'] and ci >= pos['tp2']:
                 frac = 0.30 / 0.70
                 sh   = pos['shares_remaining'] * frac
@@ -88,13 +78,13 @@ def simulate(
                 pos['tp2_hit'] = True
                 pos['tp2_bar'] = i
 
-            # Exit triggers
-            sl_hit   = lo <= pos['sl']
+            # Exit at close: SL or EMA10
+            sl_hit   = ci <= pos['sl']
             ema_exit = ci < e10
 
             if sl_hit or ema_exit:
-                ep  = pos['sl'] if sl_hit else ci
                 rsn = 'SL' if sl_hit else 'EMA10'
+                ep  = ci   # always exit at close
                 pos['realized_pnl'] += ((ep - pos['entry_price']) * pos['shares_remaining']
                                         - ep * pos['shares_remaining'] * commission)
                 pos.update(exit_bar=i, exit_price=ep, exit_reason=rsn,
@@ -102,6 +92,8 @@ def simulate(
                 pos['pnl_pct']          = pos['total_pnl'] / capital * 100
                 invested                = pos['entry_price'] * pos['shares']
                 pos['entry_return_pct'] = pos['total_pnl'] / invested * 100 if invested else 0
+                pos['win']              = pos['total_pnl'] > 0
+                pos['ret_pct']          = pos['entry_return_pct']
                 trades.append(pos)
                 sells.append((i, rsn))
             else:
@@ -109,11 +101,10 @@ def simulate(
 
         open_positions = still_open
 
-        # ── New entry (always allowed — multiple positions OK) ─────────────
+        # ── New entry: break price + 1 tick ──────────────────────────────
         if i in sigs and atr > 0:
-            bp   = sigs[i]
-            op   = float(df['Open'].iloc[i])
-            ep   = max(bp, op)    # if gap-up open above level, fill at open not level
+            bp  = sigs[i]
+            ep  = round(bp + set_tick(bp), 6)   # 1 tick above break level
             sld = atr * sl_mult
             sh  = max(1, int((capital * risk_pct) / sld))
             rsm_val = df['RSM'].iloc[i]
@@ -126,14 +117,15 @@ def simulate(
                 atr_val=atr,
                 rsm_at_entry=round(float(rsm_val) if not pd.isna(rsm_val) else 0, 1),
                 tp1_hit=False, tp2_hit=False, tp1_bar=None, tp2_bar=None,
-                realized_pnl=-(ep * sh * commission),   # entry commission
+                realized_pnl=-(ep * sh * commission),
                 total_pnl=0.0, pnl_pct=0.0,
+                win=False, ret_pct=0.0,
                 exit_bar=None, exit_price=None, exit_reason='Open',
             )
             open_positions.append(pos)
             buys.append(i)
 
-    # ── Close all still-open positions at last bar ────────────────────────
+    # ── Close all still-open at last bar ─────────────────────────────────
     ep = float(df['Close'].iloc[-1])
     for pos in open_positions:
         pos['realized_pnl'] += ((ep - pos['entry_price']) * pos['shares_remaining']
@@ -143,6 +135,8 @@ def simulate(
         pos['pnl_pct']          = pos['total_pnl'] / capital * 100
         invested                = pos['entry_price'] * pos['shares']
         pos['entry_return_pct'] = pos['total_pnl'] / invested * 100 if invested else 0
+        pos['win']              = pos['total_pnl'] > 0
+        pos['ret_pct']          = pos['entry_return_pct']
         trades.append(pos)
         sells.append((N - 1, 'End'))
 

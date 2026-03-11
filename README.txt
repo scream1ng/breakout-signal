@@ -1,92 +1,65 @@
 ================================================================================
   PB SCANNER — Pivot Breakout Scanner for Thai SET
-  README / Setup & Usage Guide
 ================================================================================
 
-FOLDER STRUCTURE
-────────────────
-swing_trader/
-├── main.py                         ← single entry point for ALL commands
-├── config.py                       ← your personal settings (edit this)
-├── requirements.txt                ← Python dependencies
-│
-├── core/                           ← signal logic (don't need to edit often)
-│   ├── data.py                     ← download & cache price data
-│   ├── entry.py                    ← pivot detection, breakout signals
-│   ├── exit.py                     ← trade simulation (SL, TP, BE, EMA10)
-│   ├── rsm.py                      ← RS Momentum calculation
-│   └── scanner.py                  ← TradingView pre-screen
-│
-├── output/                         ← everything you see (charts + terminal)
-│   ├── report.py                   ← terminal output (screener, backtest)
-│   ├── chart.py                    ← PNG chart (used with --save only)
-│   ├── chart_interactive.py        ← single-stock interactive HTML
-│   └── chart_combined.py           ← combined HTML (all stocks, sidebar)
-│
-├── web/
-│   └── index.html                  ← auto-generated after each scan
-│                                      committed to git → served by GitHub Pages
-│
-├── cache/                          ← price data parquet files (auto-managed)
-│                                      gitignored — re-downloads automatically
-│
-├── scripts/
-│   └── cron_push.sh                ← optional local cron (backup)
-│
-└── .github/
-    └── workflows/
-        └── daily_scan.yml          ← GitHub Actions: runs scan daily at 16:35 BKK
-                                       auto-commits web/index.html to repo
+  Scans SET stocks daily for horizontal and trendline breakouts.
+  Filters by regime (above SMA50), relative volume, and RS Momentum.
+  Publishes an interactive chart to GitHub Pages automatically.
 
 
 ================================================================================
-  FIRST TIME SETUP (LOCAL)
+  PROJECT STRUCTURE
 ================================================================================
 
-1. Install Python 3.11+  →  https://python.org
-
-2. Copy the project folder to your computer
-
-3. Open terminal in the project folder, install dependencies:
-      pip install -r requirements.txt
-
-4. Edit config.py to set your capital, RSM threshold, etc.
-
-5. Run your first scan:
-      python main.py
-
-   Data downloads and caches automatically on first run.
+  breakout-signal/
+  ├── main.py                     ← single entry point
+  ├── config.py                   ← your settings (edit this)
+  ├── requirements.txt
+  ├── .env                        ← DISCORD_WEBHOOK= (never commit this)
+  │
+  ├── core/
+  │   ├── data.py                 ← download + cache price data
+  │   ├── entry.py                ← pivot detection, breakout signals
+  │   ├── exit.py                 ← trade simulation (SL/TP/BE/EMA10)
+  │   ├── rsm.py                  ← RS Momentum calculation
+  │   └── scanner.py              ← TradingView pre-screen
+  │
+  ├── output/
+  │   ├── chart_interactive.py    ← single-stock chart data
+  │   ├── chart_combined.py       ← combined HTML (all stocks)
+  │   └── discord.py              ← Discord webhook sender
+  │
+  ├── docs/
+  │   └── index.html              ← auto-generated → served by GitHub Pages
+  │
+  ├── cache/                      ← price data (gitignored, auto-managed)
+  │
+  └── .github/
+      └── workflows/
+          └── daily_scan.yml      ← runs Mon–Fri 16:35 BKK
 
 
 ================================================================================
-  DAILY COMMANDS
+  COMMANDS
 ================================================================================
 
   python main.py
-      Screener: shows today's breakout list + watchlist
-      Saves web/index.html (combined interactive chart)
+      Run scan. Prints breakout list + watchlist to terminal.
+      Also updates docs/index.html (interactive chart).
+
+  python main.py --discord
+      Same as above + sends results to Discord.
 
   python main.py --view
-      Opens web/index.html in browser
-      Reuses today's chart if already generated (instant)
-      Runs full scan first if not yet generated today
+      Opens interactive chart in browser.
+      Reuses today's chart if already generated (instant).
+      Runs full scan first if not yet done today.
 
   python main.py --view TOP.BK
-      Opens interactive chart for TOP.BK only in browser
-
-  python main.py --backtest
-      Full backtest: leaderboard + summary for all stocks
-
-  python main.py --backtest TOP.BK
-      Backtest single stock: every trade listed + summary
-
-  python main.py --save
-      Add to any command to save individual PNG + HTML charts
-      Example: python main.py --save
-      Example: python main.py --backtest TOP.BK --save
+      Opens chart for a single stock.
 
   python main.py --clear-cache
-      Delete all cached price data (forces fresh download next run)
+      Delete cached price data. Forces re-download on next run.
 
 
 ================================================================================
@@ -96,69 +69,162 @@ swing_trader/
   --period  12mo|2y       lookback period  (default: 12mo)
   --capital 200000        starting capital (default: 100000)
   --rsm     60            min RS Momentum  (default: 70)
-  --save                  save individual charts to output/charts/
 
   Examples:
-    python main.py --rsm 60
-    python main.py --backtest --period 2y --capital 200000
+    python main.py --rsm 60 --period 2y
     python main.py --view TOP.BK --period 2y
 
 
 ================================================================================
-  HOW CACHING WORKS
+  CONFIG (config.py)
+================================================================================
+
+  CFG = {
+      'capital'        : 100_000,    # starting capital (THB)
+      'risk_pct'       : 0.005,      # 0.5% risk per trade
+      'rs_momentum_min': 70,         # RSM threshold
+      'rvol_min'       : 1.5,        # min relative volume
+      'min_turnover'   : 5_000_000,  # min daily turnover (THB)
+      'commission'     : 0.0015,     # 0.15% per side
+      'period'         : '12mo',     # data lookback
+      'sl_atr_mult'    : 1,          # SL = entry - 1×ATR
+      'tp1_atr_mult'   : 2,          # TP1 = entry + 2×ATR
+      'tp2_atr_mult'   : 4,          # TP2 = entry + 4×ATR
+      'be_after_days'  : 3,          # breakeven after N bars
+  }
+
+
+================================================================================
+  ENTRY & EXIT LOGIC
+================================================================================
+
+  ENTRY FILTERS (3 tiers shown on chart)
+    Full         : above SMA50 + RVol ≥ 1.5x + RSM ≥ 70
+    No RSM       : above SMA50 + RVol ≥ 1.5x
+    Regime only  : above SMA50 only
+
+  ENTRY PRICE
+    Break price + 1 SET tick (realistic limit order above level)
+    SET tick sizes: <฿2 = 0.01 | <฿5 = 0.02 | <฿10 = 0.05 |
+                    <฿25 = 0.10 | <฿100 = 0.25 | <฿200 = 0.50 |
+                    <฿400 = 1.00 | ≥฿400 = 2.00
+
+  STOP LOSS
+    SL = entry − 1×ATR
+    Triggers when close ≤ SL (end-of-day check)
+    After 3 bars → moves to entry price (breakeven)
+
+  TAKE PROFIT
+    TP1 = entry + 2×ATR  → sell 30%  (limit order)
+    TP2 = entry + 4×ATR  → sell 30%  (limit order)
+    Final 40% → exits when close < EMA10
+
+  ALL SL/BE/MA10 EXITS → at close price
+  TP1/TP2 EXITS        → at target price (limit order)
+
+  POSITION SIZE
+    Shares = (capital × 0.5%) ÷ ATR
+  COMMISSION
+    0.15% per side, applied on every partial fill
+
+
+================================================================================
+  SIGNALS COLUMN GUIDE
+================================================================================
+
+  Ticker   : stock symbol (without .BK)
+  T        : Hz = horizontal breakout | TL = trendline breakout
+  Criteria : Full | No RSM | Regime
+  Level    : pivot level being broken (entry reference)
+  Close    : last closing price
+  RVol     : today's volume ÷ 20-day avg (green if ≥ 1.5x)
+  RSM      : RS Momentum 0–100 (higher = stronger vs SET index)
+  ATR%     : ATR as % of close (wider = more volatile)
+
+
+================================================================================
+  INTERACTIVE CHART
+================================================================================
+
+  Sidebar
+    Pink  ▲  =  breakout signal today
+    Yellow   =  watchlist (active line, no breakout yet)
+    Grey     =  all other stocks above SMA50
+    RVol shown in green if ≥ 1.5x
+
+  Right panel — SIGNALS tab
+    Lists all historical signals for selected stock
+    Click signal → analysis card (entry / SL / TP1 / TP2 / RSM / RVol)
+    Return shown green (profit) or red (loss)
+
+  Right panel — BACKTEST SUMMARY
+    Per-filter stats: Full | No RSM | Regime only
+    WR% and avg return for each filter tier
+
+  BACKTEST tab (top right)
+    Full leaderboard: all stocks sorted by PnL%
+    Summary cards: trades, win rate, avg win, avg loss
+    Click any row → jumps to that stock's chart
+
+
+================================================================================
+  CACHING
 ================================================================================
 
   - First run each day downloads all stocks from Yahoo Finance → cache/
-  - All runs after that load from cache instantly
-  - Cache expires after 16:30 Bangkok time (SET market close)
-  - Next run after 16:30 re-downloads to get end-of-day prices
-  - --clear-cache forces immediate re-download on next run
+  - Subsequent runs that day load from cache instantly
+  - Cache expires after 16:30 Bangkok time (SET close)
+  - GitHub Actions always downloads fresh (CI=true bypasses cache)
+  - --clear-cache forces re-download on next run
+
+
+================================================================================
+  DISCORD SETUP
+================================================================================
+
+  1. Discord → channel settings → Integrations → Webhooks → New Webhook
+  2. Copy Webhook URL
+  3. Create .env file in project root:
+
+       DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+
+  4. Test:
+       python main.py --discord
+
+  Message format (single message):
+    PB Scanner  |  2026-03-11
+    112 above SMA50  ·  80 watchlist  ·  3 breakouts
+    ┌─────────────────────────────────────────────────┐
+    │ Ticker  T  Criteria  Level    Close   RVol  RSM  ATR
+    │ TOP     Hz  Full     277.64   280.00  2.3x   74  1.8%
+    └─────────────────────────────────────────────────┘
+    https://scream1ng.github.io/breakout-signal/
 
 
 ================================================================================
   GITHUB SETUP (one time)
 ================================================================================
 
-  1. Create a GitHub account → https://github.com
+  1. Create a public GitHub repository
 
-  2. Create a new PUBLIC repository called "swing-trader"
-
-  3. In your project folder terminal:
-
+  2. In project folder:
        git init
        git add .
        git commit -m "initial commit"
        git branch -M main
-       git remote add origin https://github.com/YOURUSERNAME/swing-trader.git
+       git remote add origin https://github.com/USERNAME/REPO.git
        git push -u origin main
 
-     When asked for password, use a Personal Access Token:
-       GitHub → Settings → Developer settings → Personal access tokens
-       → Tokens (classic) → Generate new token → check "repo" → copy token
+  3. Enable GitHub Pages:
+       repo → Settings → Pages
+       Branch: main   Folder: /docs   → Save
 
-  4. Enable GitHub Pages:
-       GitHub → repo → Settings → Pages
-       Source: Deploy from branch
-       Branch: main   Folder: /web   → Save
+  4. Add Discord secret (optional):
+       repo → Settings → Environments → create environment "env"
+       → Add secret: DISCORD_WEBHOOK = your webhook URL
 
-  5. Your public site:
-       https://YOURUSERNAME.github.io/swing-trader/
-
-     Share this URL with your friend — updates automatically every day.
-
-
-================================================================================
-  UPDATING GITHUB AFTER CODE CHANGES (every time you edit files)
-================================================================================
-
-  git add .
-  git commit -m "describe what you changed"
-  git push
-
-  GitHub Actions will use your new code on the next daily run.
-
-  To test immediately without waiting for 16:35:
-    GitHub → repo → Actions → Daily Scan → Run workflow button
+  5. Public chart URL:
+       https://USERNAME.github.io/REPO/
 
 
 ================================================================================
@@ -166,60 +232,29 @@ swing_trader/
 ================================================================================
 
   File: .github/workflows/daily_scan.yml
+  Schedule: Mon–Fri 16:35 Bangkok time (09:35 UTC)
 
-  - Runs Mon–Fri at 16:35 Bangkok time (09:35 UTC)
-  - Downloads fresh data, runs python main.py
-  - Commits updated web/index.html back to repo
-  - GitHub Pages serves it publicly
+  What it does:
+    1. Downloads fresh price data
+    2. Runs scan → generates docs/index.html
+    3. Commits index.html back to repo
+    4. Sends Discord message (requires DISCORD_WEBHOOK secret)
+    5. GitHub Pages serves updated chart publicly
 
-  Check results:
-    GitHub → Actions tab → green tick = success, red X = error
-
-
-================================================================================
-  SCREENER OUTPUT — COLUMN GUIDE
-================================================================================
-
-  Type   : Horiz Break = horizontal pivot  |  TL Break = descending trendline
-  Level  : the price level being broken (your entry reference)
-  Close  : last closing price
-  Gap%   : distance from close to level
-  RVol   : volume vs 20-day average  (1.5x = 50% above average)
-  RSM    : RS Momentum 0–100  (higher = stronger stock vs SET index)
-  ATR%   : ATR as % of close  (wider = more volatile, wider stop)
+  Monitor:
+    GitHub → Actions tab → Daily Scan
+    Green tick = success | Red X = check logs
 
 
 ================================================================================
-  BACKTEST — HOW IT WORKS
+  PUSH AFTER CODE CHANGES
 ================================================================================
 
-  Entry   : max(level price, open)  — gap-up fills at open, not level
-  SL      : entry − 1×ATR
-  TP1     : entry + 2×ATR  → close 30% of position
-  TP2     : entry + 4×ATR  → close 30% of position
-  Final   : remaining 40% exits when close < EMA10
-  BE      : after 3 bars, SL moves to entry price (breakeven)
-  Size    : capital × 0.5% / ATR  (fixed risk per trade)
-  Cost    : 0.15% commission per side
+  git add .
+  git commit -m "describe change"
+  git push
 
-  Avg Gain% and Avg Loss% = return from entry price (not % of capital)
-  e.g. buy ฿50, exit ฿54 = +8.0%
-
-
-================================================================================
-  OLD FILES TO DELETE (once new structure confirmed working)
-================================================================================
-
-  Delete these from project root — replaced by core/ and output/ folders:
-
-    entry.py            → now core/entry.py
-    exit.py             → now core/exit.py
-    rsm.py              → now core/rsm.py
-    scanner.py          → now core/scanner.py
-    chart.py            → now output/chart.py
-    chart_interactive.py → now output/chart_interactive.py
-    chart_combined.py   → now output/chart_combined.py
-    viewer.py           → replaced by --view command
-    scan.py             → replaced by main.py
+  Trigger manually without waiting for 16:35:
+    GitHub → Actions → Daily Scan → Run workflow
 
 ================================================================================

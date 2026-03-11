@@ -41,6 +41,47 @@ def generate_combined_html(
     stocks_data = sig_stocks + wtc_stocks + rest_stocks
     all_stocks_json = json.dumps(stocks_data)
 
+    # Build backtest summary data for the BACKTEST tab
+    # Build ticker → sidebar index map
+    ticker_to_idx = {d['ticker']: i for i, d in enumerate(stocks_data)}
+
+    bt_rows = []
+    for r in results:
+        trades = r.get('trades', [])
+        wins   = [t for t in trades if t.get('win')]
+        losses = [t for t in trades if not t.get('win')]
+        bt_rows.append(dict(
+            ticker     = r['ticker'].replace('.BK',''),
+            ticker_full= r['ticker'],
+            idx        = ticker_to_idx.get(r['ticker'], -1),
+            rsm        = round(r.get('rs_momentum', 0), 0),
+            trades     = len(trades),
+            wr         = round(len(wins) / len(trades) * 100, 1) if trades else 0,
+            pnl_pct    = round(r.get('total_pnl_pct', 0), 2),
+            avg_win    = round(sum(t.get('ret_pct',0) for t in wins)   / len(wins),   2) if wins   else None,
+            avg_loss   = round(sum(t.get('ret_pct',0) for t in losses) / len(losses), 2) if losses else None,
+            has_signal = bool(r.get('today_signal')),
+            has_pending= bool(r.get('pending')),
+        ))
+    # Overall summary
+    all_trades  = [t for r in results for t in r.get('trades', [])]
+    all_wins    = [t for t in all_trades if t.get('win')]
+    overall_wr  = round(len(all_wins) / len(all_trades) * 100, 1) if all_trades else 0
+    overall_pnl = round(sum(r.get('total_pnl_pct', 0) for r in results), 2)
+    avg_ret_win  = round(sum(t.get('ret_pct',0) for t in all_wins) / len(all_wins), 2) if all_wins else 0
+    all_losses   = [t for t in all_trades if not t.get('win')]
+    avg_ret_loss = round(sum(t.get('ret_pct',0) for t in all_losses) / len(all_losses), 2) if all_losses else 0
+
+    backtest_json = json.dumps(dict(
+        rows      = sorted(bt_rows, key=lambda x: x['pnl_pct'], reverse=True),
+        n_trades  = len(all_trades),
+        wr        = overall_wr,
+        pnl_pct   = overall_pnl,
+        avg_win   = avg_ret_win,
+        avg_loss  = avg_ret_loss,
+        n_stocks  = len(results),
+    ))
+
     n_sig = len(sig_stocks)
     n_wtc = len(wtc_stocks)
     total = len(stocks_data)
@@ -248,6 +289,37 @@ def generate_combined_html(
   .leg-dot  {{ width:8px; height:8px; border-radius:50%; }}
   kbd {{ background:#2a2e39; border:1px solid #444; border-radius:3px;
          padding:0 5px; font-size:10px; color:var(--text); }}
+
+  /* ── Nav tabs (header) ── */
+  .nav-tabs {{ display:flex; gap:2px; margin-left:auto; }}
+  .nav-tab {{ padding:6px 16px; font-size:10px; letter-spacing:.07em; cursor:pointer;
+              border-radius:4px; color:var(--text); transition:all .15s; }}
+  .nav-tab.active {{ background:var(--accent); color:#000; font-weight:600; }}
+  .nav-tab:not(.active):hover {{ background:rgba(0,229,204,.1); color:var(--white); }}
+
+  /* ── Backtest pane (full overlay) ── */
+  #pane-backtest {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
+                    background:var(--bg); overflow-y:auto; padding:28px 48px; z-index:50; }}
+  .bt-title {{ font-family:'Syne',sans-serif; font-weight:800; font-size:22px;
+               color:var(--accent); margin-bottom:8px; }}
+  .bt-sub   {{ font-size:13px; color:var(--text); margin-bottom:24px; }}
+  .bt-summary {{ display:flex; gap:20px; flex-wrap:wrap; margin-bottom:28px; }}
+  .bt-card {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
+              padding:16px 28px; min-width:160px; }}
+  .bt-card-label {{ font-size:10px; color:var(--text); letter-spacing:.08em;
+                    text-transform:uppercase; margin-bottom:8px; }}
+  .bt-card-val   {{ font-size:26px; font-weight:700; color:var(--white); }}
+  .bt-table {{ width:100%; border-collapse:collapse; font-size:13px; }}
+  .bt-table th {{ padding:10px 16px; text-align:left; color:var(--text); font-size:11px;
+                  letter-spacing:.07em; text-transform:uppercase; border-bottom:2px solid var(--border);
+                  position:sticky; top:0; background:var(--bg); }}
+  .bt-table th.r {{ text-align:right; }}
+  .bt-table td {{ padding:10px 16px; border-bottom:1px solid rgba(42,46,57,.5); }}
+  .bt-table td.r {{ text-align:right; }}
+  .bt-table tr:hover td {{ background:rgba(0,229,204,.04); }}
+  .bt-tag {{ font-size:10px; padding:2px 6px; border-radius:3px; margin-left:6px; vertical-align:middle; }}
+  .bt-sig {{ background:rgba(255,110,199,.2); color:var(--pink); }}
+  .bt-wtc {{ background:rgba(255,215,64,.15);  color:var(--yellow); }}
 </style>
 </head>
 <body>
@@ -258,7 +330,11 @@ def generate_combined_html(
     <div class="hinfo"   id="h-info"></div>
     <div class="hrsm"    id="h-rsm"></div>
     <div class="hdate">{date_str.replace('_','-')} · {total} stocks · <span style="color:var(--pink)">{n_sig} signals</span> · <span style="color:var(--yellow)">{n_wtc} watching</span></div>
-    <div style="margin-left:8px;font-size:10px;color:var(--text)">
+    <div class="nav-tabs">
+      <div class="nav-tab active" id="nav-chart"    onclick="switchNav('chart')">CHART</div>
+      <div class="nav-tab"        id="nav-backtest" onclick="switchNav('backtest')">BACKTEST</div>
+    </div>
+    <div style="font-size:10px;color:var(--text);margin-left:8px">
       <kbd>↑↓</kbd> navigate &nbsp; <kbd>Esc</kbd> clear
     </div>
   </header>
@@ -301,12 +377,96 @@ def generate_combined_html(
   </div>
 </div>
 
+<!-- BACKTEST pane (fixed overlay, hidden by default) -->
+<div id="pane-backtest">
+  <div class="bt-title">BACKTEST RESULTS</div>
+  <div class="bt-sub" id="bt-sub">Loading...</div>
+  <div class="bt-summary" id="bt-cards"></div>
+  <table class="bt-table">
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th class="r">RSM</th>
+        <th class="r">Trades</th>
+        <th class="r">WR%</th>
+        <th class="r">Avg Win</th>
+        <th class="r">Avg Loss</th>
+        <th class="r">PnL%</th>
+      </tr>
+    </thead>
+    <tbody id="bt-tbody"></tbody>
+  </table>
+</div>
+
 <script>
 // ── All stock data ─────────────────────────────────────────────────────────────
 const ALL_STOCKS = {all_stocks_json};
+const BT         = {backtest_json};
 let D = null;
 let currentStockIdx = null;
 let selectedSigIdx  = null;
+
+// ── Nav tab switching ─────────────────────────────────────────────────────────
+function switchNav(name) {{
+  document.getElementById('nav-chart').classList.toggle('active',    name==='chart');
+  document.getElementById('nav-backtest').classList.toggle('active', name==='backtest');
+  document.getElementById('pane-backtest').style.display = name==='backtest' ? 'block' : 'none';
+  if(name==='backtest') renderBacktest();
+}}
+
+function goToChart(idx) {{
+  switchNav('chart');
+  loadStock(idx);
+  document.getElementById('sb-'+idx)?.scrollIntoView({{block:'center'}});
+}}
+
+function renderBacktest() {{
+  if(document.getElementById('bt-tbody').children.length) return; // already built
+
+  const b = BT;
+  document.getElementById('bt-sub').textContent =
+    `${{b.n_stocks}} stocks · ${{b.n_trades}} trades · WR ${{b.wr}}% · ` +
+    `Avg win ${{b.avg_win>=0?'+':''}}${{b.avg_win}}% · Avg loss ${{b.avg_loss}}%`;
+
+  // Summary cards
+  const cards = [
+    {{ label:'Stocks',   val: b.n_stocks }},
+    {{ label:'Trades',   val: b.n_trades }},
+    {{ label:'Win Rate', val: b.wr+'%' }},
+    {{ label:'Avg Win',  val: (b.avg_win>=0?'+':'')+b.avg_win+'%' }},
+    {{ label:'Avg Loss', val: b.avg_loss+'%' }},
+    {{ label:'Total PnL',val: (b.pnl_pct>=0?'+':'')+b.pnl_pct+'%' }},
+  ];
+  document.getElementById('bt-cards').innerHTML = cards.map(c => `
+    <div class="bt-card">
+      <div class="bt-card-label">${{c.label}}</div>
+      <div class="bt-card-val" style="color:${{
+        c.label.includes('Win')||c.label==='Win Rate' ? 'var(--green)' :
+        c.label.includes('Loss') ? 'var(--red)' :
+        c.label==='Total PnL' ? (b.pnl_pct>=0?'var(--green)':'var(--red)') :
+        'var(--white)'
+      }}">${{c.val}}</div>
+    </div>`).join('');
+
+  // Leaderboard rows
+  const tbody = document.getElementById('bt-tbody');
+  tbody.innerHTML = b.rows.map(r => {{
+    const pnlCol  = r.pnl_pct >= 0 ? 'var(--green)' : 'var(--red)';
+    const sigTag  = r.has_signal  ? '<span class="bt-tag bt-sig">▲</span>' : '';
+    const wtcTag  = r.has_pending ? '<span class="bt-tag bt-wtc">W</span>'  : '';
+    const click   = r.idx >= 0 ? `onclick="goToChart(${{r.idx}})" style="cursor:pointer"` : '';
+    return `<tr ${{click}}>
+      <td><b style="color:var(--white)">${{r.ticker}}</b>${{sigTag}}${{wtcTag}}
+        ${{r.idx>=0 ? '<span style="font-size:9px;color:var(--accent);margin-left:6px;opacity:.6">→ chart</span>' : ''}}</td>
+      <td class="r" style="color:var(--yellow)">${{r.rsm}}</td>
+      <td class="r">${{r.trades}}</td>
+      <td class="r">${{r.wr}}%</td>
+      <td class="r" style="color:var(--green)">${{r.avg_win!=null?(r.avg_win>=0?'+':'')+r.avg_win+'%':'—'}}</td>
+      <td class="r" style="color:var(--red)">${{r.avg_loss!=null?r.avg_loss+'%':'—'}}</td>
+      <td class="r" style="color:${{pnlCol}};font-weight:600">${{r.pnl_pct>=0?'+':''}}${{r.pnl_pct}}%</td>
+    </tr>`;
+  }}).join('');
+}}
 
 // ── Load a stock ──────────────────────────────────────────────────────────────
 function loadStock(idx) {{
