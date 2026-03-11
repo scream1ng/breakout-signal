@@ -1,0 +1,51 @@
+name: Daily Scan
+
+on:
+  schedule:
+    # SET closes 16:30 Bangkok (UTC+7) = 09:30 UTC
+    # Run at 09:35 UTC Mon–Fri to get EOD data
+    - cron: '35 9 * * 1-5'
+
+  # Also allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to commit web/index.html back to repo
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run screener
+        run: python main.py
+        env:
+          # Tells data.py we are running in CI — skip Bangkok time check, always download
+          CI: true
+
+      - name: Commit updated chart
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add web/index.html
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "auto: daily scan $(date '+%Y-%m-%d')"
+          git push
