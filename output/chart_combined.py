@@ -15,7 +15,8 @@ def generate_combined_html(
     results:     list,
     charts_dir:  str,
     date_str:    str,
-    filename:    str = None,
+    filename:    str  = None,
+    portfolio:   dict = None,
 ) -> str:
     if not stocks_data:
         return None
@@ -135,6 +136,8 @@ def generate_combined_html(
             sidebar_parts.append(_sb_item(i, d, ''))
 
     sidebar_html = '\n'.join(sidebar_parts)
+
+    portfolio_json = json.dumps(portfolio) if portfolio else 'null'
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -320,6 +323,42 @@ def generate_combined_html(
   .bt-tag {{ font-size:10px; padding:2px 6px; border-radius:3px; margin-left:6px; vertical-align:middle; }}
   .bt-sig {{ background:rgba(255,110,199,.2); color:var(--pink); }}
   .bt-wtc {{ background:rgba(255,215,64,.15);  color:var(--yellow); }}
+
+  /* ── Portfolio pane ── */
+  #pane-portfolio {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
+                     background:var(--bg); overflow-y:auto; padding:28px 48px; z-index:50; }}
+  .pt-title {{ font-family:'Syne',sans-serif; font-weight:800; font-size:22px;
+               color:var(--accent); margin-bottom:8px; }}
+  .pt-sub   {{ font-size:13px; color:var(--text); margin-bottom:28px; }}
+  .pt-cards {{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:36px; }}
+  .pt-card  {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
+               padding:14px 24px; min-width:150px; flex-shrink:0; }}
+  .pt-card-label {{ font-size:10px; color:var(--text); letter-spacing:.08em;
+                    text-transform:uppercase; margin-bottom:8px; }}
+  .pt-card-val {{ font-size:24px; font-weight:700; }}
+  .pt-section {{ font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
+                 color:var(--text); letter-spacing:.08em; text-transform:uppercase;
+                 margin:0 0 14px; padding-bottom:8px; border-bottom:2px solid var(--border); }}
+  .pt-curve-wrap {{ width:100%; height:180px; margin-bottom:40px; position:relative; }}
+  #pt-curve {{ display:block; width:100%; height:180px; }}
+  .pt-table {{ width:100%; border-collapse:collapse; font-size:12px; }}
+  .pt-table th {{ padding:9px 14px; text-align:left; color:var(--text); font-size:10px;
+                  letter-spacing:.07em; text-transform:uppercase; border-bottom:2px solid var(--border);
+                  position:sticky; top:0; background:var(--bg); z-index:2; }}
+  .pt-table th.r {{ text-align:right; }}
+  .pt-table td {{ padding:8px 14px; border-bottom:1px solid rgba(42,46,57,.4); font-size:12px; }}
+  .pt-table td.r {{ text-align:right; font-variant-numeric:tabular-nums; }}
+  .pt-table tr:hover td {{ background:rgba(0,229,204,.04); }}
+  .pt-buy  {{ border-left:3px solid var(--blue); }}
+  .pt-sell {{ border-left:3px solid transparent; }}
+  .pt-sell.win  {{ border-left-color:var(--green); }}
+  .pt-sell.loss {{ border-left-color:var(--red); }}
+  .pt-action {{ display:inline-block; font-size:9px; font-weight:700; padding:2px 7px;
+                border-radius:3px; letter-spacing:.05em; }}
+  .pt-act-buy  {{ background:rgba(33,150,243,.2);  color:#64b5f6; }}
+  .pt-act-sell {{ background:rgba(158,158,158,.15); color:#aaa; }}
+  .pt-act-win  {{ background:rgba(0,230,118,.15);  color:var(--green); }}
+  .pt-act-loss {{ background:rgba(239,83,80,.15);  color:var(--red);   }}
 </style>
 </head>
 <body>
@@ -331,8 +370,9 @@ def generate_combined_html(
     <div class="hrsm"    id="h-rsm"></div>
     <div class="hdate">{date_str.replace('_','-')} · {total} stocks · <span style="color:var(--pink)">{n_sig} signals</span> · <span style="color:var(--yellow)">{n_wtc} watching</span></div>
     <div class="nav-tabs">
-      <div class="nav-tab active" id="nav-chart"    onclick="switchNav('chart')">CHART</div>
-      <div class="nav-tab"        id="nav-backtest" onclick="switchNav('backtest')">BACKTEST</div>
+      <div class="nav-tab active" id="nav-chart"     onclick="switchNav('chart')">CHART</div>
+      <div class="nav-tab"        id="nav-backtest"  onclick="switchNav('backtest')">BACKTEST</div>
+      <div class="nav-tab"        id="nav-portfolio" onclick="switchNav('portfolio')">PORTFOLIO</div>
     </div>
     <div style="font-size:10px;color:var(--text);margin-left:8px">
       <kbd>↑↓</kbd> navigate &nbsp; <kbd>Esc</kbd> clear
@@ -398,26 +438,177 @@ def generate_combined_html(
   </table>
 </div>
 
+<!-- PORTFOLIO pane -->
+<div id="pane-portfolio">
+  <div class="pt-title">PORTFOLIO SIMULATION</div>
+  <div class="pt-sub" id="pt-sub">Loading...</div>
+
+  <div class="pt-cards" id="pt-cards"></div>
+
+  <div class="pt-section">EQUITY CURVE</div>
+  <div class="pt-curve-wrap">
+    <canvas id="pt-curve"></canvas>
+  </div>
+
+  <div class="pt-section">TRADE LOG — chronological buy / sell with running balance</div>
+  <table class="pt-table">
+    <thead>
+      <tr>
+        <th style="width:110px">Date</th>
+        <th style="width:60px">Action</th>
+        <th>Ticker</th>
+        <th>Exit Reason</th>
+        <th class="r">Return%</th>
+        <th class="r">Trade PnL (฿)</th>
+        <th class="r">Balance (฿)</th>
+      </tr>
+    </thead>
+    <tbody id="pt-tbody"></tbody>
+  </table>
+</div>
+
 <script>
 // ── All stock data ─────────────────────────────────────────────────────────────
 const ALL_STOCKS = {all_stocks_json};
 const BT         = {backtest_json};
+const PT         = {portfolio_json};
 let D = null;
 let currentStockIdx = null;
 let selectedSigIdx  = null;
 
 // ── Nav tab switching ─────────────────────────────────────────────────────────
 function switchNav(name) {{
-  document.getElementById('nav-chart').classList.toggle('active',    name==='chart');
-  document.getElementById('nav-backtest').classList.toggle('active', name==='backtest');
-  document.getElementById('pane-backtest').style.display = name==='backtest' ? 'block' : 'none';
-  if(name==='backtest') renderBacktest();
+  ['chart','backtest','portfolio'].forEach(n => {{
+    document.getElementById('nav-'+n).classList.toggle('active', n===name);
+  }});
+  document.getElementById('pane-backtest').style.display  = name==='backtest'  ? 'block' : 'none';
+  document.getElementById('pane-portfolio').style.display = name==='portfolio' ? 'block' : 'none';
+  if(name==='backtest')  renderBacktest();
+  if(name==='portfolio') renderPortfolio();
 }}
 
 function goToChart(idx) {{
   switchNav('chart');
   loadStock(idx);
   document.getElementById('sb-'+idx)?.scrollIntoView({{block:'center'}});
+}}
+
+// ── Portfolio tab ─────────────────────────────────────────────────────────────
+function renderPortfolio() {{
+  if(document.getElementById('pt-tbody').children.length) return;
+  if(!PT) {{
+    document.getElementById('pt-sub').textContent = 'No portfolio data available.';
+    return;
+  }}
+  const p = PT;
+
+  document.getElementById('pt-sub').textContent =
+    `Max ${{p.max_positions}} concurrent positions  ·  ${{p.n_taken}} trades  ·  ${{p.n_skipped}} skipped`;
+
+  // ── Summary cards ────────────────────────────────────────────────────────
+  const retCol = p.total_ret_pct >= 0 ? 'var(--green)' : 'var(--red)';
+  const cards = [
+    {{ label:'Start Capital', val:'฿'+p.start_capital.toLocaleString(),                          col:'var(--white)'  }},
+    {{ label:'Final Equity',  val:'฿'+Math.round(p.final_equity).toLocaleString(),               col: retCol         }},
+    {{ label:'Total Return',  val:(p.total_ret_pct>=0?'+':'')+p.total_ret_pct+'%',               col: retCol         }},
+    {{ label:'Win Rate',      val:p.win_rate+'%',                                                 col:'var(--green)'  }},
+    {{ label:'Avg Win',       val:(p.avg_win>=0?'+':'')+p.avg_win+'%',                           col:'var(--green)'  }},
+    {{ label:'Avg Loss',      val:p.avg_loss+'%',                                                 col:'var(--red)'    }},
+    {{ label:'Max Drawdown',  val:'-'+p.max_drawdown+'%',                                         col:'var(--red)'    }},
+    {{ label:'Trades Taken',  val:p.n_taken+' ('+p.n_wins+'W / '+p.n_losses+'L)',               col:'var(--white)'  }},
+  ];
+  document.getElementById('pt-cards').innerHTML = cards.map(c =>
+    `<div class="pt-card">
+       <div class="pt-card-label">${{c.label}}</div>
+       <div class="pt-card-val" style="color:${{c.col}}">${{c.val}}</div>
+     </div>`).join('');
+
+  // ── Equity curve ─────────────────────────────────────────────────────────
+  const canvas = document.getElementById('pt-curve');
+  const ctx    = canvas.getContext('2d');
+  const pts    = p.equity_curve;
+  // Size to the wrapper, not canvas default
+  const wrap   = canvas.parentElement;
+  canvas.width  = wrap.clientWidth  || 1000;
+  canvas.height = wrap.clientHeight || 180;
+  const W = canvas.width, H = canvas.height;
+  const PAD = {{t:20, r:24, b:36, l:80}};
+
+  const eqs  = pts.map(q => q.equity);
+  const minEq = Math.min(...eqs), maxEq = Math.max(...eqs);
+  const range = maxEq - minEq || 1;
+  const xS = i  => PAD.l + (i / (pts.length - 1)) * (W - PAD.l - PAD.r);
+  const yS = v  => PAD.t + (1 - (v - minEq) / range) * (H - PAD.t - PAD.b);
+
+  // Horizontal grid lines
+  ctx.strokeStyle = '#2a2e39'; ctx.lineWidth = 1;
+  for(let g = 0; g <= 4; g++) {{
+    const y   = PAD.t + g * (H - PAD.t - PAD.b) / 4;
+    const val = maxEq - g * range / 4;
+    ctx.beginPath(); ctx.moveTo(PAD.l, y); ctx.lineTo(W - PAD.r, y); ctx.stroke();
+    ctx.fillStyle = '#9598a1'; ctx.font = '10px DM Mono,monospace'; ctx.textAlign = 'right';
+    ctx.fillText('฿' + Math.round(val).toLocaleString(), PAD.l - 6, y + 4);
+  }}
+
+  // Start capital dashed reference line
+  const capY = yS(p.start_capital);
+  ctx.setLineDash([5, 4]); ctx.strokeStyle = '#444'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD.l, capY); ctx.lineTo(W - PAD.r, capY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Gradient fill
+  const aboveCapital = p.final_equity >= p.start_capital;
+  const fillColor    = aboveCapital ? 'rgba(0,230,118,' : 'rgba(239,83,80,';
+  const grad = ctx.createLinearGradient(0, PAD.t, 0, H - PAD.b);
+  grad.addColorStop(0, fillColor + '0.2)');
+  grad.addColorStop(1, fillColor + '0.02)');
+  ctx.beginPath();
+  pts.forEach((pt, i) => i === 0 ? ctx.moveTo(xS(i), yS(pt.equity)) : ctx.lineTo(xS(i), yS(pt.equity)));
+  ctx.lineTo(xS(pts.length - 1), H - PAD.b);
+  ctx.lineTo(xS(0), H - PAD.b);
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+
+  // Main line
+  const lineColor = aboveCapital ? '#00e676' : '#ef5350';
+  ctx.strokeStyle = lineColor; ctx.lineWidth = 2;
+  ctx.beginPath();
+  pts.forEach((pt, i) => i === 0 ? ctx.moveTo(xS(i), yS(pt.equity)) : ctx.lineTo(xS(i), yS(pt.equity)));
+  ctx.stroke();
+
+  // Date labels: first, middle, last
+  ctx.fillStyle = '#9598a1'; ctx.font = '10px DM Mono,monospace'; ctx.textAlign = 'center';
+  [[0, 'left'], [Math.floor(pts.length/2), 'center'], [pts.length-1, 'right']].forEach(([i, align]) => {{
+    if(i < pts.length) {{
+      ctx.textAlign = align;
+      const x = align==='left' ? PAD.l : align==='right' ? W-PAD.r : xS(i);
+      ctx.fillText(pts[i].date, x, H - 6);
+    }}
+  }});
+
+  // ── Trade log (chronological BUY / SELL events) ───────────────────────
+  const tbody = document.getElementById('pt-tbody');
+  tbody.innerHTML = p.events.map(e => {{
+    const isBuy  = e.action === 'BUY';
+    const isWin  = !isBuy && e.pnl > 0;
+    const isLoss = !isBuy && e.pnl <= 0;
+    const rowCls = isBuy ? 'pt-buy' : isWin ? 'pt-sell win' : 'pt-sell loss';
+    const actCls = isBuy ? 'pt-act-buy' : isWin ? 'pt-act-win' : 'pt-act-loss';
+    const actLbl = isBuy ? 'BUY' : 'SELL';
+    const retStr = isBuy ? '—' : (e.ret_pct>=0?'+':'')+e.ret_pct+'%';
+    const pnlStr = isBuy ? '−฿'+Math.round(Math.abs(e.pnl)).toLocaleString()
+                         : (e.pnl>=0?'+':'')+Math.round(e.pnl).toLocaleString();
+    const retCol = isBuy ? 'var(--text)' : isWin ? 'var(--green)' : 'var(--red)';
+    const pnlCol = isBuy ? 'var(--text)' : isWin ? 'var(--green)' : 'var(--red)';
+    return `<tr class="${{rowCls}}">
+      <td style="color:var(--text)">${{e.date}}</td>
+      <td><span class="pt-action ${{actCls}}">${{actLbl}}</span></td>
+      <td style="color:var(--white);font-weight:600">${{e.ticker}}</td>
+      <td style="color:var(--text);font-size:11px">${{e.reason || '—'}}</td>
+      <td class="r" style="color:${{retCol}}">${{retStr}}</td>
+      <td class="r" style="color:${{pnlCol}}">${{pnlStr}}</td>
+      <td class="r" style="color:var(--white)">฿${{Math.round(e.balance).toLocaleString()}}</td>
+    </tr>`;
+  }}).join('');
 }}
 
 function renderBacktest() {{
