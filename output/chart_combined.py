@@ -359,6 +359,8 @@ def generate_combined_html(
   .pt-act-sell {{ background:rgba(158,158,158,.15); color:#aaa; }}
   .pt-act-win  {{ background:rgba(0,230,118,.15);  color:var(--green); }}
   .pt-act-loss {{ background:rgba(239,83,80,.15);  color:var(--red);   }}
+  .pt-act-tp1  {{ background:rgba(255,215,64,.18); color:var(--yellow); }}
+  .pt-act-tp2  {{ background:rgba(255,152,0,.18);  color:var(--orange); }}
 </style>
 </head>
 <body>
@@ -456,7 +458,9 @@ def generate_combined_html(
       <tr>
         <th style="width:110px">Date</th>
         <th style="width:60px">Action</th>
-        <th>Ticker</th>
+        <th style="width:90px">Ticker</th>
+        <th class="r">Sizing (฿)</th>
+        <th class="r">Cash (฿)</th>
         <th>Exit Reason</th>
         <th class="r">Return%</th>
         <th class="r">Trade PnL (฿)</th>
@@ -585,28 +589,41 @@ function renderPortfolio() {{
     }}
   }});
 
-  // ── Trade log (chronological BUY / SELL events) ───────────────────────
+  // ── Trade log (chronological BUY / TP1 / TP2 / SELL events) ────────────
   const tbody = document.getElementById('pt-tbody');
   tbody.innerHTML = p.events.map(e => {{
     const isBuy  = e.action === 'BUY';
+    const isTp1  = !isBuy && e.reason.startsWith('TP1');
+    const isTp2  = !isBuy && e.reason.startsWith('TP2');
     const isWin  = !isBuy && e.pnl > 0;
-    const isLoss = !isBuy && e.pnl <= 0;
+    const isLoss = !isBuy && !isWin;
+
     const rowCls = isBuy ? 'pt-buy' : isWin ? 'pt-sell win' : 'pt-sell loss';
-    const actCls = isBuy ? 'pt-act-buy' : isWin ? 'pt-act-win' : 'pt-act-loss';
-    const actLbl = isBuy ? 'BUY' : 'SELL';
-    const retStr = isBuy ? '—' : (e.ret_pct>=0?'+':'')+e.ret_pct+'%';
-    const pnlStr = isBuy ? '−฿'+Math.round(Math.abs(e.pnl)).toLocaleString()
-                         : (e.pnl>=0?'+':'')+Math.round(e.pnl).toLocaleString();
-    const retCol = isBuy ? 'var(--text)' : isWin ? 'var(--green)' : 'var(--red)';
-    const pnlCol = isBuy ? 'var(--text)' : isWin ? 'var(--green)' : 'var(--red)';
+    const actCls = isBuy ? 'pt-act-buy'
+                 : isTp1 ? 'pt-act-tp1'
+                 : isTp2 ? 'pt-act-tp2'
+                 : isWin ? 'pt-act-win' : 'pt-act-loss';
+    const actLbl = isBuy ? 'BUY' : isTp1 ? 'TP1' : isTp2 ? 'TP2' : 'SELL';
+    const retStr = isBuy ? '—' : (e.ret_pct >= 0 ? '+' : '') + e.ret_pct + '%';
+    const pnlStr = isBuy ? '—' : (e.pnl >= 0 ? '+' : '') + Math.round(e.pnl).toLocaleString();
+    const retCol = isBuy ? 'var(--text)' : isTp1 || isTp2 || isWin ? 'var(--green)' : 'var(--red)';
+    const sizing    = Math.round(e.sizing).toLocaleString();
+    const cashAfter = Math.round(e.cash_after).toLocaleString();
+    const reasonStr = isBuy ? '—'
+                    : isTp1 ? '30% at TP1'
+                    : isTp2 ? '30% at TP2'
+                    : e.reason || '—';
+
     return `<tr class="${{rowCls}}">
       <td style="color:var(--text)">${{e.date}}</td>
       <td><span class="pt-action ${{actCls}}">${{actLbl}}</span></td>
       <td style="color:var(--white);font-weight:600">${{e.ticker}}</td>
-      <td style="color:var(--text);font-size:11px">${{e.reason || '—'}}</td>
+      <td class="r" style="color:var(--text)">฿${{sizing}}</td>
+      <td class="r" style="color:var(--text)">฿${{cashAfter}}</td>
+      <td style="color:var(--text);font-size:11px">${{reasonStr}}</td>
       <td class="r" style="color:${{retCol}}">${{retStr}}</td>
-      <td class="r" style="color:${{pnlCol}}">${{pnlStr}}</td>
-      <td class="r" style="color:var(--white)">฿${{Math.round(e.balance).toLocaleString()}}</td>
+      <td class="r" style="color:${{retCol}}">${{pnlStr}}</td>
+      <td class="r" style="color:var(--white);font-weight:500">฿${{Math.round(e.balance).toLocaleString()}}</td>
     </tr>`;
   }}).join('');
 }}
