@@ -3,6 +3,7 @@ Swing Trading Scanner — Thai SET  (Pivot Breakout strategy)
 ============================================================
 USAGE:
   python main.py                     # screener: breakout list + watchlist
+  python main.py --discord           # screener + send results to Discord
   python main.py --backtest          # backtest all stocks: leaderboard + summary
   python main.py --backtest TOP.BK   # backtest single stock: trade list + summary
   python main.py --view              # open combined chart in browser
@@ -35,6 +36,7 @@ from output.report           import (print_screener, print_leaderboard,
 from output.chart             import draw_chart
 from output.chart_interactive import draw_interactive_chart, get_chart_data
 from output.chart_combined    import generate_combined_html
+from output.discord           import send_discord
 
 # ── Config ────────────────────────────────────────────────────────────────────
 _cfg_path = os.path.join(SCRIPT_DIR, 'config.py')
@@ -59,6 +61,8 @@ ap.add_argument('--rsm',          type=float, default=_cfg('rs_momentum_min', 70
 ap.add_argument('--min-turnover', type=float, default=_cfg('min_turnover',    5_000_000))
 ap.add_argument('--benchmark',    type=str,   default=_cfg('benchmark',       '^SET.BK'))
 ap.add_argument('--save',         action='store_true')
+ap.add_argument('--discord',      action='store_true')
+ap.add_argument('--discord-test', action='store_true', dest='discord_test')
 args = ap.parse_args()
 
 CFG = dict(
@@ -159,6 +163,10 @@ def process_ticker(stock: dict, bench: pd.Series):
     today_info = None
     today_sig  = next((b for b in all_breaks if b['bar'] == last_bar
                        and b['rsm_ok'] and b['rvol_ok'] and b['regime_ok']), None)
+    # Also try No RSM if no Full signal
+    if not today_sig:
+        today_sig = next((b for b in all_breaks if b['bar'] == last_bar
+                          and b['rvol_ok'] and b['regime_ok']), None)
     if today_sig:
         bp  = today_sig['bp']
         atr = today_sig['atr']
@@ -170,19 +178,44 @@ def process_ticker(stock: dict, bench: pd.Series):
             tp1=round(bp + atr * CFG['tp1_mult'], 4),
             tp2=round(bp + atr * CFG['tp2_mult'], 4),
             atr=atr, rsm=today_sig['rsm'], rvol=today_sig['rvol'],
+            rsm_ok=today_sig['rsm_ok'], rvol_ok=today_sig['rvol_ok'],
         )
 
-    pb_sig = [(b['bar'], b['bp']) for b in all_breaks
-              if b['rsm_ok'] and b['rvol_ok'] and b['regime_ok']]
-    pb_trades, pb_buy, pb_sell = simulate(df, pb_sig, CFG)
+    # ── 3 simulations for trade tab comparison ───────────────────────────
+    def _sig(regime=True, rvol=True, rsm=True):
+        return [(b['bar'], b['bp']) for b in all_breaks
+                if (b['regime_ok'] if regime else True)
+                and (b['rvol_ok']  if rvol   else True)
+                and (b['rsm_ok']   if rsm    else True)
+                and b['regime_ok']]   # always require regime
 
-    for t in pb_trades:
-        eb = t['entry_bar']; xb = t['exit_bar']
-        t['entry_date'] = str(df.index[eb].date()) if hasattr(df.index[eb], 'date') else str(eb)
-        t['exit_date']  = str(df.index[xb].date()) if xb is not None and hasattr(df.index[xb], 'date') else '—'
+    def _run(sig_list, label):
+        ts, _, _ = simulate(df, sig_list, CFG)
+        for t in ts:
+            eb = t['entry_bar']; xb = t['exit_bar']
+            t['entry_date'] = str(df.index[eb].date()) if hasattr(df.index[eb], 'date') else str(eb)
+            t['exit_date']  = str(df.index[xb].date()) if xb is not None and hasattr(df.index[xb], 'date') else '—'
+            t['filter_type'] = label
+        return ts
+
+    pb_sig    = _sig(regime=True, rvol=True, rsm=True)
+    pb_trades = _run(pb_sig,                           'Full')
+    no_rsm_t  = _run(_sig(regime=True, rvol=True,  rsm=False),  'No RSM')
+    no_rvol_t = _run(_sig(regime=True, rvol=False, rsm=False),  'Regime only')
+    pb_buy    = [t['entry_bar'] for t in pb_trades]
+    pb_sell   = [(t['exit_bar'], t['exit_reason']) for t in pb_trades]
+
+    # Combine all trades for chart tab (deduplicate by entry_bar + filter)
+    all_trades_chart = pb_trades + [
+        t for t in no_rsm_t  if t['entry_bar'] not in {x['entry_bar'] for x in pb_trades}
+    ] + [
+        t for t in no_rvol_t if t['entry_bar'] not in {x['entry_bar'] for x in no_rsm_t}
+        and t['entry_bar'] not in {x['entry_bar'] for x in pb_trades}
+    ]
 
     chart_data = get_chart_data(df, ticker, stock, all_breaks,
-                                hz_lines, tl_lines, rvol_arr, is_gap, CFG)
+                                hz_lines, tl_lines, rvol_arr, is_gap, CFG,
+                                trades=all_trades_chart)
 
     if args.save:
         draw_interactive_chart(df, ticker, stock, all_breaks,
@@ -249,6 +282,18 @@ def open_in_browser(path: str):
 
 # ══════════════════════════════════════════════════════════════════════════════
 def main():
+    if args.discord_test:
+        from output.discord import _load_env, _post
+        _load_env()
+        import os
+        url = os.environ.get('DISCORD_WEBHOOK', '').strip()
+        if not url:
+            print('  ⚠  DISCORD_WEBHOOK not found in .env')
+            return
+        ok = _post(url, '✅ PB Scanner webhook test OK')
+        print(f'  Result: {"SUCCESS" if ok else "FAILED"}')
+        return
+
     if args.clear_cache:
         clear_cache()
         print('  Cache cleared.')
@@ -317,6 +362,9 @@ def main():
         path = generate_combined_html(stocks_data, results, WEB_DIR, DATE_STR,
                                       filename='index.html')
         print(f'  📊 Chart updated → run  python main.py --view  to open\n')
+
+    if args.discord:
+        send_discord(today_signals, pending_list, results, DATE_STR, CFG)
 
 
 if __name__ == '__main__':

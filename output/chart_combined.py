@@ -50,10 +50,12 @@ def generate_combined_html(
         rsm     = d.get('rsm_now', 0) or 0
         pnl_pct = m.get('total_pnl_pct', 0) or 0
         trades  = m.get('total_trades', 0) or 0
-        rvol    = d.get('rvol_now', 0) or 0
-        pnl_col = '#00e676' if pnl_pct >= 0 else '#ef5350'
-        pnl_str = f'{pnl_pct:+.1f}%' if trades else '—'
+        rvol     = d.get('rvol_now', 0) or 0
+        rvol_min = d.get('rvol_min', 1.5) or 1.5
+        pnl_col  = '#00e676' if pnl_pct >= 0 else '#ef5350'
+        pnl_str  = f'{pnl_pct:+.1f}%' if trades else '—'
         rvol_str = f'{rvol:.1f}x' if rvol else '—'
+        rvol_col = '#00e676' if rvol >= rvol_min else 'var(--text)'
         # section: 'sig' | 'wtc' | ''
         item_cls = f'sb-item sb-{section}' if section else 'sb-item'
         return f"""
@@ -63,7 +65,7 @@ def generate_combined_html(
             <span class="sb-rsm">RSM {rsm:.0f}</span>
           </div>
           <div class="sb-bot">
-            <span class="sb-rvol">RVol {rvol_str}</span>
+            <span class="sb-rvol" style="color:{rvol_col}">RVol {rvol_str}</span>
             <span class="sb-pnl" style="color:{pnl_col}">{pnl_str}</span>
           </div>
         </div>"""
@@ -162,6 +164,40 @@ def generate_combined_html(
   .sb-rvol   {{ font-size:9px; color:var(--text); }}
   .sb-pnl    {{ font-size:10px; font-weight:500; }}
 
+  /* ── Tabs ── */
+  .tab-bar {{ display:flex; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--panel); }}
+  .tab {{ flex:1; padding:9px 0; text-align:center; font-size:10px; letter-spacing:.06em;
+          cursor:pointer; color:var(--text); border-bottom:2px solid transparent; transition:all .15s; }}
+  .tab.active {{ color:var(--accent); border-bottom-color:var(--accent); }}
+  .tab-pane {{ display:none; flex:1; flex-direction:column; overflow:hidden; }}
+  .tab-pane.active {{ display:flex; }}
+  /* ── Trade table ── */
+  .trade-table {{ flex:1; overflow-y:auto; font-size:10px; }}
+  .trade-table::-webkit-scrollbar {{ width:3px; }}
+  .trade-table::-webkit-scrollbar-thumb {{ background:var(--border); }}
+  .tr-hdr {{ display:grid; grid-template-columns:72px 72px 56px 44px 1fr;
+             gap:2px; padding:6px 8px; color:var(--text);
+             border-bottom:1px solid var(--border); font-size:9px; letter-spacing:.05em;
+             position:sticky; top:0; background:var(--panel); z-index:1; }}
+  .tr-row {{ display:grid; grid-template-columns:72px 72px 56px 44px 1fr;
+             gap:2px; padding:5px 8px; border-bottom:1px solid rgba(42,46,57,.4);
+             cursor:pointer; transition:background .1s; align-items:center; }}
+  .tr-row:hover  {{ background:rgba(0,229,204,.05); }}
+  .tr-row.active {{ background:rgba(0,229,204,.1); }}
+  .tr-filter {{ font-size:8px; padding:1px 5px; border-radius:3px; font-weight:600; }}
+  .tf-full   {{ background:rgba(255,110,199,.15); color:#ff6ec7; }}
+  .tf-norsm  {{ background:rgba(33,150,243,.15);  color:#64b5f6; }}
+  .tf-regime {{ background:rgba(158,158,158,.15); color:#aaa; }}
+  .tr-stat {{ padding:8px 10px; font-size:10px; border-top:1px solid var(--border);
+              display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; color:var(--text); }}
+  /* ── Trade summary ── */
+  .trade-summary {{ border-top:1px solid var(--border); padding:10px 12px;
+                    font-size:10px; flex-shrink:0; }}
+  .ts-title {{ color:var(--text); font-size:9px; letter-spacing:.06em;
+               text-transform:uppercase; margin-bottom:6px; }}
+  .ts-row {{ display:flex; justify-content:space-between; align-items:center;
+             padding:3px 0; border-bottom:1px solid rgba(42,46,57,.4); }}
+  .ts-row:last-child {{ border-bottom:none; }}
   /* ── Chart area ── */
   .chart-area {{ position:relative; overflow:hidden; background:var(--bg); }}
   canvas {{ position:absolute; top:0; left:0; }}
@@ -254,13 +290,14 @@ def generate_combined_html(
   <!-- Signal panel -->
   <div class="panel">
     <div class="sig-header">
-      BREAKOUT SIGNALS — <span id="sig-count" style="color:var(--white)">—</span>
+      SIGNALS — <span id="sig-count" style="color:var(--white)">—</span>
       <span id="sig-filter-info" style="font-size:10px;display:block;margin-top:2px;opacity:.7"></span>
     </div>
     <div class="sig-list" id="sig-list"></div>
     <div class="analysis" id="analysis">
       <div class="an-empty">← Click a signal to analyse</div>
     </div>
+    <div class="trade-summary" id="trade-summary"></div>
   </div>
 </div>
 
@@ -284,6 +321,7 @@ function loadStock(idx) {{
   document.getElementById('no-stock').style.display = 'none';
 
   selectedSigIdx = null;
+  document.getElementById('trade-summary').innerHTML = '';
   resize();
   buildSignalList();
   document.getElementById('analysis').innerHTML = '<div class="an-empty">← Click a signal to analyse</div>';
@@ -488,6 +526,24 @@ function drawChart() {{
     ctx.strokeStyle='#131722'; ctx.lineWidth=1; ctx.stroke();
   }});
 
+  // ── Exit arrows ──────────────────────────────────────────────────────
+  function drawArrow(bar, price, col, sz=7) {{
+    if(bar==null || bar<0 || bar>=candles.length) return;
+    const x=xOf(bar), y=yOf(price,0)-sz-4;
+    ctx.fillStyle=col;
+    ctx.beginPath();
+    ctx.moveTo(x, y+sz); ctx.lineTo(x-sz*0.7, y); ctx.lineTo(x+sz*0.7, y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='#131722'; ctx.lineWidth=0.8; ctx.stroke();
+  }}
+  if(D.trades) D.trades.forEach(t => {{
+    if(t.tp1_hit && t.tp1_bar!=null) drawArrow(t.tp1_bar, candles[t.tp1_bar]?.h, '#00e676', 6);
+    if(t.tp2_hit && t.tp2_bar!=null) drawArrow(t.tp2_bar, candles[t.tp2_bar]?.h, '#00b862', 6);
+    const exitCol = t.exit_reason==='SL' ? '#ef5350'
+                  : t.exit_reason==='EMA10' ? '#ffd740' : '#888';
+    if(t.exit_bar!=null) drawArrow(t.exit_bar, candles[t.exit_bar]?.h, exitCol, 7);
+  }});
+
   const lc = D.last_close;
   const ly = yOf(lc,0);
   ctx.fillStyle='#ef5350';
@@ -560,9 +616,34 @@ function drawOverlay(sigIdx) {{
     ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(W-MARGIN.r,y); ctx.stroke();
     ctx.setLineDash([]);
   }}
+  // Big circle with white border on entry
   ctx.fillStyle=s.col;
   ctx.beginPath(); ctx.arc(x, yOf(s.bar_y,0)-10, 7, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Highlight matching trade exit arrows
+  // Try Full trade first, fall back to any trade at that bar
+  const trade = (D.trades||[]).find(t => t.entry_bar === s.i && t.filter_type === 'Full')
+             || (D.trades||[]).find(t => t.entry_bar === s.i);
+  if(trade) {{
+    function drawArrowHL(bar, price, col, sz=9) {{
+      if(bar==null || bar<0 || bar>=D.candles.length) return;
+      const ax=xOf(bar), ay=yOf(price,0)-sz-4;
+      ctx.fillStyle=col;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay+sz); ctx.lineTo(ax-sz*0.7, ay); ctx.lineTo(ax+sz*0.7, ay);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
+    }}
+    if(trade.tp1_hit && trade.tp1_bar!=null)
+      drawArrowHL(trade.tp1_bar, D.candles[trade.tp1_bar]?.h, '#00e676', 9);
+    if(trade.tp2_hit && trade.tp2_bar!=null)
+      drawArrowHL(trade.tp2_bar, D.candles[trade.tp2_bar]?.h, '#00b862', 9);
+    const exitCol = trade.exit_reason==='SL' ? '#ef5350'
+                  : trade.exit_reason==='EMA10' ? '#ffd740' : '#888';
+    if(trade.exit_bar!=null)
+      drawArrowHL(trade.exit_bar, D.candles[trade.exit_bar]?.h, exitCol, 10);
+  }}
 }}
 
 // ── Signal list (right panel) ──────────────────────────────────────────────────
@@ -574,22 +655,68 @@ function buildSignalList() {{
   document.getElementById('sig-filter-info').textContent =
     `RVol>${{D.rvol_min}}x  RSM>${{D.rsm_min}}`;
 
+  // Build lookup: entry_bar → trade (Full first, fallback any)
+  const tradeByBar = {{}};
+  (D.trades||[]).forEach(t => {{
+    if(!tradeByBar[t.entry_bar] || t.filter_type==='Full') tradeByBar[t.entry_bar] = t;
+  }});
+
   const list = document.getElementById('sig-list');
   list.innerHTML = '';
   D.signals.forEach((s, idx) => {{
     const el = document.createElement('div');
     el.className = 'sig-item';
     el.id = 'sig-' + idx;
-    const kindLabel = s.kind === 'hz' ? 'Horiz Break' : 'TL Break';
+    const kindLabel = s.kind === 'hz' ? 'Horiz' : 'TL';
+    const trade = tradeByBar[s.i];
+    let retHtml = '';
+    if(trade) {{
+      const retCol = trade.ret_pct >= 0 ? '#00e676' : '#ef5350';
+      const tp1str = trade.tp1_hit ? ' TP1✓' : '';
+      const tp2str = trade.tp2_hit ? ' TP2✓' : '';
+      const rsn    = trade.exit_reason==='EMA10' ? 'MA10' : (trade.exit_reason||'');
+      retHtml = ` <span style="color:${{retCol}};font-weight:600">${{trade.ret_pct>=0?'+':''}}${{trade.ret_pct.toFixed(1)}}%${{tp1str}}${{tp2str}} ${{rsn}}</span>`;
+    }}
     el.innerHTML = `
       <div class="sig-dot" style="background:${{s.col}}"></div>
       <div class="sig-info">
-        <div class="sig-date">${{s.date}}  <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
-        <div class="sig-sub">Entry ฿${{s.bp.toFixed(4)}} · SL ฿${{s.sl?s.sl.toFixed(4):'—'}} · ${{s.label}}</div>
+        <div class="sig-date">${{s.date}} <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
+        <div class="sig-sub">฿${{s.bp.toFixed(2)}} · ${{s.label}}${{retHtml}}</div>
       </div>`;
     el.onclick = () => selectSignal(idx);
     list.appendChild(el);
   }});
+
+  buildTradeSummary();
+}}
+
+function buildTradeSummary() {{
+  const box = document.getElementById('trade-summary');
+  const trades = D.trades || [];
+  if(!trades.length) {{ box.innerHTML=''; return; }}
+
+  const fc = {{ 'Full':'tf-full', 'No RSM':'tf-norsm', 'Regime only':'tf-regime' }};
+  const groups = {{}};
+  trades.forEach(t => {{
+    if(!groups[t.filter_type]) groups[t.filter_type]=[];
+    groups[t.filter_type].push(t);
+  }});
+
+  let rows = '';
+  ['Full','No RSM','Regime only'].forEach(lbl => {{
+    const ts = groups[lbl]; if(!ts) return;
+    const wins = ts.filter(t=>t.win).length;
+    const wr   = (wins/ts.length*100).toFixed(0);
+    const avg  = (ts.reduce((s,t)=>s+t.ret_pct,0)/ts.length);
+    const avgCol = avg >= 0 ? '#00e676' : '#ef5350';
+    rows += `<div class="ts-row">
+      <span><span class="tr-filter ${{fc[lbl]||''}}" style="margin-right:5px">${{lbl}}</span>
+        ${{ts.length}}T &nbsp; WR${{wr}}%</span>
+      <span style="color:${{avgCol}};font-weight:600">avg ${{avg>=0?'+':''}}${{avg.toFixed(1)}}%</span>
+    </div>`;
+  }});
+
+  box.innerHTML = `<div class="ts-title">BACKTEST SUMMARY</div>${{rows}}`;
 }}
 
 function selectSignal(idx) {{
@@ -605,7 +732,7 @@ function selectSignal(idx) {{
 function renderAnalysis(idx) {{
   const s   = D.signals[idx];
   const box = document.getElementById('analysis');
-  const fmt    = (v,d=4) => v!=null ? `฿${{v.toFixed(d)}}` : '—';
+  const fmt    = (v,d=2) => v!=null ? `฿${{v.toFixed(d)}}` : '—';
   const fmtPct = (v)     => v!=null ? (v>=0?'+':'')+v.toFixed(2)+'%' : '—';
   const kindFull = s.kind === 'hz' ? 'Horizontal Breakout' : 'Trendline Breakout';
   box.innerHTML = `
@@ -642,7 +769,7 @@ function renderAnalysis(idx) {{
     </div>`;
 }}
 
-// Canvas click → nearest signal
+// ── Canvas click → nearest signal
 document.getElementById('cv-overlay').addEventListener('click', e => {{
   if(!D) return;
   const rect = e.target.getBoundingClientRect();

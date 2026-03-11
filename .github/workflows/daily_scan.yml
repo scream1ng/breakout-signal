@@ -15,6 +15,9 @@ permissions:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    environment: env
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repo
@@ -36,10 +39,10 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run screener
-        run: python main.py
+        run: python main.py --discord
         env:
-          # Tells data.py we are running in CI — skip Bangkok time check, always download
           CI: true
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Commit updated chart
         run: |

@@ -45,7 +45,7 @@ def _candle_color(o, c, rv, rvol_min):
 
 def _build_chart_data(
     df, ticker, stock, all_breaks, hz_lines, tl_lines,
-    rvol_arr, is_gap_arr, cfg
+    rvol_arr, is_gap_arr, cfg, trades=None
 ) -> dict:
     """Build the chart data dict (no file I/O). Used by both draw_interactive_chart and get_chart_data."""
     N          = len(df)
@@ -129,6 +129,29 @@ def _build_chart_data(
     rsm_now    = rsm_s[-1] or 0
     rvol_now   = rvol_s[-1] if rvol_s else 0
 
+    # Serialize trades for JS
+    trades_json = []
+    for t in (trades or []):
+        trades_json.append(dict(
+            entry_bar   = t.get('entry_bar'),
+            exit_bar    = t.get('exit_bar'),
+            tp1_bar     = t.get('tp1_bar'),
+            tp2_bar     = t.get('tp2_bar'),
+            tp1_hit     = bool(t.get('tp1_hit')),
+            tp2_hit     = bool(t.get('tp2_hit')),
+            exit_reason = t.get('exit_reason',''),
+            entry_price = round(float(t.get('entry_price',0)),4),
+            exit_price  = round(float(t.get('exit_price') or 0),4),
+            sl          = round(float(t.get('sl',0)),4),
+            tp1         = round(float(t.get('tp1',0)),4),
+            tp2         = round(float(t.get('tp2',0)),4),
+            ret_pct     = round(float(t.get('entry_return_pct',0)),2),
+            entry_date  = str(t.get('entry_date','')),
+            exit_date   = str(t.get('exit_date','')),
+            filter_type = t.get('filter_type','Full'),
+            win         = bool(t.get('total_pnl',0) > 0),
+        ))
+
     return dict(
         ticker=ticker, desc=stock.get('desc',''), sector=stock.get('sector',''),
         rsm_now=rsm_now, rvol_now=rvol_now, rsm_min=rsm_min, rvol_min=rvol_min,
@@ -139,6 +162,7 @@ def _build_chart_data(
         hz_fast=hz_fast_json, hz_slow=hz_slow_json,
         tl_fast=tl_fast_json, tl_slow=tl_slow_json,
         signals=signals_json,
+        trades=trades_json,
         sl_mult=cfg['sl_mult'], tp1_mult=cfg['tp1_mult'], tp2_mult=cfg['tp2_mult'],
         be_days=cfg['be_days'],
     )
@@ -146,11 +170,11 @@ def _build_chart_data(
 
 def get_chart_data(
     df, ticker, stock, all_breaks, hz_lines, tl_lines,
-    rvol_arr, is_gap_arr, cfg
+    rvol_arr, is_gap_arr, cfg, trades=None
 ) -> dict:
     """Return chart data dict for embedding in combined HTML. No file saved."""
     return _build_chart_data(df, ticker, stock, all_breaks, hz_lines, tl_lines,
-                             rvol_arr, is_gap_arr, cfg)
+                             rvol_arr, is_gap_arr, cfg, trades=trades)
 
 
 def draw_interactive_chart(
@@ -235,10 +259,48 @@ def draw_interactive_chart(
   .an-empty {{ color:var(--text); font-size:11px; text-align:center;
                padding:20px 0; opacity:.6; }}
   .filter-row {{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }}
+
+  /* Trade summary */
+  .trade-summary {{ border-top:1px solid var(--border); padding:10px 12px;
+                    font-size:10px; flex-shrink:0; }}
+  .ts-title {{ color:var(--text); font-size:9px; letter-spacing:.06em;
+               text-transform:uppercase; margin-bottom:6px; }}
+  .ts-row {{ display:flex; justify-content:space-between; align-items:center;
+             padding:3px 0; border-bottom:1px solid rgba(42,46,57,.4); }}
+  .ts-row:last-child {{ border-bottom:none; }}
   .badge {{ font-size:9.5px; padding:2px 8px; border-radius:10px;
             font-weight:600; letter-spacing:.04em; }}
   .badge.pass {{ background:rgba(0,230,118,.15); color:var(--green); border:1px solid rgba(0,230,118,.3); }}
   .badge.fail {{ background:rgba(239,83,80,.15);  color:var(--red);   border:1px solid rgba(239,83,80,.3); }}
+
+  /* Tabs */
+  .tab-bar {{ display:flex; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--panel); }}
+  .tab {{ flex:1; padding:9px 0; text-align:center; font-size:10px; letter-spacing:.06em;
+          cursor:pointer; color:var(--text); border-bottom:2px solid transparent;
+          transition:all .15s; }}
+  .tab.active {{ color:var(--accent); border-bottom-color:var(--accent); }}
+  .tab-pane {{ display:none; flex:1; flex-direction:column; overflow:hidden; }}
+  .tab-pane.active {{ display:flex; }}
+
+  /* Trade table */
+  .trade-table {{ flex:1; overflow-y:auto; font-size:10px; }}
+  .trade-table::-webkit-scrollbar {{ width:3px; }}
+  .trade-table::-webkit-scrollbar-thumb {{ background:var(--border); }}
+  .tr-hdr {{ display:grid; grid-template-columns:72px 72px 56px 44px 1fr;
+             gap:2px; padding:6px 8px; color:var(--text);
+             border-bottom:1px solid var(--border); font-size:9px;
+             letter-spacing:.05em; position:sticky; top:0; background:var(--panel); }}
+  .tr-row {{ display:grid; grid-template-columns:72px 72px 56px 44px 1fr;
+             gap:2px; padding:5px 8px; border-bottom:1px solid rgba(42,46,57,.4);
+             cursor:pointer; transition:background .1s; align-items:center; }}
+  .tr-row:hover {{ background:rgba(0,229,204,.05); }}
+  .tr-row.active {{ background:rgba(0,229,204,.1); }}
+  .tr-filter {{ font-size:8px; padding:1px 5px; border-radius:3px; font-weight:600; }}
+  .tf-full    {{ background:rgba(255,110,199,.15); color:#ff6ec7; }}
+  .tf-norsm   {{ background:rgba(33,150,243,.15);  color:#64b5f6; }}
+  .tf-regime  {{ background:rgba(158,158,158,.15); color:#aaa; }}
+  .tr-stat {{ padding:8px 10px; font-size:10px; border-top:1px solid var(--border);
+              display:flex; gap:12px; flex-wrap:wrap; flex-shrink:0; color:var(--text); }}
 
   /* Legend */
   .legend {{ display:flex; gap:12px; flex-wrap:wrap; padding:6px 18px;
@@ -265,13 +327,14 @@ def draw_interactive_chart(
 
   <div class="panel">
     <div class="sig-header">
-      BREAKOUT SIGNALS — <span id="sig-count" style="color:var(--white)">0</span>
+      SIGNALS — <span id="sig-count" style="color:var(--white)">0</span>
       <span id="sig-filter-info" style="font-size:10px;display:block;margin-top:2px;opacity:.7"></span>
     </div>
     <div class="sig-list" id="sig-list"></div>
     <div class="analysis" id="analysis">
       <div class="an-empty">← Click a signal to analyse</div>
     </div>
+    <div class="trade-summary" id="trade-summary"></div>
   </div>
 </div>
 
@@ -459,6 +522,35 @@ function drawChart() {{
     ctx.strokeStyle='#131722'; ctx.lineWidth=1; ctx.stroke();
   }});
 
+  // ── Exit arrows ────────────────────────────────────────────────────────
+  function drawArrow(bar, price, col, size=7) {{
+    if(bar == null || bar < 0 || bar >= candles.length) return;
+    const x = xOf(bar);
+    const y = yOf(price, 0) - size - 4;  // above candle high
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(x, y + size);       // tip pointing down toward candle
+    ctx.lineTo(x - size*0.7, y);   // top-left
+    ctx.lineTo(x + size*0.7, y);   // top-right
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#131722'; ctx.lineWidth = 0.8; ctx.stroke();
+  }}
+  D.trades.forEach(t => {{
+    const c = candles[t.exit_bar];
+    if(!c) return;
+    // TP1 partial exit
+    if(t.tp1_hit && t.tp1_bar != null)
+      drawArrow(t.tp1_bar, candles[t.tp1_bar]?.h, '#00e676', 6);
+    // TP2 partial exit
+    if(t.tp2_hit && t.tp2_bar != null)
+      drawArrow(t.tp2_bar, candles[t.tp2_bar]?.h, '#00b862', 6);
+    // Final exit
+    const exitCol = t.exit_reason==='SL' ? '#ef5350'
+                  : t.exit_reason==='EMA10' ? '#ffd740'
+                  : '#888888';
+    drawArrow(t.exit_bar, c.h, exitCol, 7);
+  }});
+
   // Last close label
   const lc = D.last_close;
   const ly = yOf(lc,0);
@@ -550,9 +642,34 @@ function drawOverlay(sigIdx) {{
   }}
 
   // Big dot on the signal
+  // Big circle with white border on entry
   ctx.fillStyle=s.col;
   ctx.beginPath(); ctx.arc(x, yOf(s.bar_y,0)-10, 7, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // Highlight matching trade exit arrows
+  // Try Full trade first, fall back to any trade at that bar
+  const trade = (D.trades||[]).find(t => t.entry_bar === s.i && t.filter_type === 'Full')
+             || (D.trades||[]).find(t => t.entry_bar === s.i);
+  if(trade) {{
+    function drawArrowHL(bar, price, col, sz=9) {{
+      if(bar==null || bar<0 || bar>=D.candles.length) return;
+      const ax=xOf(bar), ay=yOf(price,0)-sz-4;
+      ctx.fillStyle=col;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay+sz); ctx.lineTo(ax-sz*0.7, ay); ctx.lineTo(ax+sz*0.7, ay);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
+    }}
+    if(trade.tp1_hit && trade.tp1_bar!=null)
+      drawArrowHL(trade.tp1_bar, D.candles[trade.tp1_bar]?.h, '#00e676', 9);
+    if(trade.tp2_hit && trade.tp2_bar!=null)
+      drawArrowHL(trade.tp2_bar, D.candles[trade.tp2_bar]?.h, '#00b862', 9);
+    const exitCol = trade.exit_reason==='SL' ? '#ef5350'
+                  : trade.exit_reason==='EMA10' ? '#ffd740' : '#888';
+    if(trade.exit_bar!=null)
+      drawArrowHL(trade.exit_bar, D.candles[trade.exit_bar]?.h, exitCol, 10);
+  }}
 }}
 
 // ── Signal list ────────────────────────────────────────────────────────────
@@ -564,7 +681,13 @@ function buildSignalList() {{
   document.getElementById('h-rsm').textContent    = `RSM ${{D.rsm_now?.toFixed(0)}}  1D`;
   document.getElementById('sig-count').textContent = D.signals.length;
   document.getElementById('sig-filter-info').textContent =
-    `RVol>${{D.rvol_min}}x  RSM>${{D.rsm_min}}  (colour = filter status)`;
+    `RVol>${{D.rvol_min}}x  RSM>${{D.rsm_min}}`;
+
+  // Build lookup: entry_bar → trade (Full first, fallback any)
+  const tradeByBar = {{}};
+  (D.trades||[]).forEach(t => {{
+    if(!tradeByBar[t.entry_bar] || t.filter_type==='Full') tradeByBar[t.entry_bar] = t;
+  }});
 
   const list = document.getElementById('sig-list');
   list.innerHTML = '';
@@ -573,17 +696,54 @@ function buildSignalList() {{
     const el = document.createElement('div');
     el.className = 'sig-item';
     el.id = 'sig-' + idx;
-    const kindLabel = s.kind === 'hz' ? 'Horiz Break' : 'TL Break';
+    const kindLabel = s.kind === 'hz' ? 'Horiz' : 'TL';
+    const trade = tradeByBar[s.i];
+    let retHtml = '';
+    if(trade) {{
+      const retCol = trade.ret_pct >= 0 ? '#00e676' : '#ef5350';
+      const tp1str = trade.tp1_hit ? ' TP1✓' : '';
+      const tp2str = trade.tp2_hit ? ' TP2✓' : '';
+      const rsn    = trade.exit_reason==='EMA10' ? 'MA10' : (trade.exit_reason||'');
+      retHtml = ` <span style="color:${{retCol}};font-weight:600">${{trade.ret_pct>=0?'+':''}}${{trade.ret_pct.toFixed(1)}}%${{tp1str}}${{tp2str}} ${{rsn}}</span>`;
+    }}
     el.innerHTML = `
       <div class="sig-dot" style="background:${{s.col}}"></div>
       <div class="sig-info">
-        <div class="sig-date">${{s.date}}  <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
-        <div class="sig-sub">Entry ฿${{s.bp.toFixed(4)}}  · SL ฿${{s.sl ? s.sl.toFixed(4) : '—'}}  · ${{s.label}}</div>
+        <div class="sig-date">${{s.date}} <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
+        <div class="sig-sub">฿${{s.bp.toFixed(2)}} · ${{s.label}}${{retHtml}}</div>
       </div>
     `;
     el.onclick = () => selectSignal(idx);
     list.appendChild(el);
   }});
+
+  buildTradeSummary();
+}}
+
+function buildTradeSummary() {{
+  const box = document.getElementById('trade-summary');
+  const trades = D.trades || [];
+  if(!trades.length) {{ box.innerHTML=''; return; }}
+  const fc = {{ 'Full':'tf-full', 'No RSM':'tf-norsm', 'Regime only':'tf-regime' }};
+  const groups = {{}};
+  trades.forEach(t => {{
+    if(!groups[t.filter_type]) groups[t.filter_type]=[];
+    groups[t.filter_type].push(t);
+  }});
+  let rows = '';
+  ['Full','No RSM','Regime only'].forEach(lbl => {{
+    const ts = groups[lbl]; if(!ts) return;
+    const wins = ts.filter(t=>t.win).length;
+    const wr   = (wins/ts.length*100).toFixed(0);
+    const avg  = ts.reduce((s,t)=>s+t.ret_pct,0)/ts.length;
+    const avgCol = avg >= 0 ? '#00e676' : '#ef5350';
+    rows += `<div class="ts-row">
+      <span><span class="tr-filter ${{fc[lbl]||''}}" style="margin-right:5px">${{lbl}}</span>
+        ${{ts.length}}T &nbsp; WR${{wr}}%</span>
+      <span style="color:${{avgCol}};font-weight:600">avg ${{avg>=0?'+':''}}${{avg.toFixed(1)}}%</span>
+    </div>`;
+  }});
+  box.innerHTML = `<div class="ts-title">BACKTEST SUMMARY</div>${{rows}}`;
 }}
 
 function selectSignal(idx) {{
@@ -600,7 +760,7 @@ function renderAnalysis(idx) {{
   const s = D.signals[idx];
   const box = document.getElementById('analysis');
 
-  const fmt = (v, d=4) => v != null ? `฿${{v.toFixed(d)}}` : '—';
+  const fmt = (v, d=2) => v != null ? `฿${{v.toFixed(d)}}` : '—';
   const fmtPct = (v) => v != null ? (v>=0?'+':'')+v.toFixed(2)+'%' : '—';
   const pctClass = (v) => v == null ? '' : (v>=0 ? 'green' : 'red');
 
