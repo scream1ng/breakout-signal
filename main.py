@@ -188,6 +188,16 @@ def process_ticker(stock: dict, bench: pd.Series):
             t['entry_date']  = str(df.index[eb].date()) if hasattr(df.index[eb], 'date') else str(eb)
             t['exit_date']   = str(df.index[xb].date()) if xb is not None and hasattr(df.index[xb], 'date') else '—'
             t['filter_type'] = label
+            # TP dates for portfolio partial-exit splitting
+            tp1b = t.get('tp1_bar')
+            tp2b = t.get('tp2_bar')
+            t['tp1_date'] = str(df.index[tp1b].date()) if tp1b is not None and hasattr(df.index[tp1b], 'date') else None
+            t['tp2_date'] = str(df.index[tp2b].date()) if tp2b is not None and hasattr(df.index[tp2b], 'date') else None
+            # Per-tranche return % from entry price (for portfolio partial P&L)
+            ep = t['entry_price']
+            t['tp1_ret_pct']   = round((t['tp1']        - ep) / ep * 100, 2) if ep else 0
+            t['tp2_ret_pct']   = round((t['tp2']        - ep) / ep * 100, 2) if ep else 0
+            t['final_ret_pct'] = round((t.get('exit_price', ep) - ep) / ep * 100, 2) if ep else 0
         return ts
 
     pb_trades = _run(_sig(regime=True, rvol=True, rsm=True),  'Full')
