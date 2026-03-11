@@ -151,8 +151,11 @@ def process_ticker(stock: dict, bench: pd.Series):
     rvol_last  = round(float(rvol_arr[-1]), 2)
     today_fired = any(b['bar'] == last_bar for b in all_breaks)
 
+    last_sma50  = float(df['SMA50'].iloc[-1]) if not pd.isna(df['SMA50'].iloc[-1]) else 0
+    last_regime = last_close > last_sma50
+
     pending_info = None
-    if pending_levels and not today_fired:
+    if pending_levels and not today_fired and last_regime:
         pending_info = dict(
             ticker=ticker, desc=stock['desc'], sector=stock['sector'],
             close=last_close, atr=round(last_atr, 4),
@@ -240,6 +243,7 @@ def process_ticker(stock: dict, bench: pd.Series):
         total_pnl_pct=total_pnl_pct, win_rate=win_rate,
         today_signal=today_info, pending=pending_info,
         trades=pb_trades, chart_data=chart_data,
+        in_regime=last_regime,
     )
 
 
@@ -357,9 +361,11 @@ def main():
     pending_list  = [r['pending']       for r in results if r.get('pending')]
     print_screener(today_signals, pending_list, DATE_STR)
 
-    stocks_data = [r['chart_data'] for r in results if r.get('chart_data')]
+    # Only show stocks currently above SMA50 in the chart
+    regime_results = [r for r in results if r.get('in_regime')]
+    stocks_data = [r['chart_data'] for r in regime_results if r.get('chart_data')]
     if stocks_data:
-        path = generate_combined_html(stocks_data, results, WEB_DIR, DATE_STR,
+        path = generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
                                       filename='index.html')
         print(f'  📊 Chart updated → run  python main.py --view  to open\n')
 
