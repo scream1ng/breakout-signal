@@ -147,50 +147,34 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
             'BUY', t['ticker_short'], cost, 0.0, -slot, '', t['ticker']
         ))
 
-    # Flush all remaining positions
+    # Force-close remaining — mark as OPEN (still holding, not a real exit)
     for p in open_pos:
         for ex_date, frac, ret_pct, label in p['exits']:
             cost_slice = p['cost_total'] * frac
-            gross      = cost_slice * (1.0 + ret_pct / 100.0)
-            returned   = gross * (1.0 - commission)
-            pnl        = returned - cost_slice
-            cash      += returned
-            tp_suffix  = ''
-            if label not in ('TP1', 'TP2'):
-                if p['tp1_hit']: tp_suffix += ' TP1✓'
-                if p['tp2_hit']: tp_suffix += ' TP2✓'
             raw_events.append((
-                ex_date, 1, 'SELL', p['ticker_short'], cost_slice, ret_pct, pnl,
-                label + tp_suffix, p['ticker']
+                ex_date, 2,   # sort_key 2 = after SELL, at end
+                'OPEN', p['ticker_short'], cost_slice, 0.0, 0.0,
+                'Still holding', p['ticker']
             ))
-            closed_stats.append(dict(ret_pct=ret_pct, pnl=pnl, win=pnl > 0,
-                                     label=label, ticker=p['ticker_short']))
 
     # ── Sort timeline then replay cash ────────────────────────────────────
     raw_events.sort(key=lambda e: (str(e[0]), e[1], e[3]))
 
-    # Replay: recompute running cash and balance from scratch
-    replay_cash    = float(capital)
-    open_cost_map  = {}   # ticker_short → list of costs currently open
-    events         = []
+    replay_cash   = float(capital)
+    open_cost_map = {}   # ticker_short → list of costs currently open
+    events        = []
 
     for ev in raw_events:
         date, _, action, ticker, sizing, ret_pct, pnl, label, ticker_full = ev
-        isBuy = action == 'BUY'
 
-        if isBuy:
-            replay_cash -= (sizing / (1.0 - commission))  # slot = sizing/(1-commission) ... 
-            # Actually sizing = slot*(1-commission), so slot = sizing + commission portion
-            # Let's just track: BUY removes slot from cash (pnl = -slot, slot = -pnl)
-            replay_cash += pnl   # pnl is negative for BUY (-slot)
+        if action == 'BUY':
+            replay_cash += pnl            # pnl stored as -slot for BUY
             open_cost_map.setdefault(ticker, []).append(sizing)
-        else:
-            replay_cash += sizing + pnl  # return capital + profit
-
-        # Current open cost = sum of all remaining open positions
-        # Approximate: track entries and exits
-        if not isBuy and ticker in open_cost_map and open_cost_map[ticker]:
-            open_cost_map[ticker].pop(0)  # remove oldest cost for this ticker
+        elif action == 'SELL':
+            replay_cash += sizing + pnl   # return cost + profit
+            if ticker in open_cost_map and open_cost_map[ticker]:
+                open_cost_map[ticker].pop(0)
+        # OPEN = still holding, no cash change
 
         open_total = sum(c for costs in open_cost_map.values() for c in costs)
         balance    = replay_cash + open_total
@@ -205,7 +189,6 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
             ret_pct     = round(ret_pct, 2),
             pnl         = round(pnl),
             balance     = round(balance),
-            accum_pct   = round((balance - capital) / capital * 100, 2),
             reason      = label,
         ))
 
