@@ -361,6 +361,7 @@ def generate_combined_html(
   .pt-act-loss {{ background:rgba(239,83,80,.15);  color:var(--red);   }}
   .pt-act-tp1  {{ background:rgba(255,215,64,.18); color:var(--yellow); }}
   .pt-act-tp2  {{ background:rgba(255,152,0,.18);  color:var(--orange); }}
+  .pt-act-open {{ background:rgba(0,229,204,.12);  color:var(--accent); }}
 </style>
 </head>
 <body>
@@ -465,7 +466,6 @@ def generate_combined_html(
         <th class="r">Trade PnL (฿)</th>
         <th class="r">Return%</th>
         <th class="r">Balance (฿)</th>
-        <th class="r">Accum%</th>
       </tr>
     </thead>
     <tbody id="pt-tbody"></tbody>
@@ -598,22 +598,23 @@ function renderPortfolio() {{
   const tbody = document.getElementById('pt-tbody');
   tbody.innerHTML = p.events.map((e, rowI) => {{
     const isBuy  = e.action === 'BUY';
-    const isTp1  = !isBuy && e.reason.startsWith('TP1');
-    const isTp2  = !isBuy && e.reason.startsWith('TP2');
-    const isWin  = !isBuy && e.pnl > 0;
+    const isOpen = e.action === 'OPEN';
+    const isTp1  = !isBuy && !isOpen && e.reason.startsWith('TP1');
+    const isTp2  = !isBuy && !isOpen && e.reason.startsWith('TP2');
+    const isWin  = !isBuy && !isOpen && e.pnl > 0;
 
-    const rowCls = isBuy ? 'pt-buy' : isWin ? 'pt-sell win' : 'pt-sell loss';
-    const actCls = isBuy ? 'pt-act-buy'
-                 : isTp1 ? 'pt-act-tp1'
-                 : isTp2 ? 'pt-act-tp2'
-                 : isWin ? 'pt-act-win' : 'pt-act-loss';
-    const actLbl = isBuy ? 'BUY' : isTp1 ? 'TP1' : isTp2 ? 'TP2' : 'SELL';
-    const pnlStr = isBuy ? '—' : (e.pnl >= 0 ? '+' : '') + Math.round(e.pnl).toLocaleString();
-    const retStr = isBuy ? '—' : (e.ret_pct >= 0 ? '+' : '') + e.ret_pct + '%';
-    const retCol = isBuy ? 'var(--text)' : isTp1||isTp2||isWin ? 'var(--green)' : 'var(--red)';
-    const accumCol = e.accum_pct >= 0 ? 'var(--green)' : 'var(--red)';
-    const accumStr = (e.accum_pct >= 0 ? '+' : '') + e.accum_pct + '%';
-    const reasonStr = isBuy ? '—' : isTp1 ? '30% at TP1' : isTp2 ? '30% at TP2' : e.reason || '—';
+    const rowCls = isBuy ? 'pt-buy' : isOpen ? 'pt-buy' : isWin ? 'pt-sell win' : 'pt-sell loss';
+    const actCls = isBuy  ? 'pt-act-buy'
+                 : isOpen ? 'pt-act-open'
+                 : isTp1  ? 'pt-act-tp1'
+                 : isTp2  ? 'pt-act-tp2'
+                 : isWin  ? 'pt-act-win' : 'pt-act-loss';
+    const actLbl = isBuy ? 'BUY' : isOpen ? 'OPEN' : isTp1 ? 'TP1' : isTp2 ? 'TP2' : 'SELL';
+    const pnlStr = (isBuy||isOpen) ? '—' : (e.pnl >= 0 ? '+' : '') + Math.round(e.pnl).toLocaleString();
+    const retStr = (isBuy||isOpen) ? '—' : (e.ret_pct >= 0 ? '+' : '') + e.ret_pct + '%';
+    const retCol = (isBuy||isOpen) ? 'var(--text)' : isTp1||isTp2||isWin ? 'var(--green)' : 'var(--red)';
+    const reasonStr = isBuy ? '—' : isOpen ? 'Still holding at period end'
+                    : isTp1 ? '30% at TP1' : isTp2 ? '30% at TP2' : e.reason || '—';
 
     // Clickable ticker — jump to chart and highlight matching signal/trade
     const sidx = tickerIdx[e.ticker_full];
@@ -631,7 +632,6 @@ function renderPortfolio() {{
       <td class="r" style="color:${{retCol}}">${{pnlStr}}</td>
       <td class="r" style="color:${{retCol}}">${{retStr}}</td>
       <td class="r" style="color:var(--white);font-weight:500">฿${{Math.round(e.balance).toLocaleString()}}</td>
-      <td class="r" style="color:${{accumCol}};font-weight:600">${{accumStr}}</td>
     </tr>`;
   }}).join('');
 }}
@@ -771,7 +771,7 @@ function resize() {{
 function computeScales() {{
   const candles = D.candles;
   const N = candles.length;
-  const pHMain = 0.62, pHRsm = 0.17, pHVol = 0.17;
+  const pHMain = 0.72, pHRsm = 0.13, pHVol = 0.13;
   const totalH = H - MARGIN.t - MARGIN.b;
   panelHeights = [totalH * pHMain, totalH * pHRsm, totalH * pHVol];
   BAR_W = Math.max(1.5, (W - MARGIN.l - MARGIN.r) / (N + 4));
