@@ -80,7 +80,7 @@ CFG = dict(
 
 PERIOD     = args.period
 CHARTS_DIR = os.path.join(SCRIPT_DIR, 'output', 'charts')
-WEB_DIR    = os.path.join(SCRIPT_DIR, 'web')
+WEB_DIR    = os.path.join(SCRIPT_DIR, 'docs')
 DATE_STR   = datetime.today().strftime('%Y_%m_%d')
 os.makedirs(CHARTS_DIR, exist_ok=True)
 os.makedirs(WEB_DIR,    exist_ok=True)
