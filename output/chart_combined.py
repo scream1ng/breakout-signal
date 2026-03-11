@@ -458,13 +458,14 @@ def generate_combined_html(
       <tr>
         <th style="width:110px">Date</th>
         <th style="width:60px">Action</th>
-        <th style="width:90px">Ticker</th>
+        <th style="width:110px">Ticker</th>
         <th class="r">Sizing (฿)</th>
         <th class="r">Cash (฿)</th>
         <th>Exit Reason</th>
-        <th class="r">Return%</th>
         <th class="r">Trade PnL (฿)</th>
+        <th class="r">Return%</th>
         <th class="r">Balance (฿)</th>
+        <th class="r">Accum%</th>
       </tr>
     </thead>
     <tbody id="pt-tbody"></tbody>
@@ -590,13 +591,16 @@ function renderPortfolio() {{
   }});
 
   // ── Trade log (chronological BUY / TP1 / TP2 / SELL events) ────────────
+  // Build ticker → sidebar index map for click-through
+  const tickerIdx = {{}};
+  ALL_STOCKS.forEach((s, i) => {{ tickerIdx[s.ticker] = i; }});
+
   const tbody = document.getElementById('pt-tbody');
-  tbody.innerHTML = p.events.map(e => {{
+  tbody.innerHTML = p.events.map((e, rowI) => {{
     const isBuy  = e.action === 'BUY';
     const isTp1  = !isBuy && e.reason.startsWith('TP1');
     const isTp2  = !isBuy && e.reason.startsWith('TP2');
     const isWin  = !isBuy && e.pnl > 0;
-    const isLoss = !isBuy && !isWin;
 
     const rowCls = isBuy ? 'pt-buy' : isWin ? 'pt-sell win' : 'pt-sell loss';
     const actCls = isBuy ? 'pt-act-buy'
@@ -604,28 +608,48 @@ function renderPortfolio() {{
                  : isTp2 ? 'pt-act-tp2'
                  : isWin ? 'pt-act-win' : 'pt-act-loss';
     const actLbl = isBuy ? 'BUY' : isTp1 ? 'TP1' : isTp2 ? 'TP2' : 'SELL';
-    const retStr = isBuy ? '—' : (e.ret_pct >= 0 ? '+' : '') + e.ret_pct + '%';
     const pnlStr = isBuy ? '—' : (e.pnl >= 0 ? '+' : '') + Math.round(e.pnl).toLocaleString();
-    const retCol = isBuy ? 'var(--text)' : isTp1 || isTp2 || isWin ? 'var(--green)' : 'var(--red)';
-    const sizing    = Math.round(e.sizing).toLocaleString();
-    const cashAfter = Math.round(e.cash_after).toLocaleString();
-    const reasonStr = isBuy ? '—'
-                    : isTp1 ? '30% at TP1'
-                    : isTp2 ? '30% at TP2'
-                    : e.reason || '—';
+    const retStr = isBuy ? '—' : (e.ret_pct >= 0 ? '+' : '') + e.ret_pct + '%';
+    const retCol = isBuy ? 'var(--text)' : isTp1||isTp2||isWin ? 'var(--green)' : 'var(--red)';
+    const accumCol = e.accum_pct >= 0 ? 'var(--green)' : 'var(--red)';
+    const accumStr = (e.accum_pct >= 0 ? '+' : '') + e.accum_pct + '%';
+    const reasonStr = isBuy ? '—' : isTp1 ? '30% at TP1' : isTp2 ? '30% at TP2' : e.reason || '—';
 
-    return `<tr class="${{rowCls}}">
+    // Clickable ticker — jump to chart and highlight matching signal/trade
+    const sidx = tickerIdx[e.ticker_full];
+    const tickerClick = sidx !== undefined
+      ? `onclick="ptGoToChart(${{sidx}}, '${{e.ticker}}', '${{e.date}}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--accent)"`
+      : '';
+
+    return `<tr class="${{rowCls}}" id="pt-row-${{rowI}}">
       <td style="color:var(--text)">${{e.date}}</td>
       <td><span class="pt-action ${{actCls}}">${{actLbl}}</span></td>
-      <td style="color:var(--white);font-weight:600">${{e.ticker}}</td>
-      <td class="r" style="color:var(--text)">฿${{sizing}}</td>
-      <td class="r" style="color:var(--text)">฿${{cashAfter}}</td>
+      <td ${{tickerClick}} style="color:var(--white);font-weight:600">${{e.ticker}}${{sidx!==undefined ? ' <span style="font-size:9px;color:var(--accent);opacity:.6">→</span>' : ''}}</td>
+      <td class="r" style="color:var(--text)">฿${{Math.round(e.sizing).toLocaleString()}}</td>
+      <td class="r" style="color:var(--text)">฿${{Math.round(e.cash_after).toLocaleString()}}</td>
       <td style="color:var(--text);font-size:11px">${{reasonStr}}</td>
-      <td class="r" style="color:${{retCol}}">${{retStr}}</td>
       <td class="r" style="color:${{retCol}}">${{pnlStr}}</td>
+      <td class="r" style="color:${{retCol}}">${{retStr}}</td>
       <td class="r" style="color:var(--white);font-weight:500">฿${{Math.round(e.balance).toLocaleString()}}</td>
+      <td class="r" style="color:${{accumCol}};font-weight:600">${{accumStr}}</td>
     </tr>`;
   }}).join('');
+}}
+
+function ptGoToChart(idx, ticker, date) {{
+  switchNav('chart');
+  loadStock(idx);
+  document.getElementById('sb-'+idx)?.scrollIntoView({{block:'center'}});
+  // Highlight the signal on the right date
+  setTimeout(() => {{
+    const sigs = document.querySelectorAll('.sig-item');
+    sigs.forEach(el => {{
+      if(el.dataset.date && el.dataset.date.startsWith(date)) {{
+        el.click();
+        el.scrollIntoView({{block:'nearest'}});
+      }}
+    }});
+  }}, 120);
 }}
 
 function renderBacktest() {{
@@ -1035,6 +1059,7 @@ function buildSignalList() {{
     const el = document.createElement('div');
     el.className = 'sig-item';
     el.id = 'sig-' + idx;
+    el.dataset.date = s.date;  // for portfolio click-through
     const kindLabel = s.kind === 'hz' ? 'Horiz' : 'TL';
     const trade = tradeByBar[s.i];
     let retHtml = '';
