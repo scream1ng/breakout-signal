@@ -28,6 +28,7 @@ from core.rsm                import calc_rsm_series
 from core.scanner            import fetch_tv_stocks
 from core.entry              import detect_pivots
 from core.exit               import simulate
+from core.portfolio          import simulate_portfolio
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
 from output.discord           import send_discord
@@ -326,8 +327,9 @@ def main():
             results, _ = run_full_scan(bench)
             regime_results = [r for r in results if r.get('in_regime')]
             stocks_data    = [r['chart_data'] for r in regime_results if r.get('chart_data')]
+            portfolio_data = simulate_portfolio(regime_results, CFG)
             path = generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                                          filename='index.html')
+                                          filename='index.html', portfolio=portfolio_data)
             webbrowser.open(f'file://{os.path.abspath(path)}')
         return
 
@@ -342,8 +344,9 @@ def main():
     regime_results = [r for r in results if r.get('in_regime')]
     stocks_data    = [r['chart_data'] for r in regime_results if r.get('chart_data')]
     if stocks_data:
+        portfolio_data = simulate_portfolio(regime_results, CFG)
         generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                               filename='index.html')
+                               filename='index.html', portfolio=portfolio_data)
         print(f'  Chart updated → python main.py --view\n')
 
     if args.discord:
