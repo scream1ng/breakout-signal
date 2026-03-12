@@ -149,6 +149,9 @@ def detect_pivots(
             date_str = (str(df.index[i].date())
                         if hasattr(df.index[i], 'date') else str(i))
 
+            atr_pct_val = (atr / bp * 100) if bp > 0 else 0
+            price_dist  = ((bp - sma_i) / sma_i * 100) if (not np.isnan(sma_i) and sma_i > 0) else 0
+            stretch_val = round(price_dist / atr_pct_val, 2) if atr_pct_val > 0 else 0
             all_breaks.append(dict(
                 bar       = i,
                 bp        = bp,
@@ -159,6 +162,7 @@ def detect_pivots(
                 atr       = round(atr, 4),
                 close     = round(cl_i, 4),
                 sma50     = round(sma_i, 4) if not np.isnan(sma_i) else None,
+                stretch   = stretch_val,
                 rsm_ok    = rsm_val >= rsm_min,
                 rvol_ok   = rv >= rvol_min,
                 regime_ok = in_regime and (not np.isnan(sma_i)) and (cl_i > sma_i),

@@ -102,27 +102,30 @@ def _build_chart_data(
         tp2_pct = round((tp2 - bp) / bp * 100, 2) if tp2 else None
         rr  = round(abs(tp1_pct / sl_pct), 1) if sl_pct and tp1_pct and sl_pct != 0 else None
 
-        all_pass = brk['regime_ok'] and brk['rvol_ok'] and brk['rsm_ok']
-        if all_pass:
-            col = '#ff6ec7'; label = 'ENTRY (all pass)'
+        stretch_v = brk.get('stretch', 0)
+        if stretch_v > 4:
+            col = '#ef5350'; label = 'STR >4 (overextended)';  filter_type = 'STR'
         elif not brk['regime_ok']:
-            col = '#888888'; label = 'Below SMA50'
-        elif not brk['rsm_ok'] and brk['rvol_ok']:
-            col = '#2196F3'; label = f'High RVol, RSM {brk["rsm"]:.0f} < {rsm_min}'
-        elif not brk['rsm_ok']:
-            col = '#ffd740'; label = f'RSM {brk["rsm"]:.0f} < {rsm_min}'
+            col = '#555555'; label = 'Below SMA50';             filter_type = 'Below'
+        elif brk['rvol_ok'] and brk['rsm_ok']:
+            col = '#ff6ec7'; label = 'Prime (RVOL+RSM+SMA50)'; filter_type = 'Prime'
+        elif brk['rvol_ok']:
+            col = '#2196F3'; label = f"RVOL (RSM {brk['rsm']:.0f} < {rsm_min})"; filter_type = 'RVOL'
+        elif brk['rsm_ok']:
+            col = '#4caf50'; label = 'RSM (no RVOL)';          filter_type = 'RSM'
         else:
-            col = '#26a69a'; label = f'RVol {brk["rvol"]:.1f}x (normal)'
+            col = '#ffd740'; label = 'SMA50 only';             filter_type = 'SMA50'
 
         signals_json.append(dict(
             i=i, bar_y=round(float(df['High'].iloc[i]),4),
             bp=round(bp,4), kind=brk['kind'], date=brk['date'],
             rsm=brk['rsm'], rvol=brk['rvol'], atr=round(atr,4),
             close=brk['close'], sma50=brk['sma50'],
+            stretch=brk.get('stretch', 0),
             sl=sl, tp1=tp1, tp2=tp2,
             sl_pct=sl_pct, tp1_pct=tp1_pct, tp2_pct=tp2_pct, rr=rr,
             rsm_ok=brk['rsm_ok'], rvol_ok=brk['rvol_ok'], regime_ok=brk['regime_ok'],
-            col=col, label=label,
+            col=col, label=label, filter_type=filter_type,
         ))
 
     last_close = round(float(df['Close'].iloc[-1]), 4)
@@ -148,8 +151,9 @@ def _build_chart_data(
             ret_pct     = round(float(t.get('entry_return_pct',0)),2),
             entry_date  = str(t.get('entry_date','')),
             exit_date   = str(t.get('exit_date','')),
-            filter_type = t.get('filter_type','Full'),
+            filter_type = t.get('filter_type','Prime'),
             win         = bool(t.get('total_pnl',0) > 0),
+            stretch     = round(float(t.get('stretch', 0)), 2),
         ))
 
     return dict(
@@ -296,9 +300,11 @@ def draw_interactive_chart(
   .tr-row:hover {{ background:rgba(0,229,204,.05); }}
   .tr-row.active {{ background:rgba(0,229,204,.1); }}
   .tr-filter {{ font-size:8px; padding:1px 5px; border-radius:3px; font-weight:600; }}
-  .tf-full    {{ background:rgba(255,110,199,.15); color:#ff6ec7; }}
-  .tf-norsm   {{ background:rgba(33,150,243,.15);  color:#64b5f6; }}
-  .tf-regime  {{ background:rgba(158,158,158,.15); color:#aaa; }}
+  .tf-prime    {{ background:rgba(255,110,199,.15); color:#ff6ec7; }}
+  .tf-rvol    {{ background:rgba(33,150,243,.15);  color:#64b5f6; }}
+  .tf-rsm     {{ background:rgba(76,175,80,.15);   color:#81c784; }}
+  .tf-sma50   {{ background:rgba(255,215,64,.15);  color:#ffd740; }}
+  .tf-str     {{ background:rgba(239,83,80,.15);   color:#ef9a9a; }}
   .tr-stat {{ padding:8px 10px; font-size:10px; border-top:1px solid var(--border);
               display:flex; gap:12px; flex-wrap:wrap; flex-shrink:0; color:var(--text); }}
 
@@ -313,7 +319,7 @@ def draw_interactive_chart(
 <body>
 <div class="app">
   <header>
-    <div class="logo">⬡ PB SCANNER</div>
+    <div class="logo">◈ BREAKOUT SCANNER</div>
     <div class="hticker" id="h-ticker">—</div>
     <div class="hinfo" id="h-info"></div>
     <div class="hrsm" id="h-rsm"></div>
@@ -573,6 +579,10 @@ function drawChart() {{
   const yRsmMin=yOf(D.rsm_min,1);
   ctx.beginPath(); ctx.moveTo(MARGIN.l,yRsmMin); ctx.lineTo(W-MARGIN.r,yRsmMin); ctx.stroke();
   ctx.setLineDash([]);
+  // RSM threshold label on right axis
+  ctx.fillStyle='rgba(255,215,64,.8)'; ctx.font='bold 9px DM Mono'; ctx.textAlign='left';
+  ctx.fillText(D.rsm_min, W-MARGIN.r+3, yRsmMin+3);
+  ctx.setLineDash([]);
 
   // ── RVol panel ────────────────────────────────────────────────────────
   D.rvol.forEach((v,i) => {{
@@ -641,15 +651,14 @@ function drawOverlay(sigIdx) {{
     ctx.setLineDash([]);
   }}
 
-  // Big dot on the signal
-  // Big circle with white border on entry
+  // Big circle on selected signal
   ctx.fillStyle=s.col;
   ctx.beginPath(); ctx.arc(x, yOf(s.bar_y,0)-10, 7, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
 
   // Highlight matching trade exit arrows
   // Try Full trade first, fall back to any trade at that bar
-  const trade = (D.trades||[]).find(t => t.entry_bar === s.i && t.filter_type === 'Full')
+  const trade = (D.trades||[]).find(t => t.entry_bar === s.i && t.filter_type === 'Prime')
              || (D.trades||[]).find(t => t.entry_bar === s.i);
   if(trade) {{
     function drawArrowHL(bar, price, col, sz=9) {{
@@ -686,7 +695,7 @@ function buildSignalList() {{
   // Build lookup: entry_bar → trade (Full first, fallback any)
   const tradeByBar = {{}};
   (D.trades||[]).forEach(t => {{
-    if(!tradeByBar[t.entry_bar] || t.filter_type==='Full') tradeByBar[t.entry_bar] = t;
+    if(!tradeByBar[t.entry_bar] || t.filter_type==='Prime') tradeByBar[t.entry_bar] = t;
   }});
 
   const list = document.getElementById('sig-list');
@@ -698,6 +707,10 @@ function buildSignalList() {{
     el.id = 'sig-' + idx;
     const kindLabel = s.kind === 'hz' ? 'Horiz' : 'TL';
     const trade = tradeByBar[s.i];
+    const dotHtml = `<div class="sig-dot" style="background:${{s.col}}"></div>`;
+    const ftLabel = s.filter_type && s.filter_type !== 'Below'
+      ? `<span class="tr-filter tf-${{s.filter_type.toLowerCase()}}" style="font-size:9px;padding:1px 4px;margin-right:3px">${{s.filter_type}}</span>`
+      : '';
     let retHtml = '';
     if(trade) {{
       const retCol = trade.ret_pct >= 0 ? '#00e676' : '#ef5350';
@@ -707,10 +720,10 @@ function buildSignalList() {{
       retHtml = ` <span style="color:${{retCol}};font-weight:600">${{trade.ret_pct>=0?'+':''}}${{trade.ret_pct.toFixed(1)}}%${{tp1str}}${{tp2str}} ${{rsn}}</span>`;
     }}
     el.innerHTML = `
-      <div class="sig-dot" style="background:${{s.col}}"></div>
+      ${{dotHtml}}
       <div class="sig-info">
-        <div class="sig-date">${{s.date}} <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
-        <div class="sig-sub">฿${{s.bp.toFixed(2)}} · ${{s.label}}${{retHtml}}</div>
+        <div class="sig-date">${{ftLabel}}${{s.date}} <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
+        <div class="sig-sub">฿${{s.bp.toFixed(2)}} · STR ${{s.stretch?.toFixed(1)}}x${{retHtml}}</div>
       </div>
     `;
     el.onclick = () => selectSignal(idx);
@@ -723,27 +736,39 @@ function buildSignalList() {{
 function buildTradeSummary() {{
   const box = document.getElementById('trade-summary');
   const trades = D.trades || [];
-  if(!trades.length) {{ box.innerHTML=''; return; }}
-  const fc = {{ 'Full':'tf-full', 'No RSM':'tf-norsm', 'Regime only':'tf-regime' }};
-  const groups = {{}};
-  trades.forEach(t => {{
-    if(!groups[t.filter_type]) groups[t.filter_type]=[];
-    groups[t.filter_type].push(t);
-  }});
-  let rows = '';
-  ['Full','No RSM','Regime only'].forEach(lbl => {{
-    const ts = groups[lbl]; if(!ts) return;
-    const wins = ts.filter(t=>t.win).length;
-    const wr   = (wins/ts.length*100).toFixed(0);
-    const avg  = ts.reduce((s,t)=>s+t.ret_pct,0)/ts.length;
+  const sigs   = D.signals || [];
+  if(!trades.length && !sigs.length) {{ box.innerHTML=''; return; }}
+
+  const sigCounts = {{}};
+  sigs.forEach(s => {{ sigCounts[s.filter_type] = (sigCounts[s.filter_type]||0)+1; }});
+
+  function tradeRow(lbl, cls, ts) {{
+    if(!ts.length) return '';
+    const wins   = ts.filter(t=>t.win).length;
+    const wr     = (wins/ts.length*100).toFixed(0);
+    const avg    = ts.reduce((s,t)=>s+t.ret_pct,0)/ts.length;
     const avgCol = avg >= 0 ? '#00e676' : '#ef5350';
-    rows += `<div class="ts-row">
-      <span><span class="tr-filter ${{fc[lbl]||''}}" style="margin-right:5px">${{lbl}}</span>
+    return `<div class="ts-row">
+      <span><span class="tr-filter ${{cls}}" style="margin-right:5px">${{lbl}}</span>
         ${{ts.length}}T &nbsp; WR${{wr}}%</span>
       <span style="color:${{avgCol}};font-weight:600">avg ${{avg>=0?'+':''}}${{avg.toFixed(1)}}%</span>
     </div>`;
-  }});
-  box.innerHTML = `<div class="ts-title">BACKTEST SUMMARY</div>${{rows}}`;
+  }}
+
+  let rows = '';
+
+  // STR — simulated but overextended
+  rows += tradeRow('STR',   'tf-str',   trades.filter(t=>t.filter_type==='STR'));
+  // Prime — main strategy
+  const primeTrades = trades.filter(t=>t.filter_type==='Prime');
+  rows += tradeRow('Prime', 'tf-prime', primeTrades);
+  // Other types — simulated for reference
+  rows += tradeRow('RVOL',  'tf-rvol',  trades.filter(t=>t.filter_type==='RVOL'));
+  rows += tradeRow('RSM',   'tf-rsm',   trades.filter(t=>t.filter_type==='RSM'));
+  rows += tradeRow('SMA50', 'tf-sma50', trades.filter(t=>t.filter_type==='SMA50'));
+
+  if(rows) box.innerHTML = `<div class="ts-title">BACKTEST SUMMARY</div>${{rows}}`;
+  else box.innerHTML = '';
 }}
 
 function selectSignal(idx) {{
@@ -784,24 +809,25 @@ function renderAnalysis(idx) {{
     <div class="an-row"><span class="an-label">TP2 (${{D.tp2_mult}}×ATR)</span>
       <span class="an-value" style="color:#00b862">${{fmt(s.tp2)}}
         <span style="font-size:10px;opacity:.8">+${{s.tp2_pct?.toFixed(2)}}%</span></span></div>
-    <div class="an-row"><span class="an-label">Risk/Reward</span>
-      <span class="an-value yellow">1 : ${{s.rr ?? '—'}}</span></div>
     <div class="an-sep"></div>
-    <div class="an-row"><span class="an-label">ATR</span>
-      <span class="an-value">฿${{s.atr}}</span></div>
+    <div class="an-row"><span class="an-label">Stretch (×ATR)</span>
+      <span class="an-value" style="color:${{s.stretch>4?'var(--red)':s.stretch>2?'var(--yellow)':'var(--green)'}}">${{s.stretch?.toFixed(2)}}x
+        <span style="font-size:10px;opacity:.7">${{s.stretch>4?'⚠ overextended':s.stretch>2?'extended':'ok'}}</span>
+      </span></div>
     <div class="an-row"><span class="an-label">RSM</span>
       <span class="an-value ${{s.rsm_ok ? 'green' : 'yellow'}}">${{s.rsm?.toFixed(1)}}
         <span style="font-size:10px;opacity:.7">${{s.rsm_ok ? '✓' : '< '+D.rsm_min}}</span></span></div>
     <div class="an-row"><span class="an-label">RVol</span>
       <span class="an-value ${{s.rvol_ok ? 'green' : 'blue'}}">${{s.rvol?.toFixed(2)}}×
         <span style="font-size:10px;opacity:.7">${{s.rvol_ok ? '✓' : '< '+D.rvol_min+'x'}}</span></span></div>
-    <div class="an-row"><span class="an-label">Regime (>SMA50)</span>
+    <div class="an-row"><span class="an-label">SMA50</span>
       <span class="an-value ${{s.regime_ok ? 'green' : 'grey'}}">${{s.regime_ok ? 'YES ✓' : 'NO ✗'}}</span></div>
     <div class="an-sep"></div>
     <div class="filter-row">
-      <span class="badge ${{s.regime_ok?'pass':'fail'}}">REGIME</span>
+      <span class="badge ${{s.regime_ok?'pass':'fail'}}">SMA50</span>
       <span class="badge ${{s.rvol_ok?'pass':'fail'}}">RVOL</span>
       <span class="badge ${{s.rsm_ok?'pass':'fail'}}">RSM</span>
+      <span class="badge ${{(s.stretch<=4)?'pass':'fail'}}">STR</span>
     </div>
   `;
 }}

@@ -23,14 +23,11 @@ def _load_env():
                     if not line or line.startswith('#') or '=' not in line:
                         continue
                     key, _, val = line.partition('=')
-                    key = key.strip()
-                    val = val.strip().strip('"').strip("'")
+                    key = key.strip(); val = val.strip().strip('"').strip("'")
                     if key and key not in os.environ:
                         os.environ[key] = val
             return
-    print('  No .env found. Tried:')
-    for p in candidates:
-        print(f'    {p}')
+    print('  No .env found.')
 
 
 def _post(url: str, text: str) -> bool:
@@ -47,11 +44,20 @@ def _post(url: str, text: str) -> bool:
 
 
 def _criteria_label(sig: dict) -> str:
-    if sig.get('rsm_ok') and sig.get('rvol_ok'):
-        return 'Full'
-    if sig.get('rvol_ok') and not sig.get('rsm_ok'):
-        return 'No RSM'
-    return 'Regime'
+    """5-type classification matching chart system."""
+    stretch = sig.get('stretch', 0)
+    rvol_ok = sig.get('rvol_ok', False)
+    rsm_ok  = sig.get('rsm_ok',  False)
+    if stretch > 4:        return 'STR'
+    if rvol_ok and rsm_ok: return 'Prime'
+    if rvol_ok:            return 'RVOL'
+    if rsm_ok:             return 'RSM'
+    return 'SMA50'
+
+
+def _criteria_sort_key(sig: dict) -> int:
+    return {'Prime': 0, 'STR': 1, 'RVOL': 2, 'RSM': 3, 'SMA50': 4}.get(
+        _criteria_label(sig), 9)
 
 
 def send_discord(today_signals, pending_list, results, date_str, cfg):
@@ -62,33 +68,34 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
         return
 
     date_fmt    = date_str.replace('_', '-')
-    n_regime    = len(results)
     n_watchlist = len(pending_list)
     n_breakout  = len(today_signals)
 
-    HDR = f"{'Ticker':<7}  {'T':<3}  {'Criteria':<8}  {'Level':>7}  {'Close':>7}  {'RVol':>6}  {'RSM':>4}  {'ATR':>5}"
+    # Header: Ticker | T | Criteria | Level | Close | RVol | RSM | STR
+    HDR = f"{'Ticker':<7}  {'T':<3}  {'Criteria':<6}  {'Level':>7}  {'Close':>7}  {'RVol':>6}  {'RSM':>4}  {'STR':>5}"
     DIV = "─" * len(HDR)
 
     if today_signals:
         rows = []
-        for s in sorted(today_signals, key=lambda x: x['ticker']):
+        # Sort: Prime first, then STR, RVOL, RSM, SMA50
+        for s in sorted(today_signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
             t       = s['ticker'].replace('.BK', '')
             kind    = 'Hz' if s.get('kind') == 'hz' else 'TL'
             crit    = _criteria_label(s)
-            close   = s.get('close', 0)
-            atr_pct = (s.get('atr', 0) / close * 100) if close else 0
+            stretch = s.get('stretch', 0)
+            str_disp= f'{stretch:.1f}x' if stretch else '—'
             rows.append(
-                f"{t:<7}  {kind:<3}  {crit:<8}  "
-                f"{s.get('bp',0):>7.2f}  {close:>7.2f}  "
-                f"{s.get('rvol',0):>5.1f}x  {s.get('rsm',0):>4.0f}  {atr_pct:>4.1f}%"
+                f"{t:<7}  {kind:<3}  {crit:<6}  "
+                f"{s.get('bp',0):>7.2f}  {s.get('close',0):>7.2f}  "
+                f"{s.get('rvol',0):>5.1f}x  {s.get('rsm',0):>4.0f}  {str_disp:>5}"
             )
         signal_block = "\n".join(rows)
     else:
         signal_block = "No breakout signals today."
 
     msg = (
-        f"**PB Scanner  |  {date_fmt}**\n"
-        f"`{n_regime} above SMA50  ·  {n_watchlist} watchlist  ·  {n_breakout} breakout{'s' if n_breakout != 1 else ''}`\n"
+        f"**BREAKOUT SCANNER  |  {date_fmt}**\n"
+        f"`{n_watchlist} watchlist  ·  {n_breakout} breakout{'s' if n_breakout != 1 else ''}`\n"
         f"\n"
         f"```\n{HDR}\n{DIV}\n{signal_block}\n```\n"
         f"{CHART_URL}"

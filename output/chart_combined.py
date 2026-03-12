@@ -51,18 +51,20 @@ def generate_combined_html(
         trades = r.get('trades', [])
         wins   = [t for t in trades if t.get('win')]
         losses = [t for t in trades if not t.get('win')]
+        atr_pcts = [t.get('stretch', 0) for t in trades if t.get('stretch', 0) > 0]
         bt_rows.append(dict(
-            ticker     = r['ticker'].replace('.BK',''),
-            ticker_full= r['ticker'],
-            idx        = ticker_to_idx.get(r['ticker'], -1),
-            rsm        = round(r.get('rs_momentum', 0), 0),
-            trades     = len(trades),
-            wr         = round(len(wins) / len(trades) * 100, 1) if trades else 0,
-            pnl_pct    = round(r.get('total_pnl_pct', 0), 2),
-            avg_win    = round(sum(t.get('ret_pct',0) for t in wins)   / len(wins),   2) if wins   else None,
-            avg_loss   = round(sum(t.get('ret_pct',0) for t in losses) / len(losses), 2) if losses else None,
-            has_signal = bool(r.get('today_signal')),
-            has_pending= bool(r.get('pending')),
+            ticker      = r['ticker'].replace('.BK',''),
+            ticker_full = r['ticker'],
+            idx         = ticker_to_idx.get(r['ticker'], -1),
+            rsm         = round(r.get('rs_momentum', 0), 0),
+            trades      = len(trades),
+            wr          = round(len(wins) / len(trades) * 100, 1) if trades else 0,
+            pnl_pct     = round(r.get('total_pnl_pct', 0), 2),
+            avg_win     = round(sum(t.get('ret_pct',0) for t in wins)   / len(wins),   2) if wins   else None,
+            avg_loss    = round(sum(t.get('ret_pct',0) for t in losses) / len(losses), 2) if losses else None,
+            avg_stretch = round(sum(atr_pcts) / len(atr_pcts), 2) if atr_pcts else None,
+            has_signal  = bool(r.get('today_signal')),
+            has_pending = bool(r.get('pending')),
         ))
     # Overall summary
     all_trades  = [t for r in results for t in r.get('trades', [])]
@@ -156,7 +158,7 @@ def generate_combined_html(
                font-family:'DM Mono',monospace; overflow:hidden; }}
 
   /* ── Layout ── */
-  .app {{ display:grid; grid-template-columns:220px 1fr 300px;
+  .app {{ display:grid; grid-template-columns:190px 1fr 260px;
           grid-template-rows:48px 1fr; height:100vh; }}
   header {{ grid-column:1/-1; display:flex; align-items:center; gap:14px;
             padding:0 18px; background:var(--panel);
@@ -229,9 +231,11 @@ def generate_combined_html(
   .tr-row:hover  {{ background:rgba(0,229,204,.05); }}
   .tr-row.active {{ background:rgba(0,229,204,.1); }}
   .tr-filter {{ font-size:8px; padding:1px 5px; border-radius:3px; font-weight:600; }}
-  .tf-full   {{ background:rgba(255,110,199,.15); color:#ff6ec7; }}
-  .tf-norsm  {{ background:rgba(33,150,243,.15);  color:#64b5f6; }}
-  .tf-regime {{ background:rgba(158,158,158,.15); color:#aaa; }}
+  .tf-prime   {{ background:rgba(255,110,199,.15); color:#ff6ec7; }}
+  .tf-rvol   {{ background:rgba(33,150,243,.15);  color:#64b5f6; }}
+  .tf-rsm    {{ background:rgba(76,175,80,.15);   color:#81c784; }}
+  .tf-sma50  {{ background:rgba(255,215,64,.15);  color:#ffd740; }}
+  .tf-str    {{ background:rgba(239,83,80,.15);   color:#ef9a9a; }}
   .tr-stat {{ padding:8px 10px; font-size:10px; border-top:1px solid var(--border);
               display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0; color:var(--text); }}
   /* ── Trade summary ── */
@@ -294,30 +298,32 @@ def generate_combined_html(
          padding:0 5px; font-size:10px; color:var(--text); }}
 
   /* ── Nav tabs (header) ── */
-  .nav-tabs {{ display:flex; gap:2px; margin-left:auto; }}
-  .nav-tab {{ padding:6px 16px; font-size:10px; letter-spacing:.07em; cursor:pointer;
-              border-radius:4px; color:var(--text); transition:all .15s; }}
-  .nav-tab.active {{ background:var(--accent); color:#000; font-weight:600; }}
-  .nav-tab:not(.active):hover {{ background:rgba(0,229,204,.1); color:var(--white); }}
+  .nav-tabs {{ display:flex; gap:3px; margin-left:auto; align-items:flex-end; }}
+  .nav-tab {{ padding:8px 20px; font-size:11px; letter-spacing:.08em; cursor:pointer;
+              background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08);
+              border-bottom:2px solid transparent; border-radius:4px 4px 0 0;
+              color:var(--text); font-family:'Syne',sans-serif; font-weight:600; transition:all .15s; }}
+  .nav-tab.active {{ background:rgba(0,229,204,.12); color:var(--accent); border-color:rgba(0,229,204,.25); border-bottom-color:var(--accent); font-weight:700; }}
+  .nav-tab:not(.active):hover {{ background:rgba(255,255,255,.08); color:var(--white); border-color:rgba(255,255,255,.15); }}
 
   /* ── Backtest pane (full overlay) ── */
   #pane-backtest {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
-                    background:var(--bg); overflow-y:auto; padding:28px 48px; z-index:50; }}
+                    background:var(--bg); overflow-y:auto; padding:28px 40px; z-index:50; }}
   .bt-title {{ font-family:'Syne',sans-serif; font-weight:800; font-size:22px;
                color:var(--accent); margin-bottom:8px; }}
   .bt-sub   {{ font-size:13px; color:var(--text); margin-bottom:24px; }}
-  .bt-summary {{ display:flex; gap:20px; flex-wrap:wrap; margin-bottom:28px; }}
+  .bt-summary {{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:28px; }}
   .bt-card {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
-              padding:16px 28px; min-width:160px; }}
+              padding:14px 22px; min-width:140px; }}
   .bt-card-label {{ font-size:10px; color:var(--text); letter-spacing:.08em;
                     text-transform:uppercase; margin-bottom:8px; }}
-  .bt-card-val   {{ font-size:26px; font-weight:700; color:var(--white); }}
-  .bt-table {{ width:100%; border-collapse:collapse; font-size:13px; }}
-  .bt-table th {{ padding:10px 16px; text-align:left; color:var(--text); font-size:11px;
+  .bt-card-val   {{ font-size:24px; font-weight:700; color:var(--white); }}
+  .bt-table {{ width:100%; border-collapse:collapse; font-size:12px; }}
+  .bt-table th {{ padding:9px 14px; text-align:left; color:var(--text); font-size:11px;
                   letter-spacing:.07em; text-transform:uppercase; border-bottom:2px solid var(--border);
                   position:sticky; top:0; background:var(--bg); }}
   .bt-table th.r {{ text-align:right; }}
-  .bt-table td {{ padding:10px 16px; border-bottom:1px solid rgba(42,46,57,.5); }}
+  .bt-table td {{ padding:9px 14px; border-bottom:1px solid rgba(42,46,57,.5); }}
   .bt-table td.r {{ text-align:right; }}
   .bt-table tr:hover td {{ background:rgba(0,229,204,.04); }}
   .bt-tag {{ font-size:10px; padding:2px 6px; border-radius:3px; margin-left:6px; vertical-align:middle; }}
@@ -326,16 +332,16 @@ def generate_combined_html(
 
   /* ── Portfolio pane ── */
   #pane-portfolio {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
-                     background:var(--bg); overflow-y:auto; padding:28px 48px; z-index:50; }}
+                     background:var(--bg); overflow-y:auto; padding:28px 40px; z-index:50; }}
   .pt-title {{ font-family:'Syne',sans-serif; font-weight:800; font-size:22px;
                color:var(--accent); margin-bottom:8px; }}
   .pt-sub   {{ font-size:13px; color:var(--text); margin-bottom:28px; }}
-  .pt-cards {{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:36px; }}
+  .pt-cards {{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:36px; }}
   .pt-card  {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
-               padding:14px 24px; min-width:150px; flex-shrink:0; }}
+               padding:12px 20px; min-width:140px; flex-shrink:0; }}
   .pt-card-label {{ font-size:10px; color:var(--text); letter-spacing:.08em;
                     text-transform:uppercase; margin-bottom:8px; }}
-  .pt-card-val {{ font-size:24px; font-weight:700; }}
+  .pt-card-val {{ font-size:22px; font-weight:700; }}
   .pt-section {{ font-family:'Syne',sans-serif; font-size:12px; font-weight:700;
                  color:var(--text); letter-spacing:.08em; text-transform:uppercase;
                  margin:0 0 14px; padding-bottom:8px; border-bottom:2px solid var(--border); }}
@@ -367,7 +373,7 @@ def generate_combined_html(
 <body>
 <div class="app">
   <header>
-    <div class="logo">⬡ PB SCANNER</div>
+    <div class="logo">◈ BREAKOUT SCANNER</div>
     <div class="hticker" id="h-ticker">← Select a stock</div>
     <div class="hinfo"   id="h-info"></div>
     <div class="hrsm"    id="h-rsm"></div>
@@ -376,9 +382,6 @@ def generate_combined_html(
       <div class="nav-tab active" id="nav-chart"     onclick="switchNav('chart')">CHART</div>
       <div class="nav-tab"        id="nav-backtest"  onclick="switchNav('backtest')">BACKTEST</div>
       <div class="nav-tab"        id="nav-portfolio" onclick="switchNav('portfolio')">PORTFOLIO</div>
-    </div>
-    <div style="font-size:10px;color:var(--text);margin-left:8px">
-      <kbd>↑↓</kbd> navigate &nbsp; <kbd>Esc</kbd> clear
     </div>
   </header>
 
@@ -422,6 +425,7 @@ def generate_combined_html(
 
 <!-- BACKTEST pane (fixed overlay, hidden by default) -->
 <div id="pane-backtest">
+  <div style="max-width:1080px;margin:0 auto">
   <div class="bt-title">BACKTEST RESULTS</div>
   <div class="bt-sub" id="bt-sub">Loading...</div>
   <div class="bt-summary" id="bt-cards"></div>
@@ -434,15 +438,18 @@ def generate_combined_html(
         <th class="r">WR%</th>
         <th class="r">Avg Win</th>
         <th class="r">Avg Loss</th>
+        <th class="r">Avg Stretch</th>
         <th class="r">PnL%</th>
       </tr>
     </thead>
     <tbody id="bt-tbody"></tbody>
   </table>
+  </div>
 </div>
 
 <!-- PORTFOLIO pane -->
 <div id="pane-portfolio">
+  <div style="max-width:1080px;margin:0 auto">
   <div class="pt-title">PORTFOLIO SIMULATION</div>
   <div class="pt-sub" id="pt-sub">Loading...</div>
 
@@ -460,6 +467,7 @@ def generate_combined_html(
         <th style="width:110px">Date</th>
         <th style="width:60px">Action</th>
         <th style="width:110px">Ticker</th>
+        <th class="r">Stretch</th>
         <th class="r">Sizing (฿)</th>
         <th class="r">Cash (฿)</th>
         <th>Exit Reason</th>
@@ -470,6 +478,7 @@ def generate_combined_html(
     </thead>
     <tbody id="pt-tbody"></tbody>
   </table>
+  </div>
 </div>
 
 <script>
@@ -638,6 +647,7 @@ function renderPortfolio() {{
       <td style="color:var(--text)">${{e.date}}</td>
       <td><span class="pt-action ${{actCls}}">${{actLbl}}</span></td>
       <td ${{tickerClick}} style="color:var(--white);font-weight:600">${{e.ticker}}${{sidx!==undefined ? ' <span style="font-size:9px;color:var(--accent);opacity:.6">→</span>' : ''}}</td>
+      <td class="r" style="color:${{isBuy&&e.stretch>4?'var(--red)':isBuy&&e.stretch>2?'var(--yellow)':'var(--text)'}}">${{isBuy&&e.stretch?e.stretch+'x':'—'}}</td>
       <td class="r" style="color:var(--text)">฿${{Math.round(e.sizing).toLocaleString()}}</td>
       <td class="r" style="color:var(--text)">฿${{Math.round(e.cash_after).toLocaleString()}}</td>
       <td style="color:var(--text);font-size:11px">${{reasonStr}}</td>
@@ -707,6 +717,7 @@ function renderBacktest() {{
       <td class="r">${{r.wr}}%</td>
       <td class="r" style="color:var(--green)">${{r.avg_win!=null?(r.avg_win>=0?'+':'')+r.avg_win+'%':'—'}}</td>
       <td class="r" style="color:var(--red)">${{r.avg_loss!=null?r.avg_loss+'%':'—'}}</td>
+      <td class="r" style="color:${{r.avg_stretch>4?'var(--red)':r.avg_stretch>2?'var(--yellow)':'var(--text)'}}">${{r.avg_stretch!=null?r.avg_stretch+'x':'—'}}</td>
       <td class="r" style="color:${{pnlCol}};font-weight:600">${{r.pnl_pct>=0?'+':''}}${{r.pnl_pct}}%</td>
     </tr>`;
   }}).join('');
@@ -967,6 +978,8 @@ function drawChart() {{
   const yRsmMin=yOf(D.rsm_min,1);
   ctx.beginPath(); ctx.moveTo(MARGIN.l,yRsmMin); ctx.lineTo(W-MARGIN.r,yRsmMin); ctx.stroke();
   ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,215,64,.85)'; ctx.font='bold 9px DM Mono'; ctx.textAlign='left';
+  ctx.fillText(D.rsm_min, W-MARGIN.r+3, yRsmMin+3);
 
   D.rvol.forEach((v,i) => {{
     const c = candles[i];
@@ -1020,14 +1033,14 @@ function drawOverlay(sigIdx) {{
     ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(W-MARGIN.r,y); ctx.stroke();
     ctx.setLineDash([]);
   }}
-  // Big circle with white border on entry
+  // Big circle on selected signal
   ctx.fillStyle=s.col;
   ctx.beginPath(); ctx.arc(x, yOf(s.bar_y,0)-10, 7, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle='white'; ctx.lineWidth=1.5; ctx.stroke();
 
   // Highlight matching trade exit arrows
   // Try Full trade first, fall back to any trade at that bar
-  const trade = (D.trades||[]).find(t => t.entry_bar === s.i && t.filter_type === 'Full')
+  const trade = (D.trades||[]).find(t => t.entry_bar === s.i && t.filter_type === 'Prime')
              || (D.trades||[]).find(t => t.entry_bar === s.i);
   if(trade) {{
     function drawArrowHL(bar, price, col, sz=9) {{
@@ -1062,7 +1075,7 @@ function buildSignalList() {{
   // Build lookup: entry_bar → trade (Full first, fallback any)
   const tradeByBar = {{}};
   (D.trades||[]).forEach(t => {{
-    if(!tradeByBar[t.entry_bar] || t.filter_type==='Full') tradeByBar[t.entry_bar] = t;
+    if(!tradeByBar[t.entry_bar] || t.filter_type==='Prime') tradeByBar[t.entry_bar] = t;
   }});
 
   const list = document.getElementById('sig-list');
@@ -1074,6 +1087,10 @@ function buildSignalList() {{
     el.dataset.date = s.date;  // for portfolio click-through
     const kindLabel = s.kind === 'hz' ? 'Horiz' : 'TL';
     const trade = tradeByBar[s.i];
+    const dotHtml = `<div class="sig-dot" style="background:${{s.col}}"></div>`;
+    const ftLabel = s.filter_type && s.filter_type !== 'Below'
+      ? `<span class="tr-filter tf-${{s.filter_type.toLowerCase()}}" style="font-size:9px;padding:1px 4px;margin-right:3px">${{s.filter_type}}</span>`
+      : '';
     let retHtml = '';
     if(trade) {{
       const retCol = trade.ret_pct >= 0 ? '#00e676' : '#ef5350';
@@ -1083,10 +1100,10 @@ function buildSignalList() {{
       retHtml = ` <span style="color:${{retCol}};font-weight:600">${{trade.ret_pct>=0?'+':''}}${{trade.ret_pct.toFixed(1)}}%${{tp1str}}${{tp2str}} ${{rsn}}</span>`;
     }}
     el.innerHTML = `
-      <div class="sig-dot" style="background:${{s.col}}"></div>
+      ${{dotHtml}}
       <div class="sig-info">
-        <div class="sig-date">${{s.date}} <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
-        <div class="sig-sub">฿${{s.bp.toFixed(2)}} · ${{s.label}}${{retHtml}}</div>
+        <div class="sig-date">${{ftLabel}}${{s.date}} <span style="color:#888;font-size:9px">${{kindLabel}}</span></div>
+        <div class="sig-sub">฿${{s.bp.toFixed(2)}} · STR ${{s.stretch?.toFixed(1)}}x${{retHtml}}</div>
       </div>`;
     el.onclick = () => selectSignal(idx);
     list.appendChild(el);
@@ -1100,28 +1117,28 @@ function buildTradeSummary() {{
   const trades = D.trades || [];
   if(!trades.length) {{ box.innerHTML=''; return; }}
 
-  const fc = {{ 'Full':'tf-full', 'No RSM':'tf-norsm', 'Regime only':'tf-regime' }};
-  const groups = {{}};
-  trades.forEach(t => {{
-    if(!groups[t.filter_type]) groups[t.filter_type]=[];
-    groups[t.filter_type].push(t);
-  }});
-
-  let rows = '';
-  ['Full','No RSM','Regime only'].forEach(lbl => {{
-    const ts = groups[lbl]; if(!ts) return;
-    const wins = ts.filter(t=>t.win).length;
-    const wr   = (wins/ts.length*100).toFixed(0);
-    const avg  = (ts.reduce((s,t)=>s+t.ret_pct,0)/ts.length);
+  function tradeRow(lbl, cls, ts) {{
+    if(!ts.length) return '';
+    const wins   = ts.filter(t=>t.win).length;
+    const wr     = (wins/ts.length*100).toFixed(0);
+    const avg    = ts.reduce((s,t)=>s+t.ret_pct,0)/ts.length;
     const avgCol = avg >= 0 ? '#00e676' : '#ef5350';
-    rows += `<div class="ts-row">
-      <span><span class="tr-filter ${{fc[lbl]||''}}" style="margin-right:5px">${{lbl}}</span>
+    return `<div class="ts-row">
+      <span><span class="tr-filter ${{cls}}" style="margin-right:5px">${{lbl}}</span>
         ${{ts.length}}T &nbsp; WR${{wr}}%</span>
       <span style="color:${{avgCol}};font-weight:600">avg ${{avg>=0?'+':''}}${{avg.toFixed(1)}}%</span>
     </div>`;
-  }});
+  }}
 
-  box.innerHTML = `<div class="ts-title">BACKTEST SUMMARY</div>${{rows}}`;
+  let rows = '';
+  rows += tradeRow('STR',   'tf-str',   trades.filter(t=>t.filter_type==='STR'));
+  rows += tradeRow('Prime', 'tf-prime', trades.filter(t=>t.filter_type==='Prime'));
+  rows += tradeRow('RVOL',  'tf-rvol',  trades.filter(t=>t.filter_type==='RVOL'));
+  rows += tradeRow('RSM',   'tf-rsm',   trades.filter(t=>t.filter_type==='RSM'));
+  rows += tradeRow('SMA50', 'tf-sma50', trades.filter(t=>t.filter_type==='SMA50'));
+
+  if(rows) box.innerHTML = `<div class="ts-title">BACKTEST SUMMARY</div>${{rows}}`;
+  else box.innerHTML = '';
 }}
 
 function selectSignal(idx) {{
@@ -1154,23 +1171,25 @@ function renderAnalysis(idx) {{
       <span class="an-value green">${{fmt(s.tp1)}} <span style="font-size:10px;opacity:.8">+${{s.tp1_pct?.toFixed(2)}}%</span></span></div>
     <div class="an-row"><span class="an-label">TP2 (${{D.tp2_mult}}×ATR)</span>
       <span class="an-value" style="color:#00b862">${{fmt(s.tp2)}} <span style="font-size:10px;opacity:.8">+${{s.tp2_pct?.toFixed(2)}}%</span></span></div>
-    <div class="an-row"><span class="an-label">Risk/Reward</span>
-      <span class="an-value yellow">1 : ${{s.rr??'—'}}</span></div>
     <div class="an-sep"></div>
-    <div class="an-row"><span class="an-label">ATR</span><span class="an-value">฿${{s.atr}}</span></div>
+    <div class="an-row"><span class="an-label">Stretch (×ATR)</span>
+      <span class="an-value" style="color:${{s.stretch>4?'var(--red)':s.stretch>2?'var(--yellow)':'var(--green)'}}">${{s.stretch?.toFixed(2)}}x
+        <span style="font-size:10px;opacity:.7">${{s.stretch>4?'⚠ overextended':s.stretch>2?'extended':'ok'}}</span>
+      </span></div>
     <div class="an-row"><span class="an-label">RSM</span>
       <span class="an-value ${{s.rsm_ok?'green':'yellow'}}">${{s.rsm?.toFixed(1)}}
         <span style="font-size:10px;opacity:.7">${{s.rsm_ok?'✓':'< '+D.rsm_min}}</span></span></div>
     <div class="an-row"><span class="an-label">RVol</span>
       <span class="an-value ${{s.rvol_ok?'green':'blue'}}">${{s.rvol?.toFixed(2)}}×
         <span style="font-size:10px;opacity:.7">${{s.rvol_ok?'✓':'< '+D.rvol_min+'x'}}</span></span></div>
-    <div class="an-row"><span class="an-label">Regime (>SMA50)</span>
+    <div class="an-row"><span class="an-label">SMA50</span>
       <span class="an-value ${{s.regime_ok?'green':'grey'}}">${{s.regime_ok?'YES ✓':'NO ✗'}}</span></div>
     <div class="an-sep"></div>
     <div class="filter-row">
-      <span class="badge ${{s.regime_ok?'pass':'fail'}}">REGIME</span>
+      <span class="badge ${{s.regime_ok?'pass':'fail'}}">SMA50</span>
       <span class="badge ${{s.rvol_ok?'pass':'fail'}}">RVOL</span>
       <span class="badge ${{s.rsm_ok?'pass':'fail'}}">RSM</span>
+      <span class="badge ${{(s.stretch<=4)?'pass':'fail'}}">STR</span>
     </div>`;
 }}
 

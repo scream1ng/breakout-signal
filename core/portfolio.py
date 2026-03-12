@@ -46,6 +46,12 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
             # Risk-based position sizing (mirrors exit.py exactly)
             atr_val     = float(t.get('atr_val', 0))
             entry_price = float(t.get('entry_price', 0))
+            stretch     = float(t.get('stretch', 0))
+
+            # Skip overextended stocks: stretch > 4 means price is 4× ATR above SMA50
+            if stretch > 4.0:
+                continue
+
             if atr_val > 0 and entry_price > 0:
                 sld    = atr_val * sl_mult
                 shares = max(1, int((capital * risk_pct) / sld))
@@ -68,9 +74,10 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
                 ret_pct       = float(t.get('ret_pct', 0)),
                 win           = bool(t.get('win', False)),
                 exit_reason   = t.get('exit_reason', ''),
-                cost          = cost,           # position size in ฿
+                cost          = cost,
                 atr_val       = atr_val,
                 entry_price   = entry_price,
+                stretch       = stretch,
             ))
 
     if not raw:
@@ -105,6 +112,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
                     closed_stats.append(dict(ret_pct=ret_pct, pnl=pnl, win=pnl > 0))
                 else:
                     keep.append(ex)
+            p['exits'] = keep   # ← remove processed exits so they never fire twice
             for ex_date, frac, ret_pct, label, slice_cost, pnl in done:
                 tp_suffix = ''
                 if label not in ('TP1', 'TP2'):
@@ -112,9 +120,8 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
                     if p['tp2_hit']: tp_suffix += ' TP2✓'
                 raw_events.append((
                     ex_date, 1, 'SELL', p['ticker_short'],
-                    slice_cost, ret_pct, pnl, label + tp_suffix, p['ticker']
+                    slice_cost, ret_pct, pnl, label + tp_suffix, p['ticker'], 0
                 ))
-            p['exits'] = keep
             if not keep:
                 to_remove.append(pid)
         for pid in to_remove:
@@ -127,6 +134,10 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
             n_skipped += 1
             continue
         if t['cost'] > cash:
+            n_skipped += 1
+            continue
+        # Don't hold the same ticker twice at the same time
+        if any(p['ticker'] == t['ticker'] for p in open_pos.values()):
             n_skipped += 1
             continue
 
@@ -161,7 +172,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
         )
         raw_events.append((
             t['entry_date'], 0, 'BUY', t['ticker_short'],
-            t['cost'], 0.0, -actual_cost, '', t['ticker']
+            t['cost'], 0.0, -actual_cost, '', t['ticker'], t['stretch']
         ))
 
     # ── Flush all remaining positions after main loop ─────────────────────
@@ -173,13 +184,11 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
             is_end     = p['exit_reason'] == 'End'
 
             if is_end:
-                # Genuinely still holding at end of data
                 raw_events.append((
                     ex_date, 2, 'OPEN', p['ticker_short'],
-                    slice_cost, 0.0, 0.0, 'Still holding', p['ticker']
+                    slice_cost, 0.0, 0.0, 'Still holding', p['ticker'], 0
                 ))
             else:
-                # Real exit that just wasn't flushed yet
                 gross    = slice_cost * (1.0 + ret_pct / 100.0)
                 returned = gross * (1.0 - commission)
                 pnl      = returned - slice_cost
@@ -189,7 +198,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
                 if p['tp2_hit']: tp_suffix += ' TP2✓'
                 raw_events.append((
                     ex_date, 1, 'SELL', p['ticker_short'],
-                    slice_cost, ret_pct, pnl, label + tp_suffix, p['ticker']
+                    slice_cost, ret_pct, pnl, label + tp_suffix, p['ticker'], 0
                 ))
                 closed_stats.append(dict(ret_pct=ret_pct, pnl=pnl, win=pnl > 0))
 
@@ -210,7 +219,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     events          = []
 
     for ev in ordered_events:
-        date, _, action, ticker, sizing, ret_pct, pnl, label, ticker_full = ev
+        date, _, action, ticker, sizing, ret_pct, pnl, label, ticker_full, atr_pct = ev
 
         if action == 'BUY':
             replay_cash     -= sizing * (1.0 + commission)
@@ -218,7 +227,6 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
         elif action == 'SELL':
             replay_cash     += sizing * (1.0 + ret_pct / 100.0) * (1.0 - commission)
             total_open_cost -= sizing
-        # OPEN: no cash change — position cost already tracked from BUY
 
         balance = replay_cash + total_open_cost
 
@@ -233,6 +241,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
             pnl         = round(pnl) if action == 'SELL' else 0,
             balance     = round(balance),
             reason      = label,
+            stretch     = round(atr_pct, 2),   # atr_pct field carries stretch value
         ))
 
     # ── Summary ───────────────────────────────────────────────────────────

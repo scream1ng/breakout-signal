@@ -153,16 +153,21 @@ def process_ticker(stock: dict, bench: pd.Series):
             levels=pending_levels,
         )
 
-    # Today's signal: Full first, fallback No RSM
+    # Today's signal: Full first, then any regime signal
     today_info = None
     today_sig  = next((b for b in all_breaks if b['bar'] == last_bar
                        and b['rsm_ok'] and b['rvol_ok'] and b['regime_ok']), None)
     if not today_sig:
         today_sig = next((b for b in all_breaks if b['bar'] == last_bar
-                          and b['rvol_ok'] and b['regime_ok']), None)
+                          and b['regime_ok']), None)
     if today_sig:
         bp  = today_sig['bp']
         atr = today_sig['atr']
+        # Stretch at break price for criteria classification
+        sma50_now  = float(df['SMA50'].iloc[last_bar]) if not pd.isna(df['SMA50'].iloc[last_bar]) else bp
+        _atr_pct   = (atr / bp * 100) if bp > 0 else 0
+        _price_dist= ((bp - sma50_now) / sma50_now * 100) if sma50_now > 0 else 0
+        _stretch   = round(_price_dist / _atr_pct, 2) if _atr_pct > 0 else 0
         today_info = dict(
             ticker=ticker, desc=stock['desc'], sector=stock['sector'],
             date=today_sig['date'], kind=today_sig['kind'],
@@ -172,6 +177,7 @@ def process_ticker(stock: dict, bench: pd.Series):
             tp2=round(bp + atr * CFG['tp2_mult'], 2),
             atr=atr, rsm=today_sig['rsm'], rvol=today_sig['rvol'],
             rsm_ok=today_sig['rsm_ok'], rvol_ok=today_sig['rvol_ok'],
+            stretch=_stretch,
         )
 
     # Backtest simulations (3 filter tiers)
@@ -198,18 +204,52 @@ def process_ticker(stock: dict, bench: pd.Series):
             t['tp1_ret_pct']   = round((t['tp1']        - ep) / ep * 100, 2) if ep else 0
             t['tp2_ret_pct']   = round((t['tp2']        - ep) / ep * 100, 2) if ep else 0
             t['final_ret_pct'] = round((t.get('exit_price', ep) - ep) / ep * 100, 2) if ep else 0
+            # Stretch Factor = (close - SMA50) / SMA50 / ATR%
+            # Measures how many ATR multiples price is extended above SMA50
+            # > 4 = overextended, skip in portfolio
+            atr_val    = float(t.get('atr_val', 0))
+            sma50      = float(df['SMA50'].iloc[eb]) if not pd.isna(df['SMA50'].iloc[eb]) else 0
+            # Stretch at break price — matches real decision point (bp, not close)
+            bp_price   = float(t.get('entry_level', t.get('entry_price', 0)))  # entry_level = bp
+            atr_pct    = (atr_val / bp_price * 100) if bp_price > 0 else 0
+            price_dist = ((bp_price - sma50) / sma50 * 100) if sma50 > 0 else 0
+            t['stretch'] = round(price_dist / atr_pct, 2) if atr_pct > 0 else 0
+            t['atr_pct'] = round(atr_pct, 2)   # keep for reference
         return ts
 
-    pb_trades = _run(_sig(regime=True, rvol=True, rsm=True),  'Full')
-    no_rsm_t  = _run(_sig(regime=True, rvol=True, rsm=False), 'No RSM')
-    no_rvol_t = _run(_sig(regime=True, rvol=False,rsm=False), 'Regime only')
+    # Prime = RVOL + RSM + SMA50 (highest quality — used for portfolio/backtest)
+    # STR   = Prime criteria but stretch > 4 at break price
+    # RVOL  = RVOL + SMA50, no RSM
+    # RSM   = RSM + SMA50, no RVOL
+    # SMA50 = SMA50 only
+    prime_sigs = _sig(regime=True, rvol=True, rsm=True)
+    # Separate STR (overextended) from Prime by stretch value
+    prime_clean = [(bar, bp) for bar, bp in prime_sigs
+                   if next((b for b in all_breaks if b['bar'] == bar), {}).get('stretch', 0) <= 4]
+    str_sigs    = [(bar, bp) for bar, bp in prime_sigs
+                   if next((b for b in all_breaks if b['bar'] == bar), {}).get('stretch', 0) > 4]
 
-    all_trades_chart = pb_trades + [
-        t for t in no_rsm_t  if t['entry_bar'] not in {x['entry_bar'] for x in pb_trades}
-    ] + [
-        t for t in no_rvol_t if t['entry_bar'] not in {x['entry_bar'] for x in pb_trades}
-        and t['entry_bar'] not in {x['entry_bar'] for x in no_rsm_t}
-    ]
+    pb_trades   = _run(prime_clean, 'Prime')
+    str_trades  = _run(str_sigs,    'STR')
+    rvol_trades = _run(_sig(regime=True, rvol=True, rsm=False), 'RVOL')
+    rsm_trades  = _run(_sig(regime=True, rvol=False, rsm=True), 'RSM')
+    sma50_trades= _run(_sig(regime=True, rvol=False, rsm=False), 'SMA50')
+
+    # Dedup by entry_bar: Prime > STR > RVOL > RSM > SMA50
+    seen_bars = {t['entry_bar'] for t in pb_trades}
+    def _dedup(trades):
+        out = []
+        for t in trades:
+            if t['entry_bar'] not in seen_bars:
+                seen_bars.add(t['entry_bar'])
+                out.append(t)
+        return out
+
+    all_trades_chart = (pb_trades
+                        + _dedup(str_trades)
+                        + _dedup(rvol_trades)
+                        + _dedup(rsm_trades)
+                        + _dedup(sma50_trades))
 
     chart_data = get_chart_data(df, ticker, stock, all_breaks,
                                 hz_lines, tl_lines, rvol_arr, is_gap, CFG,
@@ -227,7 +267,7 @@ def process_ticker(stock: dict, bench: pd.Series):
         total_trades=len(pb_trades), total_pnl=total_pnl,
         total_pnl_pct=total_pnl_pct, win_rate=win_rate,
         today_signal=today_info, pending=pending_info,
-        trades=pb_trades, chart_data=chart_data,
+        trades=all_trades_chart, chart_data=chart_data,
         in_regime=last_regime,
     )
 
@@ -258,40 +298,14 @@ def run_full_scan(bench):
 
 
 def print_scan_results(today_signals, pending_list, results, date_str):
-    """Print scan results in the same format as Discord."""
-    date_fmt    = date_str.replace('_', '-')
-    n_regime    = len(results)
-    n_watchlist = len(pending_list)
-    n_breakout  = len(today_signals)
-
-    HDR = f"{'Ticker':<7}  {'T':<3}  {'Criteria':<8}  {'Level':>7}  {'Close':>7}  {'RVol':>6}  {'RSM':>4}  {'ATR':>5}"
-    DIV = '─' * len(HDR)
-
+    """Delegate to report.py which has colour-coding, STR column, proper sort."""
+    from output.report import print_screener, print_leaderboard, print_backtest_summary
     print(f'\n{"="*64}')
-    print(f'  PB Scanner  |  {date_fmt}')
-    print(f'  {n_regime} above SMA50  ·  {n_watchlist} watchlist  ·  {n_breakout} breakout{"s" if n_breakout != 1 else ""}')
+    print(f'  BREAKOUT SCANNER  |  {date_str.replace("_","-")}  RSM>{CFG["rsm_min"]}  Capital {CFG["capital"]:,.0f}')
     print(f'{"="*64}')
-    print(f'\n  {HDR}')
-    print(f'  {DIV}')
-
-    def _criteria(s):
-        if s.get('rsm_ok') and s.get('rvol_ok'): return 'Full'
-        if s.get('rvol_ok'): return 'No RSM'
-        return 'Regime'
-
-    if today_signals:
-        for s in sorted(today_signals, key=lambda x: x['ticker']):
-            t       = s['ticker'].replace('.BK', '')
-            kind    = 'Hz' if s.get('kind') == 'hz' else 'TL'
-            crit    = _criteria(s)
-            close   = s.get('close', 0)
-            atr_pct = (s.get('atr', 0) / close * 100) if close else 0
-            print(f'  {t:<7}  {kind:<3}  {crit:<8}  '
-                  f'{s.get("bp",0):>7.2f}  {close:>7.2f}  '
-                  f'{s.get("rvol",0):>5.1f}x  {s.get("rsm",0):>4.0f}  {atr_pct:>4.1f}%')
-    else:
-        print(f'  No breakout signals today.')
-    print()
+    print_screener(today_signals, pending_list, date_str)
+    print_leaderboard(results, 0, CFG)
+    print_backtest_summary(results, CFG)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -303,7 +317,7 @@ def main():
 
     cs = cache_stats()
     print(f'\n{"="*64}')
-    print(f'  PB SCANNER  {DATE_STR.replace("_","-")}  RSM>{CFG["rsm_min"]}  Capital {CFG["capital"]:,.0f}')
+    print(f'  BREAKOUT SCANNER  {DATE_STR.replace("_","-")}  RSM>{CFG["rsm_min"]}  Capital {CFG["capital"]:,.0f}')
     print(f'  Cache: {cs["valid"]}/{cs["total"]} cached  BKK {cs["bkk_time"]}')
     print(f'{"="*64}')
 
