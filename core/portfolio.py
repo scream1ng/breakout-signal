@@ -182,23 +182,27 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     # Most of these have real exits (SL/MA10) — they just had no later trade to
     # trigger flush_exits_before(). Only exit_reason='End' means genuinely open.
     for pid, p in open_pos.items():
-        for ex_date, frac, ret_pct, label in p['exits']:
-            slice_cost = p['cost_total'] * frac
-            is_end     = p['exit_reason'] == 'End'
+        is_end = p['exit_reason'] == 'End'
 
-            if is_end:
-                raw_events.append((
-                    ex_date, 2, 'OPEN', p['ticker_short'],
-                    slice_cost, 0.0, 0.0, 'Still holding', p['ticker'], 0
-                ))
-            else:
-                gross    = slice_cost * (1.0 + ret_pct / 100.0)
-                returned = gross * (1.0 - commission)
-                pnl      = returned - slice_cost
-                cash    += returned
-                tp_suffix = ''
-                if p['tp1_hit']: tp_suffix += ' TP1✓'
-                if p['tp2_hit']: tp_suffix += ' TP2✓'
+        if is_end:
+            # Emit ONE OPEN event for the whole remaining cost — not per slice
+            last_date = max(ex[0] for ex in p['exits'])
+            raw_events.append((
+                last_date, 2, 'OPEN', p['ticker_short'],
+                p['cost_remaining'], 0.0, 0.0, 'Still holding', p['ticker'], 0
+            ))
+        else:
+            # Real exit that was never triggered — process each slice normally
+            for ex_date, frac, ret_pct, label in p['exits']:
+                slice_cost = p['cost_total'] * frac
+                gross      = slice_cost * (1.0 + ret_pct / 100.0)
+                returned   = gross * (1.0 - commission)
+                pnl        = returned - slice_cost
+                cash      += returned
+                tp_suffix  = ''
+                if label not in ('TP1', 'TP2'):
+                    if p['tp1_hit']: tp_suffix += ' TP1✓'
+                    if p['tp2_hit']: tp_suffix += ' TP2✓'
                 raw_events.append((
                     ex_date, 1, 'SELL', p['ticker_short'],
                     slice_cost, ret_pct, pnl, label + tp_suffix, p['ticker'], 0
