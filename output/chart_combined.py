@@ -46,27 +46,48 @@ def generate_combined_html(
     # Build ticker → sidebar index map
     ticker_to_idx = {d['ticker']: i for i, d in enumerate(stocks_data)}
 
+    FILTER_TYPES = ['Prime', 'STR', 'RVOL', 'RSM', 'SMA50']
+
     bt_rows = []
     for r in results:
-        trades = [t for t in r.get('trades', []) if t.get('filter_type') == 'Prime']
-        wins   = [t for t in trades if t.get('win')]
-        losses = [t for t in trades if not t.get('win')]
-        atr_pcts = [t.get('stretch', 0) for t in trades if t.get('stretch', 0) > 0]
+        all_r_trades = r.get('trades', [])
+        prime_trades = [t for t in all_r_trades if t.get('filter_type') == 'Prime']
+        wins   = [t for t in prime_trades if t.get('win')]
+        losses = [t for t in prime_trades if not t.get('win')]
+        atr_pcts = [t.get('stretch', 0) for t in prime_trades if t.get('stretch', 0) > 0]
+        # Per-type breakdown for filter
+        by_type = {}
+        for ft in FILTER_TYPES:
+            ts = [t for t in all_r_trades if t.get('filter_type') == ft]
+            if ts:
+                tw = [t for t in ts if t.get('win')]
+                tl = [t for t in ts if not t.get('win')]
+                by_type[ft] = dict(
+                    n=len(ts),
+                    wr=round(len(tw)/len(ts)*100,1) if ts else 0,
+                    avg_win=round(sum(t.get('ret_pct',0) for t in tw)/len(tw),2) if tw else None,
+                    avg_loss=round(sum(t.get('ret_pct',0) for t in tl)/len(tl),2) if tl else None,
+                    pnl_pct=round(sum(t.get('ret_pct',0) for t in ts)/len(ts),2) if ts else 0,
+                    avg_stretch=round(sum(t.get('stretch',0) for t in ts if t.get('stretch',0)>0)/
+                                      max(1,sum(1 for t in ts if t.get('stretch',0)>0)),2)
+                              if any(t.get('stretch',0)>0 for t in ts) else None,
+                )
         bt_rows.append(dict(
             ticker      = r['ticker'].replace('.BK',''),
             ticker_full = r['ticker'],
             idx         = ticker_to_idx.get(r['ticker'], -1),
             rsm         = round(r.get('rs_momentum', 0), 0),
-            trades      = len(trades),
-            wr          = round(len(wins) / len(trades) * 100, 1) if trades else 0,
+            trades      = len(prime_trades),
+            wr          = round(len(wins) / len(prime_trades) * 100, 1) if prime_trades else 0,
             pnl_pct     = round(r.get('total_pnl_pct', 0), 2),
             avg_win     = round(sum(t.get('ret_pct',0) for t in wins)   / len(wins),   2) if wins   else None,
             avg_loss    = round(sum(t.get('ret_pct',0) for t in losses) / len(losses), 2) if losses else None,
             avg_stretch = round(sum(atr_pcts) / len(atr_pcts), 2) if atr_pcts else None,
             has_signal  = bool(r.get('today_signal')),
             has_pending = bool(r.get('pending')),
+            by_type     = by_type,
         ))
-    # Overall summary — Prime only
+    # Overall summary — Prime only (default)
     all_trades  = [t for r in results for t in r.get('trades', []) if t.get('filter_type') == 'Prime']
     all_wins    = [t for t in all_trades if t.get('win')]
     overall_wr  = round(len(all_wins) / len(all_trades) * 100, 1) if all_trades else 0
@@ -329,6 +350,16 @@ def generate_combined_html(
   .bt-tag {{ font-size:10px; padding:2px 6px; border-radius:3px; margin-left:6px; vertical-align:middle; }}
   .bt-sig {{ background:rgba(255,110,199,.2); color:var(--pink); }}
   .bt-wtc {{ background:rgba(255,215,64,.15);  color:var(--yellow); }}
+  .bt-filter-bar {{ display:flex; align-items:center; gap:10px; margin-bottom:20px;
+                    padding:10px 16px; background:var(--panel); border:1px solid var(--border);
+                    border-radius:8px; flex-wrap:wrap; }}
+  .bt-filter-label {{ font-size:10px; letter-spacing:.08em; color:var(--text);
+                      text-transform:uppercase; font-weight:600; margin-right:4px; }}
+  .bt-chk {{ display:flex; align-items:center; gap:5px; cursor:pointer; font-size:11px;
+              font-weight:600; padding:4px 10px; border-radius:4px; border:1px solid rgba(255,255,255,.1);
+              transition:all .15s; user-select:none; }}
+  .bt-chk:hover {{ border-color:rgba(255,255,255,.25); }}
+  .bt-chk input {{ accent-color:var(--accent); cursor:pointer; }}
 
   /* ── Portfolio pane ── */
   #pane-portfolio {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
@@ -429,6 +460,17 @@ def generate_combined_html(
   <div class="bt-title">BACKTEST RESULTS</div>
   <div class="bt-sub" id="bt-sub">Loading...</div>
   <div class="bt-summary" id="bt-cards"></div>
+
+  <!-- Strategy filter bar -->
+  <div class="bt-filter-bar" id="bt-filter-bar">
+    <span class="bt-filter-label">INCLUDE:</span>
+    <label class="bt-chk tf-prime"><input type="checkbox" value="Prime" checked onchange="applyBtFilter()"> Prime</label>
+    <label class="bt-chk tf-str"><input type="checkbox" value="STR" onchange="applyBtFilter()"> STR</label>
+    <label class="bt-chk tf-rvol"><input type="checkbox" value="RVOL" onchange="applyBtFilter()"> RVOL</label>
+    <label class="bt-chk tf-rsm"><input type="checkbox" value="RSM" onchange="applyBtFilter()"> RSM</label>
+    <label class="bt-chk tf-sma50"><input type="checkbox" value="SMA50" onchange="applyBtFilter()"> SMA50</label>
+  </div>
+
   <table class="bt-table">
     <thead>
       <tr>
@@ -674,53 +716,106 @@ function ptGoToChart(idx, ticker, date) {{
   }}, 120);
 }}
 
-function renderBacktest() {{
-  if(document.getElementById('bt-tbody').children.length) return; // already built
+// ── Active filter types (default: Prime only) ────────────────────────────────
+let activeFilters = new Set(['Prime']);
 
+function getActiveFilters() {{
+  return [...document.querySelectorAll('#bt-filter-bar input[type=checkbox]:checked')]
+    .map(cb => cb.value);
+}}
+
+function mergeByType(row, types) {{
+  // Combine by_type stats for selected types
+  let n=0, wins=0, sumWin=0, nWin=0, sumLoss=0, nLoss=0, sumStretch=0, nStr=0;
+  types.forEach(ft => {{
+    const d = row.by_type[ft];
+    if(!d) return;
+    n      += d.n;
+    wins   += Math.round(d.wr / 100 * d.n);
+    if(d.avg_win  != null) {{ sumWin  += d.avg_win  * Math.round(d.wr/100*d.n); nWin  += Math.round(d.wr/100*d.n); }}
+    if(d.avg_loss != null) {{ sumLoss += d.avg_loss * (d.n - Math.round(d.wr/100*d.n)); nLoss += (d.n - Math.round(d.wr/100*d.n)); }}
+    if(d.avg_stretch != null) {{ sumStretch += d.avg_stretch * d.n; nStr += d.n; }}
+  }});
+  return {{
+    trades:     n,
+    wr:         n ? +(wins/n*100).toFixed(1) : 0,
+    avg_win:    nWin  ? +(sumWin/nWin).toFixed(2)    : null,
+    avg_loss:   nLoss ? +(sumLoss/nLoss).toFixed(2)  : null,
+    avg_stretch:nStr  ? +(sumStretch/nStr).toFixed(2): null,
+  }};
+}}
+
+function applyBtFilter() {{
+  const types = getActiveFilters();
   const b = BT;
-  document.getElementById('bt-sub').textContent =
-    `${{b.n_stocks}} stocks · ${{b.n_trades}} trades · WR ${{b.wr}}% · ` +
-    `Avg win ${{b.avg_win>=0?'+':''}}${{b.avg_win}}% · Avg loss ${{b.avg_loss}}%`;
 
-  // Summary cards
+  // Recompute global summary from raw bt rows
+  let totTrades=0, totWins=0, sumW=0, nW=0, sumL=0, nL=0;
+  b.rows.forEach(r => {{
+    const m = mergeByType(r, types);
+    totTrades += m.trades;
+    const w = Math.round(m.wr/100*m.trades);
+    totWins   += w;
+    if(m.avg_win  != null) {{ sumW += m.avg_win  * w; nW += w; }}
+    if(m.avg_loss != null) {{ const l = m.trades-w; sumL += m.avg_loss*l; nL += l; }}
+  }});
+  const wr      = totTrades ? +(totWins/totTrades*100).toFixed(1) : 0;
+  const avgWin  = nW ? +(sumW/nW).toFixed(2) : 0;
+  const avgLoss = nL ? +(sumL/nL).toFixed(2) : 0;
+
+  document.getElementById('bt-sub').textContent =
+    `${{b.n_stocks}} stocks · ${{totTrades}} trades · WR ${{wr}}% · ` +
+    `Avg win ${{avgWin>=0?'+':''}}${{avgWin}}% · Avg loss ${{avgLoss}}%`;
+
   const cards = [
     {{ label:'Stocks',   val: b.n_stocks }},
-    {{ label:'Trades',   val: b.n_trades }},
-    {{ label:'Win Rate', val: b.wr+'%' }},
-    {{ label:'Avg Win',  val: (b.avg_win>=0?'+':'')+b.avg_win+'%' }},
-    {{ label:'Avg Loss', val: b.avg_loss+'%' }},
+    {{ label:'Trades',   val: totTrades }},
+    {{ label:'Win Rate', val: wr+'%' }},
+    {{ label:'Avg Win',  val: (avgWin>=0?'+':'')+avgWin+'%' }},
+    {{ label:'Avg Loss', val: avgLoss+'%' }},
     {{ label:'Total PnL',val: (b.pnl_pct>=0?'+':'')+b.pnl_pct+'%' }},
   ];
   document.getElementById('bt-cards').innerHTML = cards.map(c => `
     <div class="bt-card">
       <div class="bt-card-label">${{c.label}}</div>
       <div class="bt-card-val" style="color:${{
-        c.label.includes('Win')||c.label==='Win Rate' ? 'var(--green)' :
-        c.label.includes('Loss') ? 'var(--red)' :
+        c.label==='Win Rate'||c.label==='Avg Win' ? 'var(--green)' :
+        c.label==='Avg Loss' ? 'var(--red)' :
         c.label==='Total PnL' ? (b.pnl_pct>=0?'var(--green)':'var(--red)') :
         'var(--white)'
       }}">${{c.val}}</div>
     </div>`).join('');
 
-  // Leaderboard rows
+  // Rebuild rows with merged stats, sort by pnl descending
+  const merged = b.rows.map(r => ({{ ...r, ...mergeByType(r, types) }}))
+    .filter(r => r.trades > 0)
+    .sort((a,b) => b.pnl_pct - a.pnl_pct);
+
   const tbody = document.getElementById('bt-tbody');
-  tbody.innerHTML = b.rows.map(r => {{
-    const pnlCol  = r.pnl_pct >= 0 ? 'var(--green)' : 'var(--red)';
-    const sigTag  = r.has_signal  ? '<span class="bt-tag bt-sig">B</span>' : '';
-    const wtcTag  = r.has_pending ? '<span class="bt-tag bt-wtc">W</span>'  : '';
-    const click   = r.idx >= 0 ? `onclick="goToChart(${{r.idx}})" style="cursor:pointer"` : '';
+  tbody.innerHTML = merged.map(r => {{
+    const pnlCol = r.pnl_pct >= 0 ? 'var(--green)' : 'var(--red)';
+    const sigTag = r.has_signal  ? '<span class="bt-tag bt-sig">B</span>' : '';
+    const wtcTag = r.has_pending ? '<span class="bt-tag bt-wtc">W</span>'  : '';
+    const click  = r.idx >= 0 ? `onclick="goToChart(${{r.idx}})" style="cursor:pointer"` : '';
+    const strCol = r.avg_stretch>4?'var(--red)':r.avg_stretch>2?'var(--yellow)':'var(--text)';
     return `<tr ${{click}}>
       <td><b style="color:var(--white)">${{r.ticker}}</b>${{sigTag}}${{wtcTag}}
-        ${{r.idx>=0 ? '<span style="font-size:9px;color:var(--accent);margin-left:6px;opacity:.6">→ chart</span>' : ''}}</td>
+        ${{r.idx>=0?'<span style="font-size:9px;color:var(--accent);margin-left:6px;opacity:.6">→ chart</span>':''}}
+      </td>
       <td class="r" style="color:var(--yellow)">${{r.rsm}}</td>
       <td class="r">${{r.trades}}</td>
       <td class="r">${{r.wr}}%</td>
       <td class="r" style="color:var(--green)">${{r.avg_win!=null?(r.avg_win>=0?'+':'')+r.avg_win+'%':'—'}}</td>
       <td class="r" style="color:var(--red)">${{r.avg_loss!=null?r.avg_loss+'%':'—'}}</td>
-      <td class="r" style="color:${{r.avg_stretch>4?'var(--red)':r.avg_stretch>2?'var(--yellow)':'var(--text)'}}">${{r.avg_stretch!=null?r.avg_stretch+'x':'—'}}</td>
+      <td class="r" style="color:${{strCol}}">${{r.avg_stretch!=null?r.avg_stretch+'x':'—'}}</td>
       <td class="r" style="color:${{pnlCol}};font-weight:600">${{r.pnl_pct>=0?'+':''}}${{r.pnl_pct}}%</td>
     </tr>`;
   }}).join('');
+}}
+
+function renderBacktest() {{
+  if(document.getElementById('bt-tbody').children.length) return; // already built
+  applyBtFilter(); // initial render with Prime checked
 }}
 
 // ── Load a stock ──────────────────────────────────────────────────────────────
