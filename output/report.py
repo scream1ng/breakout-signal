@@ -29,19 +29,18 @@ def _criteria_sort_key(sig: dict) -> int:
 
 SCREEN_HDR = (
     f'  {"Ticker":<12} {"T":<5} {"Criteria":<8} {"Level":>8}  {"Close":>8}  '
-    f'{"RVol":>5}  {"RSM":>5}  {"STR":>5}  {"Sector"}'
+    f'{"RVol":>5}  {"RSM":>5}  {"STR":>5}'
 )
 
 
 def _screen_row(ticker, kind, level, close, rvol, rsm, stretch, sector='', crit_label=''):
     kind_lbl = {'hz': 'Horiz', 'tl': 'TL'}.get(kind, kind)
     col      = _criteria_color(crit_label)
-    str_col  = R if stretch > 4 else (Y if stretch > 2 else G)
+    str_col  = R if stretch > 4 else G
     return (
         f'  {W}{ticker:<12}{RST} {DIM}{kind_lbl:<5}{RST} {col}{crit_label:<8}{RST} '
         f'{level:>8.3f}  {close:>8.3f}  '
         f'{rvol:>4.1f}x  {rsm:>5.0f}  {str_col}{stretch:>4.1f}x{RST}'
-        + (f'  {DIM}{sector[:16]}{RST}' if sector else '')
     )
 
 
@@ -94,15 +93,14 @@ def print_leaderboard(results: list, skipped: int, cfg: dict):
 
     by_pnl = sorted(results, key=lambda r: r['total_pnl'], reverse=True)
     grand  = sum(r['total_pnl'] for r in results)
-    HDR = (f'  {"#":<3} {"Ticker":<12} {"RSM":>4}  {"Sector":<16}  '
+    HDR = (f'  {"#":<3} {"Ticker":<12} {"RSM":>4}  '
            f'{"Trades":>6}  {"WR":>6}  {"PnL":>12}  {"PnL%":>7}')
 
     def row(rank, r):
         arrow = f'{G}▲{RST}' if r['total_pnl'] >= 0 else f'{R}▼{RST}'
-        s     = (r['sector'] or '')[:14]
         wr_str= f'{r["win_rate"]:.0f}%' if r['total_trades'] > 0 else '--'
         pc    = G if r['total_pnl'] >= 0 else R
-        return (f'  {rank:<3} {r["ticker"]:<12} {r["rs_momentum"]:>4.0f}  {s:<16}  '
+        return (f'  {rank:<3} {r["ticker"]:<12} {r["rs_momentum"]:>4.0f}  '
                 f'{r["total_trades"]:>6}  {wr_str:>6}  '
                 f'{arrow} {pc}{r["total_pnl"]:>+10,.0f}  {r["total_pnl_pct"]:>+6.1f}%{RST}')
 

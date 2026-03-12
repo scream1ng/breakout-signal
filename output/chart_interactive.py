@@ -104,7 +104,7 @@ def _build_chart_data(
 
         stretch_v = brk.get('stretch', 0)
         if stretch_v > 4:
-            col = '#ef5350'; label = 'STR >4 (overextended)';  filter_type = 'STR'
+            col = '#ef5350'; label = 'STR >4';  filter_type = 'STR'
         elif not brk['regime_ok']:
             col = '#555555'; label = 'Below SMA50';             filter_type = 'Below'
         elif brk['rvol_ok'] and brk['rsm_ok']:
@@ -811,8 +811,8 @@ function renderAnalysis(idx) {{
         <span style="font-size:10px;opacity:.8">+${{s.tp2_pct?.toFixed(2)}}%</span></span></div>
     <div class="an-sep"></div>
     <div class="an-row"><span class="an-label">Stretch (×ATR)</span>
-      <span class="an-value" style="color:${{s.stretch>4?'var(--red)':s.stretch>2?'var(--yellow)':'var(--green)'}}">${{s.stretch?.toFixed(2)}}x
-        <span style="font-size:10px;opacity:.7">${{s.stretch>4?'⚠ overextended':s.stretch>2?'extended':'ok'}}</span>
+      <span class="an-value" style="color:${{s.stretch>4?'var(--red)':'var(--green)'}}">${{s.stretch?.toFixed(2)}}x
+        <span style="font-size:10px">${{s.stretch>4?'✗':'✓'}}</span>
       </span></div>
     <div class="an-row"><span class="an-label">RSM</span>
       <span class="an-value ${{s.rsm_ok ? 'green' : 'yellow'}}">${{s.rsm?.toFixed(1)}}

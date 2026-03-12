@@ -119,7 +119,7 @@ def generate_combined_html(
     # ── Section 1: BREAKOUT ──────────────────────────────────────────────
     if sig_stocks:
         sidebar_parts.append(
-            f'<div class="sb-section-hdr sb-hdr-sig">▲ BREAKOUT ({n_sig})</div>')
+            f'<div class="sb-section-hdr sb-hdr-sig">B BREAKOUT ({n_sig})</div>')
         for i, d in enumerate(sig_stocks):
             sidebar_parts.append(_sb_item(i, d, 'sig'))
 
@@ -706,7 +706,7 @@ function renderBacktest() {{
   const tbody = document.getElementById('bt-tbody');
   tbody.innerHTML = b.rows.map(r => {{
     const pnlCol  = r.pnl_pct >= 0 ? 'var(--green)' : 'var(--red)';
-    const sigTag  = r.has_signal  ? '<span class="bt-tag bt-sig">▲</span>' : '';
+    const sigTag  = r.has_signal  ? '<span class="bt-tag bt-sig">B</span>' : '';
     const wtcTag  = r.has_pending ? '<span class="bt-tag bt-wtc">W</span>'  : '';
     const click   = r.idx >= 0 ? `onclick="goToChart(${{r.idx}})" style="cursor:pointer"` : '';
     return `<tr ${{click}}>
@@ -1173,8 +1173,8 @@ function renderAnalysis(idx) {{
       <span class="an-value" style="color:#00b862">${{fmt(s.tp2)}} <span style="font-size:10px;opacity:.8">+${{s.tp2_pct?.toFixed(2)}}%</span></span></div>
     <div class="an-sep"></div>
     <div class="an-row"><span class="an-label">Stretch (×ATR)</span>
-      <span class="an-value" style="color:${{s.stretch>4?'var(--red)':s.stretch>2?'var(--yellow)':'var(--green)'}}">${{s.stretch?.toFixed(2)}}x
-        <span style="font-size:10px;opacity:.7">${{s.stretch>4?'⚠ overextended':s.stretch>2?'extended':'ok'}}</span>
+      <span class="an-value" style="color:${{s.stretch>4?'var(--red)':'var(--green)'}}">${{s.stretch?.toFixed(2)}}x
+        <span style="font-size:10px">${{s.stretch>4?'✗':'✓'}}</span>
       </span></div>
     <div class="an-row"><span class="an-label">RSM</span>
       <span class="an-value ${{s.rsm_ok?'green':'yellow'}}">${{s.rsm?.toFixed(1)}}

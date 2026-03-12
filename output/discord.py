@@ -1,12 +1,13 @@
 """
 discord.py — Send daily scan to Discord webhook.
 Reads DISCORD_WEBHOOK from .env or environment.
+Splits messages to avoid 2000-char Discord limit.
 """
 
 import os
 
-
 CHART_URL = "https://scream1ng.github.io/breakout-signal/"
+DISCORD_LIMIT = 1900  # safe buffer below 2000
 
 
 def _load_env():
@@ -16,7 +17,6 @@ def _load_env():
     ]
     for path in candidates:
         if os.path.exists(path):
-            print(f'  Loading .env from: {path}')
             with open(path) as f:
                 for line in f:
                     line = line.strip()
@@ -27,7 +27,6 @@ def _load_env():
                     if key and key not in os.environ:
                         os.environ[key] = val
             return
-    print('  No .env found.')
 
 
 def _post(url: str, text: str) -> bool:
@@ -43,8 +42,18 @@ def _post(url: str, text: str) -> bool:
         return False
 
 
+def _post_chunks(url: str, chunks: list[str]) -> bool:
+    """Post multiple messages sequentially."""
+    import time
+    ok = True
+    for chunk in chunks:
+        if not _post(url, chunk):
+            ok = False
+        time.sleep(0.5)  # avoid rate limit
+    return ok
+
+
 def _criteria_label(sig: dict) -> str:
-    """5-type classification matching chart system."""
     stretch = sig.get('stretch', 0)
     rvol_ok = sig.get('rvol_ok', False)
     rsm_ok  = sig.get('rsm_ok',  False)
@@ -67,39 +76,57 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
         print('  DISCORD_WEBHOOK not set — skipping.')
         return
 
-    date_fmt    = date_str.replace('_', '-')
-    n_watchlist = len(pending_list)
-    n_breakout  = len(today_signals)
+    date_fmt   = date_str.replace('_', '-')
+    n_breakout = len(today_signals)
+    n_watchlist= len(pending_list)
 
-    # Header: Ticker | T | Criteria | Level | Close | RVol | RSM | STR
-    HDR = f"{'Ticker':<7}  {'T':<3}  {'Criteria':<6}  {'Level':>7}  {'Close':>7}  {'RVol':>6}  {'RSM':>4}  {'STR':>5}"
+    # ── Header ──────────────────────────────────────────────────────────────
+    HDR = f"{'Ticker':<7}  {'T':<3}  {'Crit':<6}  {'Level':>7}  {'Close':>7}  {'RVol':>6}  {'RSM':>4}  {'STR':>5}"
     DIV = "─" * len(HDR)
 
-    if today_signals:
-        rows = []
-        # Sort: Prime first, then STR, RVOL, RSM, SMA50
-        for s in sorted(today_signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
-            t       = s['ticker'].replace('.BK', '')
-            kind    = 'Hz' if s.get('kind') == 'hz' else 'TL'
-            crit    = _criteria_label(s)
-            stretch = s.get('stretch', 0)
-            str_disp= f'{stretch:.1f}x' if stretch else '—'
-            rows.append(
-                f"{t:<7}  {kind:<3}  {crit:<6}  "
-                f"{s.get('bp',0):>7.2f}  {s.get('close',0):>7.2f}  "
-                f"{s.get('rvol',0):>5.1f}x  {s.get('rsm',0):>4.0f}  {str_disp:>5}"
-            )
-        signal_block = "\n".join(rows)
-    else:
-        signal_block = "No breakout signals today."
-
-    msg = (
+    header_msg = (
         f"**BREAKOUT SCANNER  |  {date_fmt}**\n"
-        f"`{n_watchlist} watchlist  ·  {n_breakout} breakout{'s' if n_breakout != 1 else ''}`\n"
-        f"\n"
-        f"```\n{HDR}\n{DIV}\n{signal_block}\n```\n"
-        f"{CHART_URL}"
+        f"`{n_watchlist} watchlist  ·  {n_breakout} breakout{'s' if n_breakout != 1 else ''}`"
     )
 
-    ok = _post(url, msg)
+    # ── Build rows (all breaks, sorted: Prime first) ─────────────────────
+    rows = []
+    for s in sorted(today_signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
+        t        = s['ticker'].replace('.BK', '')
+        kind     = 'Hz' if s.get('kind') == 'hz' else 'TL'
+        crit     = _criteria_label(s)
+        stretch  = s.get('stretch', 0)
+        str_disp = f'{stretch:.1f}x' if stretch else '—'
+        rows.append(
+            f"{t:<7}  {kind:<3}  {crit:<6}  "
+            f"{s.get('bp',0):>7.2f}  {s.get('close',0):>7.2f}  "
+            f"{s.get('rvol',0):>5.1f}x  {s.get('rsm',0):>4.0f}  {str_disp:>5}"
+        )
+
+    if not rows:
+        rows = ["No breakout signals today."]
+
+    # ── Chunk rows into messages under DISCORD_LIMIT ─────────────────────
+    def make_block(row_list):
+        return f"```\n{HDR}\n{DIV}\n" + "\n".join(row_list) + "\n```"
+
+    chunks = []
+    current_rows = []
+    for row in rows:
+        test_block = make_block(current_rows + [row])
+        if len(test_block) > DISCORD_LIMIT and current_rows:
+            chunks.append(make_block(current_rows))
+            current_rows = [row]
+        else:
+            current_rows.append(row)
+    if current_rows:
+        chunks.append(make_block(current_rows))
+
+    # ── Assemble final messages ──────────────────────────────────────────
+    messages = [header_msg]
+    for i, chunk in enumerate(chunks):
+        messages.append(chunk)
+    messages.append(CHART_URL)
+
+    ok = _post_chunks(url, messages)
     print(f'  {"✅ Discord sent" if ok else "❌ Discord failed"} — {n_breakout} breakouts')
