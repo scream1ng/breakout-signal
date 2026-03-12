@@ -17,10 +17,13 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     risk_pct   = cfg['risk_pct']
     sl_mult    = cfg['sl_mult']
 
-    # ── Collect trades ────────────────────────────────────────────────────
+    # ── Collect trades (Prime only — highest quality, all criteria met) ──────
     raw = []
     for r in results:
         for t in r.get('trades', []):
+            # Portfolio only executes Prime-quality setups
+            if t.get('filter_type') != 'Prime':
+                continue
             ed = t.get('entry_date', '')
             xd = t.get('exit_date', '')
             if not ed or 'bar' in str(ed) or not xd or str(xd) == '—':
