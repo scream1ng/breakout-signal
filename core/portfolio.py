@@ -151,26 +151,47 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
         open_pos[pos_seq] = dict(
             ticker         = t['ticker'],
             ticker_short   = t['ticker_short'],
-            cost_total     = t['cost'],      # original gross cost (no commission)
+            cost_total     = t['cost'],
             cost_remaining = t['cost'],
             exits          = exits,
             tp1_hit        = t['tp1_hit'],
             tp2_hit        = t['tp2_hit'],
             win            = t['win'],
+            exit_reason    = rsn,
         )
         raw_events.append((
             t['entry_date'], 0, 'BUY', t['ticker_short'],
             t['cost'], 0.0, -actual_cost, '', t['ticker']
         ))
 
-    # Force-close remaining as OPEN (still holding)
+    # ── Flush all remaining positions after main loop ─────────────────────
+    # Most of these have real exits (SL/MA10) — they just had no later trade to
+    # trigger flush_exits_before(). Only exit_reason='End' means genuinely open.
     for pid, p in open_pos.items():
         for ex_date, frac, ret_pct, label in p['exits']:
             slice_cost = p['cost_total'] * frac
-            raw_events.append((
-                ex_date, 2, 'OPEN', p['ticker_short'],
-                slice_cost, 0.0, 0.0, 'Still holding', p['ticker']
-            ))
+            is_end     = p['exit_reason'] == 'End'
+
+            if is_end:
+                # Genuinely still holding at end of data
+                raw_events.append((
+                    ex_date, 2, 'OPEN', p['ticker_short'],
+                    slice_cost, 0.0, 0.0, 'Still holding', p['ticker']
+                ))
+            else:
+                # Real exit that just wasn't flushed yet
+                gross    = slice_cost * (1.0 + ret_pct / 100.0)
+                returned = gross * (1.0 - commission)
+                pnl      = returned - slice_cost
+                cash    += returned
+                tp_suffix = ''
+                if p['tp1_hit']: tp_suffix += ' TP1✓'
+                if p['tp2_hit']: tp_suffix += ' TP2✓'
+                raw_events.append((
+                    ex_date, 1, 'SELL', p['ticker_short'],
+                    slice_cost, ret_pct, pnl, label + tp_suffix, p['ticker']
+                ))
+                closed_stats.append(dict(ret_pct=ret_pct, pnl=pnl, win=pnl > 0))
 
     # ── Replay cash in strict date order ──────────────────────────────────
     raw_events.sort(key=lambda e: (str(e[0]), e[1], e[3]))
