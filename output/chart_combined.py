@@ -596,12 +596,24 @@ function renderPortfolio() {{
   ALL_STOCKS.forEach((s, i) => {{ tickerIdx[s.ticker] = i; }});
 
   const tbody = document.getElementById('pt-tbody');
+  let separatorAdded = false;
   tbody.innerHTML = p.events.map((e, rowI) => {{
     const isBuy  = e.action === 'BUY';
     const isOpen = e.action === 'OPEN';
     const isTp1  = !isBuy && !isOpen && e.reason.startsWith('TP1');
     const isTp2  = !isBuy && !isOpen && e.reason.startsWith('TP2');
     const isWin  = !isBuy && !isOpen && e.pnl > 0;
+
+    // Insert separator before first OPEN row
+    let separator = '';
+    if (isOpen && !separatorAdded) {{
+      separatorAdded = true;
+      separator = `<tr style="height:1px;background:var(--accent);opacity:.25">
+        <td colspan="8" style="padding:0;font-size:10px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;padding:8px 14px 4px;opacity:1;background:var(--bg)">
+          ▸ OPEN POSITIONS — still holding
+        </td>
+      </tr>`;
+    }}
 
     const rowCls = isBuy ? 'pt-buy' : isOpen ? 'pt-buy' : isWin ? 'pt-sell win' : 'pt-sell loss';
     const actCls = isBuy  ? 'pt-act-buy'
@@ -622,7 +634,7 @@ function renderPortfolio() {{
       ? `onclick="ptGoToChart(${{sidx}}, '${{e.ticker}}', '${{e.date}}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--accent)"`
       : '';
 
-    return `<tr class="${{rowCls}}" id="pt-row-${{rowI}}">
+    return separator + `<tr class="${{rowCls}}" id="pt-row-${{rowI}}">
       <td style="color:var(--text)">${{e.date}}</td>
       <td><span class="pt-action ${{actCls}}">${{actLbl}}</span></td>
       <td ${{tickerClick}} style="color:var(--white);font-weight:600">${{e.ticker}}${{sidx!==undefined ? ' <span style="font-size:9px;color:var(--accent);opacity:.6">→</span>' : ''}}</td>
