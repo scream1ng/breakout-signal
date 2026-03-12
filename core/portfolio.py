@@ -94,6 +94,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     pos_seq    = 0      # unique ID counter
     raw_events = []
     n_skipped  = 0
+    skip_log   = []   # (entry_date, ticker, reason)
     closed_stats = []
 
     def flush_exits_before(cutoff_date):
@@ -135,13 +136,16 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
 
         if len(open_pos) >= max_positions:
             n_skipped += 1
+            skip_log.append((str(t['entry_date']), t['ticker_short'], f'max_positions ({len(open_pos)}/{max_positions})'))
             continue
         if t['cost'] > cash:
             n_skipped += 1
+            skip_log.append((str(t['entry_date']), t['ticker_short'], f'insufficient_cash (need ฿{t["cost"]:,.0f}, have ฿{cash:,.0f})'))
             continue
         # Don't hold the same ticker twice at the same time
         if any(p['ticker'] == t['ticker'] for p in open_pos.values()):
             n_skipped += 1
+            skip_log.append((str(t['entry_date']), t['ticker_short'], 'duplicate_ticker'))
             continue
 
         # Deduct with commission
@@ -287,6 +291,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
         total_ret_pct = total_ret,
         n_taken       = len(full_trades),
         n_skipped     = n_skipped,
+        skip_log      = skip_log[-50:],   # last 50 skips for diagnostics
         n_wins        = len(full_wins),
         n_losses      = len(full_trades) - len(full_wins),
         win_rate      = round(len(full_wins) / len(full_trades) * 100, 1) if full_trades else 0,
