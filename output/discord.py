@@ -89,14 +89,19 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
         f"`{n_watchlist} watchlist  ·  {n_breakout} breakout{'s' if n_breakout != 1 else ''}`"
     )
 
-    # ── Build rows (all breaks, sorted: Prime first) ─────────────────────
+    # ── Build rows sorted by criteria, with blank lines between groups ────
     rows = []
+    last_crit = None
     for s in sorted(today_signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
         t        = s['ticker'].replace('.BK', '')
         kind     = 'Hz' if s.get('kind') == 'hz' else 'TL'
         crit     = _criteria_label(s)
         stretch  = s.get('stretch', 0)
         str_disp = f'{stretch:.1f}x' if stretch else '—'
+        # Blank line between groups
+        if last_crit is not None and crit != last_crit:
+            rows.append('')
+        last_crit = crit
         rows.append(
             f"{t:<7}  {kind:<3}  {crit:<6}  "
             f"{s.get('bp',0):>7.2f}  {s.get('close',0):>7.2f}  "
@@ -115,10 +120,16 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
     for row in rows:
         test_block = make_block(current_rows + [row])
         if len(test_block) > DISCORD_LIMIT and current_rows:
+            # Don't end a chunk on a blank line
+            while current_rows and current_rows[-1] == '':
+                current_rows.pop()
             chunks.append(make_block(current_rows))
-            current_rows = [row]
+            current_rows = [row] if row else []
         else:
             current_rows.append(row)
+    # Trim trailing blank lines from last chunk
+    while current_rows and current_rows[-1] == '':
+        current_rows.pop()
     if current_rows:
         chunks.append(make_block(current_rows))
 

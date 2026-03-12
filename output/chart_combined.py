@@ -48,7 +48,7 @@ def generate_combined_html(
 
     bt_rows = []
     for r in results:
-        trades = r.get('trades', [])
+        trades = [t for t in r.get('trades', []) if t.get('filter_type') == 'Prime']
         wins   = [t for t in trades if t.get('win')]
         losses = [t for t in trades if not t.get('win')]
         atr_pcts = [t.get('stretch', 0) for t in trades if t.get('stretch', 0) > 0]
@@ -66,8 +66,8 @@ def generate_combined_html(
             has_signal  = bool(r.get('today_signal')),
             has_pending = bool(r.get('pending')),
         ))
-    # Overall summary
-    all_trades  = [t for r in results for t in r.get('trades', [])]
+    # Overall summary — Prime only
+    all_trades  = [t for r in results for t in r.get('trades', []) if t.get('filter_type') == 'Prime']
     all_wins    = [t for t in all_trades if t.get('win')]
     overall_wr  = round(len(all_wins) / len(all_trades) * 100, 1) if all_trades else 0
     overall_pnl = round(sum(r.get('total_pnl_pct', 0) for r in results), 2)
