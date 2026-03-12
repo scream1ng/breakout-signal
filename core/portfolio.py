@@ -229,17 +229,21 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
         ))
 
     # ── Summary ───────────────────────────────────────────────────────────
-    # Final cash from actual simulation (not replay — replay accumulates float drift)
-    # Flush remaining for final equity calculation
-    final_cash = cash
-    for pid, p in open_pos.items():
-        for ex_date, frac, ret_pct, label in p['exits']:
-            slice_cost  = p['cost_total'] * frac
-            returned    = slice_cost * (1.0 + ret_pct / 100.0) * (1.0 - commission)
-            final_cash += returned
-
-    final_eq  = round(final_cash, 2)
+    # Final equity = cash already received + remaining open positions at COST
+    # (not marked-to-market at backtest ret% — those haven't exited yet)
+    open_cost_remaining = sum(
+        p['cost_total'] * frac
+        for p in open_pos.values()
+        for ex_date, frac, ret_pct, label in p['exits']
+    )
+    final_eq  = round(cash + open_cost_remaining, 2)
     total_ret = round((final_eq - capital) / capital * 100, 2)
+
+    # Last equity curve point = last SELL balance (not final_eq which includes open pos)
+    last_sell_balance = next(
+        (e['balance'] for e in reversed(events) if e['action'] == 'SELL'),
+        capital
+    )
 
     full_trades = raw
     full_wins   = [t for t in raw if t['win']]
@@ -250,7 +254,9 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     for e in events:
         if e['action'] == 'SELL':
             eq_curve.append({'date': e['date'], 'equity': e['balance']})
-    eq_curve.append({'date': str(raw[-1]['exit_date']), 'equity': final_eq})
+    # End point = last sell balance (flat — open positions held at cost, no gain yet)
+    if eq_curve[-1]['equity'] != last_sell_balance:
+        eq_curve.append({'date': str(raw[-1]['exit_date']), 'equity': last_sell_balance})
 
     peak = capital; max_dd = 0.0
     for pt in eq_curve:
