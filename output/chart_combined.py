@@ -68,6 +68,7 @@ def generate_combined_html(
                     avg_win=round(sum(t.get('ret_pct',0) for t in tw)/len(tw),2) if tw else None,
                     avg_loss=round(sum(t.get('ret_pct',0) for t in tl)/len(tl),2) if tl else None,
                     pnl_pct=round(sum(t.get('ret_pct',0) for t in ts)/len(ts),2) if ts else 0,
+                    pnl_sum=round(sum(t.get('ret_pct',0) for t in ts), 2),
                     avg_stretch=round(sum(t.get('stretch',0) for t in ts if t.get('stretch',0)>0)/
                                       max(1,sum(1 for t in ts if t.get('stretch',0)>0)),2)
                               if any(t.get('stretch',0)>0 for t in ts) else None,
@@ -520,6 +521,22 @@ def generate_combined_html(
     </thead>
     <tbody id="pt-tbody"></tbody>
   </table>
+
+  <div class="pt-section" id="skip-section" style="display:none">
+    SKIPPED SIGNALS — positions rejected by portfolio rules
+    <span id="skip-toggle" onclick="toggleSkipLog()"
+      style="cursor:pointer;font-size:10px;color:var(--accent);margin-left:10px">[show]</span>
+  </div>
+  <div id="skip-log-wrap" style="display:none;margin-bottom:32px">
+    <table class="pt-table">
+      <thead><tr>
+        <th style="width:110px">Date</th>
+        <th style="width:110px">Ticker</th>
+        <th>Reason</th>
+      </tr></thead>
+      <tbody id="skip-tbody"></tbody>
+    </table>
+  </div>
   </div>
 </div>
 
@@ -698,6 +715,31 @@ function renderPortfolio() {{
       <td class="r" style="color:var(--white);font-weight:500">฿${{Math.round(e.balance).toLocaleString()}}</td>
     </tr>`;
   }}).join('');
+
+  // ── Skip log ────────────────────────────────────────────────────────────────
+  const skipLog = p.skip_log || [];
+  if(skipLog.length) {{
+    document.getElementById('skip-section').style.display = '';
+    const sTbody = document.getElementById('skip-tbody');
+    sTbody.innerHTML = skipLog.map(([date, ticker, reason]) => {{
+      const rCol = reason.startsWith('max_pos') ? 'var(--yellow)'
+                 : reason.startsWith('dup')     ? 'var(--text)'
+                 : 'var(--red)';
+      return `<tr>
+        <td style="color:var(--text)">${{date}}</td>
+        <td style="color:var(--white);font-weight:600">${{ticker}}</td>
+        <td style="color:${{rCol}};font-size:11px">${{reason}}</td>
+      </tr>`;
+    }}).join('');
+  }}
+}}
+
+function toggleSkipLog() {{
+  const wrap = document.getElementById('skip-log-wrap');
+  const btn  = document.getElementById('skip-toggle');
+  const open = wrap.style.display === 'none';
+  wrap.style.display = open ? '' : 'none';
+  btn.textContent    = open ? '[hide]' : '[show]';
 }}
 
 function ptGoToChart(idx, ticker, date) {{
@@ -750,7 +792,7 @@ function applyBtFilter() {{
   const b = BT;
 
   // Recompute global summary from raw bt rows
-  let totTrades=0, totWins=0, sumW=0, nW=0, sumL=0, nL=0;
+  let totTrades=0, totWins=0, sumW=0, nW=0, sumL=0, nL=0, totPnlSum=0;
   b.rows.forEach(r => {{
     const m = mergeByType(r, types);
     totTrades += m.trades;
@@ -758,10 +800,16 @@ function applyBtFilter() {{
     totWins   += w;
     if(m.avg_win  != null) {{ sumW += m.avg_win  * w; nW += w; }}
     if(m.avg_loss != null) {{ const l = m.trades-w; sumL += m.avg_loss*l; nL += l; }}
+    // Sum pnl_sum across selected types for this row
+    types.forEach(ft => {{
+      const d = r.by_type[ft];
+      if(d) totPnlSum += (d.pnl_sum || 0);
+    }});
   }});
   const wr      = totTrades ? +(totWins/totTrades*100).toFixed(1) : 0;
   const avgWin  = nW ? +(sumW/nW).toFixed(2) : 0;
   const avgLoss = nL ? +(sumL/nL).toFixed(2) : 0;
+  const totPnl  = +totPnlSum.toFixed(2);
 
   document.getElementById('bt-sub').textContent =
     `${{b.n_stocks}} stocks · ${{totTrades}} trades · WR ${{wr}}% · ` +
@@ -773,7 +821,7 @@ function applyBtFilter() {{
     {{ label:'Win Rate', val: wr+'%' }},
     {{ label:'Avg Win',  val: (avgWin>=0?'+':'')+avgWin+'%' }},
     {{ label:'Avg Loss', val: avgLoss+'%' }},
-    {{ label:'Total PnL',val: (b.pnl_pct>=0?'+':'')+b.pnl_pct+'%' }},
+    {{ label:'Total PnL',val: (totPnl>=0?'+':'')+totPnl+'%' }},
   ];
   document.getElementById('bt-cards').innerHTML = cards.map(c => `
     <div class="bt-card">
@@ -781,7 +829,7 @@ function applyBtFilter() {{
       <div class="bt-card-val" style="color:${{
         c.label==='Win Rate'||c.label==='Avg Win' ? 'var(--green)' :
         c.label==='Avg Loss' ? 'var(--red)' :
-        c.label==='Total PnL' ? (b.pnl_pct>=0?'var(--green)':'var(--red)') :
+        c.label==='Total PnL' ? (totPnl>=0?'var(--green)':'var(--red)') :
         'var(--white)'
       }}">${{c.val}}</div>
     </div>`).join('');
