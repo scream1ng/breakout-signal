@@ -194,24 +194,31 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
                 closed_stats.append(dict(ret_pct=ret_pct, pnl=pnl, win=pnl > 0))
 
     # ── Replay cash in strict date order ──────────────────────────────────
-    raw_events.sort(key=lambda e: (str(e[0]), e[1], e[3]))
+    # Partition: completed trades first (BUY/SELL), OPEN positions always last
+    completed_evs = sorted(
+        [e for e in raw_events if e[2] != 'OPEN'],
+        key=lambda e: (str(e[0]), e[1], e[3])
+    )
+    open_evs = sorted(
+        [e for e in raw_events if e[2] == 'OPEN'],
+        key=lambda e: (str(e[0]), e[3])
+    )
+    ordered_events = completed_evs + open_evs
 
-    # Track open cost per position using a running dict: ticker → [cost_remaining_slices]
-    # Use a simpler approach: maintain total_open_cost updated at each event
-    replay_cash      = float(capital)
-    total_open_cost  = 0.0   # sum of all remaining position costs
-    events           = []
+    replay_cash     = float(capital)
+    total_open_cost = 0.0
+    events          = []
 
-    for ev in raw_events:
+    for ev in ordered_events:
         date, _, action, ticker, sizing, ret_pct, pnl, label, ticker_full = ev
 
         if action == 'BUY':
-            replay_cash    -= (sizing * (1.0 + commission))
+            replay_cash     -= sizing * (1.0 + commission)
             total_open_cost += sizing
         elif action == 'SELL':
-            replay_cash    += sizing * (1.0 + ret_pct / 100.0) * (1.0 - commission)
+            replay_cash     += sizing * (1.0 + ret_pct / 100.0) * (1.0 - commission)
             total_open_cost -= sizing
-        # OPEN: no change
+        # OPEN: no cash change — position cost already tracked from BUY
 
         balance = replay_cash + total_open_cost
 
@@ -229,21 +236,14 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
         ))
 
     # ── Summary ───────────────────────────────────────────────────────────
-    # Final equity = cash already received + remaining open positions at COST
-    # (not marked-to-market at backtest ret% — those haven't exited yet)
-    open_cost_remaining = sum(
-        p['cost_total'] * frac
-        for p in open_pos.values()
-        for ex_date, frac, ret_pct, label in p['exits']
+    # Final equity = balance at last completed (non-OPEN) event
+    # This is cash received + remaining open positions at cost — no unrealised P&L
+    last_completed = next(
+        (e for e in reversed(events) if e['action'] != 'OPEN'),
+        None
     )
-    final_eq  = round(cash + open_cost_remaining, 2)
+    final_eq  = last_completed['balance'] if last_completed else round(replay_cash, 2)
     total_ret = round((final_eq - capital) / capital * 100, 2)
-
-    # Last equity curve point = last SELL balance (not final_eq which includes open pos)
-    last_sell_balance = next(
-        (e['balance'] for e in reversed(events) if e['action'] == 'SELL'),
-        capital
-    )
 
     full_trades = raw
     full_wins   = [t for t in raw if t['win']]
@@ -254,9 +254,6 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     for e in events:
         if e['action'] == 'SELL':
             eq_curve.append({'date': e['date'], 'equity': e['balance']})
-    # End point = last sell balance (flat — open positions held at cost, no gain yet)
-    if eq_curve[-1]['equity'] != last_sell_balance:
-        eq_curve.append({'date': str(raw[-1]['exit_date']), 'equity': last_sell_balance})
 
     peak = capital; max_dd = 0.0
     for pt in eq_curve:
