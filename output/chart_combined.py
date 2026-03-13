@@ -808,20 +808,19 @@ function applyBtFilter() {{
   const wr     = totTrades ? +(totWins/totTrades*100).toFixed(1) : 0;
   const avgWin = nW ? +(sumW/nW).toFixed(2) : 0;
   const avgLoss= nL ? +(sumL/nL).toFixed(2) : 0;
-  // Avg PnL per stock (return on 100k capital averaged across active stocks)
-  const avgPnl = nStocks ? +(totPnlCap/nStocks).toFixed(2) : 0;
+  const totPnl = +totPnlCap.toFixed(2);
 
   document.getElementById('bt-sub').textContent =
     `${{b.n_stocks}} stocks · ${{totTrades}} trades · WR ${{wr}}% · ` +
     `Avg win ${{avgWin>=0?'+':''}}${{avgWin}}% · Avg loss ${{avgLoss}}%`;
 
   const cards = [
-    {{ label:'Stocks',        val: b.n_stocks }},
-    {{ label:'Trades',        val: totTrades }},
-    {{ label:'Win Rate',      val: wr+'%' }},
-    {{ label:'Avg Win',       val: (avgWin>=0?'+':'')+avgWin+'%' }},
-    {{ label:'Avg Loss',      val: avgLoss+'%' }},
-    {{ label:'Avg PnL/Stock', val: (avgPnl>=0?'+':'')+avgPnl+'%' }},
+    {{ label:'Stocks',    val: b.n_stocks }},
+    {{ label:'Trades',    val: totTrades }},
+    {{ label:'Win Rate',  val: wr+'%' }},
+    {{ label:'Avg Win',   val: (avgWin>=0?'+':'')+avgWin+'%' }},
+    {{ label:'Avg Loss',  val: avgLoss+'%' }},
+    {{ label:'Total PnL', val: (totPnl>=0?'+':'')+totPnl+'%' }},
   ];
   document.getElementById('bt-cards').innerHTML = cards.map(c => `
     <div class="bt-card">
@@ -829,7 +828,7 @@ function applyBtFilter() {{
       <div class="bt-card-val" style="color:${{
         c.label==='Win Rate'||c.label==='Avg Win' ? 'var(--green)' :
         c.label==='Avg Loss' ? 'var(--red)' :
-        c.label==='Avg PnL/Stock' ? (avgPnl>=0?'var(--green)':'var(--red)') :
+        c.label==='Total PnL' ? (totPnl>=0?'var(--green)':'var(--red)') :
         'var(--white)'
       }}">${{c.val}}</div>
     </div>`).join('');
