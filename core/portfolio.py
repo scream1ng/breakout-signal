@@ -221,6 +221,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     for ev in ordered_events:
         date, _, action, ticker, sizing, ret_pct, pnl, label, ticker_full, atr_pct = ev
 
+        cash_before = replay_cash
         if action == 'BUY':
             replay_cash     -= sizing * (1.0 + commission)
             total_open_cost += sizing
@@ -236,12 +237,13 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
             ticker      = ticker,
             ticker_full = ticker_full,
             sizing      = round(sizing),
+            cash_before = round(cash_before),
             cash_after  = round(replay_cash),
             ret_pct     = round(ret_pct, 2),
             pnl         = round(pnl) if action == 'SELL' else 0,
             balance     = round(balance),
             reason      = label,
-            stretch     = round(atr_pct, 2),   # atr_pct field carries stretch value
+            stretch     = round(atr_pct, 2),
         ))
 
     # ── Summary ───────────────────────────────────────────────────────────
@@ -280,6 +282,7 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
         total_ret_pct = total_ret,
         n_taken       = len(full_trades),
         n_skipped     = n_skipped,
+        current_cash  = round(replay_cash),
         skip_log      = skip_log[-50:],   # last 50 skips for diagnostics
         n_wins        = len(full_wins),
         n_losses      = len(full_trades) - len(full_wins),

@@ -78,12 +78,13 @@ def simulate(df, signal_bars, cfg):
                 pos['tp2_hit'] = True
                 pos['tp2_bar'] = i
 
-            # Exit at close: SL or EMA10
+            # Exit at close: SL, BE, or EMA10
             sl_hit   = ci <= pos['sl']
             ema_exit = ci < e10
 
             if sl_hit or ema_exit:
-                rsn = 'SL' if sl_hit else 'EMA10'
+                at_be = pos['sl'] == pos['entry_price']
+                rsn = 'EMA10' if ema_exit else ('BE' if at_be else 'SL')
                 ep  = ci   # always exit at close
                 pos['realized_pnl'] += ((ep - pos['entry_price']) * pos['shares_remaining']
                                         - ep * pos['shares_remaining'] * commission)

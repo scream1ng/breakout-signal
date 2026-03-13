@@ -285,7 +285,7 @@ def run_full_scan(bench):
             r = process_ticker(stock, bench)
             if r is None:
                 skipped += 1; print('  skipped'); continue
-            sig    = '🔔' if r.get('today_signal') else ('W' if r.get('pending') else ' ')
+            sig    = 'B' if r.get('today_signal') else ('W' if r.get('pending') else ' ')
             wr_str = f'{r["win_rate"]:.0f}%' if r['total_trades'] > 0 else '--'
             print(f'  {sig}  RSM {r["rs_momentum"]:>4.0f}  '
                   f'{r["total_trades"]:>2}T  WR {wr_str:>4}  '
@@ -298,14 +298,9 @@ def run_full_scan(bench):
 
 
 def print_scan_results(today_signals, pending_list, results, date_str):
-    """Delegate to report.py which has colour-coding, STR column, proper sort."""
-    from output.report import print_screener, print_leaderboard, print_backtest_summary
-    print(f'\n{"="*64}')
-    print(f'  BREAKOUT SCANNER  |  {date_str.replace("_","-")}  RSM>{CFG["rsm_min"]}  Capital {CFG["capital"]:,.0f}')
-    print(f'{"="*64}')
+    """Delegate to report.py — only breakout signals in terminal."""
+    from output.report import print_screener
     print_screener(today_signals, pending_list, date_str)
-    print_leaderboard(results, 0, CFG)
-    print_backtest_summary(results, CFG)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

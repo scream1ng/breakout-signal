@@ -53,6 +53,18 @@ def _post_chunks(url: str, chunks: list[str]) -> bool:
     return ok
 
 
+# ANSI color codes for Discord ```ansi blocks
+# Format: \033[{style};{color}m  (style: 0=normal,1=bold | fg: 30-37, 90-97)
+_ANSI = {
+    'Prime': '\033[1;35m',   # bold magenta
+    'STR':   '\033[1;31m',   # bold red
+    'RVOL':  '\033[1;34m',   # bold blue
+    'RSM':   '\033[1;32m',   # bold green
+    'SMA50': '\033[1;33m',   # bold yellow
+    'RESET': '\033[0m',
+}
+
+
 def _criteria_label(sig: dict) -> str:
     stretch = sig.get('stretch', 0)
     rvol_ok = sig.get('rvol_ok', False)
@@ -89,7 +101,7 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
         f"`{n_watchlist} watchlist  ·  {n_breakout} breakout{'s' if n_breakout != 1 else ''}`"
     )
 
-    # ── Build rows sorted by criteria, with blank lines between groups ────
+    # ── Build rows sorted by criteria, blank lines between groups ─────────
     rows = []
     last_crit = None
     for s in sorted(today_signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
@@ -98,12 +110,15 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
         crit     = _criteria_label(s)
         stretch  = s.get('stretch', 0)
         str_disp = f'{stretch:.1f}x' if stretch else '—'
+        col      = _ANSI.get(crit, '')
+        rst      = _ANSI['RESET']
         # Blank line between groups
         if last_crit is not None and crit != last_crit:
             rows.append('')
         last_crit = crit
+        # Colour the criteria label + ticker
         rows.append(
-            f"{t:<7}  {kind:<3}  {crit:<6}  "
+            f"{col}{t:<7}{rst}  {kind:<3}  {col}{crit:<6}{rst}  "
             f"{s.get('bp',0):>7.2f}  {s.get('close',0):>7.2f}  "
             f"{s.get('rvol',0):>5.1f}x  {s.get('rsm',0):>4.0f}  {str_disp:>5}"
         )
@@ -113,31 +128,26 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
 
     # ── Chunk rows into messages under DISCORD_LIMIT ─────────────────────
     def make_block(row_list):
-        return f"```\n{HDR}\n{DIV}\n" + "\n".join(row_list) + "\n```"
+        return f"```ansi\n{HDR}\n{DIV}\n" + "\n".join(row_list) + f"\n{_ANSI['RESET']}```"
 
     chunks = []
     current_rows = []
     for row in rows:
         test_block = make_block(current_rows + [row])
         if len(test_block) > DISCORD_LIMIT and current_rows:
-            # Don't end a chunk on a blank line
             while current_rows and current_rows[-1] == '':
                 current_rows.pop()
             chunks.append(make_block(current_rows))
             current_rows = [row] if row else []
         else:
             current_rows.append(row)
-    # Trim trailing blank lines from last chunk
     while current_rows and current_rows[-1] == '':
         current_rows.pop()
     if current_rows:
         chunks.append(make_block(current_rows))
 
     # ── Assemble final messages ──────────────────────────────────────────
-    messages = [header_msg]
-    for i, chunk in enumerate(chunks):
-        messages.append(chunk)
-    messages.append(CHART_URL)
+    messages = [header_msg] + chunks + [CHART_URL]
 
     ok = _post_chunks(url, messages)
     print(f'  {"✅ Discord sent" if ok else "❌ Discord failed"} — {n_breakout} breakouts')

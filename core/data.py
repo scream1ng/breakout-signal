@@ -31,9 +31,9 @@ def _cache_path(ticker: str) -> str:
 
 
 def _cache_valid(path: str) -> bool:
-    """Cache is valid if file exists, saved today, and either:
-    - market hasn't closed yet, OR file was saved after market close.
-    In CI (GitHub Actions) cache is never valid — always re-download.
+    """Cache is valid only after market close and if saved after close.
+    Before close: always re-download (intraday data changes every run).
+    In CI (GitHub Actions): always re-download.
     """
     if os.environ.get('CI'):
         return False   # always fresh on GitHub Actions
@@ -44,19 +44,15 @@ def _cache_valid(path: str) -> bool:
     mtime_ts = os.path.getmtime(path)
     mtime    = datetime.fromtimestamp(mtime_ts, tz=BKK_TZ)
 
-    # Must be saved today
-    if mtime.date() != now.date():
-        return False
-
     now_mins   = now.hour * 60 + now.minute
     mtime_mins = mtime.hour * 60 + mtime.minute
 
-    # Before market close: any cache from today is fine
+    # Before market close: never use cache — prices are still changing
     if now_mins < MARKET_CLOSE:
-        return True
+        return False
 
-    # After market close: cache must have been saved after close to have EOD data
-    return mtime_mins >= MARKET_CLOSE
+    # After market close: cache must be from today AND saved after close
+    return mtime.date() == now.date() and mtime_mins >= MARKET_CLOSE
 
 
 def load_ticker(ticker: str, period: str = '2y', force: bool = False) -> pd.DataFrame | None:

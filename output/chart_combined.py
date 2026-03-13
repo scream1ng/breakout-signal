@@ -330,7 +330,7 @@ def generate_combined_html(
 
   /* ── Backtest pane (full overlay) ── */
   #pane-backtest {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
-                    background:var(--bg); overflow-y:auto; padding:28px 40px; z-index:50; }}
+                    background:var(--bg); overflow-y:auto; padding:20px 8px; z-index:50; }}
   .bt-title {{ font-family:'Syne',sans-serif; font-weight:800; font-size:22px;
                color:var(--accent); margin-bottom:8px; }}
   .bt-sub   {{ font-size:13px; color:var(--text); margin-bottom:24px; }}
@@ -341,11 +341,11 @@ def generate_combined_html(
                     text-transform:uppercase; margin-bottom:8px; }}
   .bt-card-val   {{ font-size:24px; font-weight:700; color:var(--white); }}
   .bt-table {{ width:100%; border-collapse:collapse; font-size:12px; }}
-  .bt-table th {{ padding:9px 14px; text-align:left; color:var(--text); font-size:11px;
+  .bt-table th {{ padding:8px 10px; text-align:left; color:var(--text); font-size:11px;
                   letter-spacing:.07em; text-transform:uppercase; border-bottom:2px solid var(--border);
                   position:sticky; top:0; background:var(--bg); }}
   .bt-table th.r {{ text-align:right; }}
-  .bt-table td {{ padding:9px 14px; border-bottom:1px solid rgba(42,46,57,.5); }}
+  .bt-table td {{ padding:8px 10px; border-bottom:1px solid rgba(42,46,57,.5); }}
   .bt-table td.r {{ text-align:right; }}
   .bt-table tr:hover td {{ background:rgba(0,229,204,.04); }}
   .bt-tag {{ font-size:10px; padding:2px 6px; border-radius:3px; margin-left:6px; vertical-align:middle; }}
@@ -364,7 +364,7 @@ def generate_combined_html(
 
   /* ── Portfolio pane ── */
   #pane-portfolio {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
-                     background:var(--bg); overflow-y:auto; padding:28px 40px; z-index:50; }}
+                     background:var(--bg); overflow-y:auto; padding:20px 8px; z-index:50; }}
   .pt-title {{ font-family:'Syne',sans-serif; font-weight:800; font-size:22px;
                color:var(--accent); margin-bottom:8px; }}
   .pt-sub   {{ font-size:13px; color:var(--text); margin-bottom:28px; }}
@@ -380,11 +380,11 @@ def generate_combined_html(
   .pt-curve-wrap {{ width:100%; height:180px; margin-bottom:40px; position:relative; }}
   #pt-curve {{ display:block; width:100%; height:180px; }}
   .pt-table {{ width:100%; border-collapse:collapse; font-size:12px; }}
-  .pt-table th {{ padding:9px 14px; text-align:left; color:var(--text); font-size:10px;
+  .pt-table th {{ padding:8px 10px; text-align:left; color:var(--text); font-size:10px;
                   letter-spacing:.07em; text-transform:uppercase; border-bottom:2px solid var(--border);
-                  position:sticky; top:0; background:var(--bg); z-index:2; }}
+                  position:sticky; top:0; background:var(--bg); z-index:2; white-space:nowrap; }}
   .pt-table th.r {{ text-align:right; }}
-  .pt-table td {{ padding:8px 14px; border-bottom:1px solid rgba(42,46,57,.4); font-size:12px; }}
+  .pt-table td {{ padding:7px 10px; border-bottom:1px solid rgba(42,46,57,.4); font-size:12px; white-space:nowrap; }}
   .pt-table td.r {{ text-align:right; font-variant-numeric:tabular-nums; }}
   .pt-table tr:hover td {{ background:rgba(0,229,204,.04); }}
   .pt-buy  {{ border-left:3px solid var(--blue); }}
@@ -457,7 +457,7 @@ def generate_combined_html(
 
 <!-- BACKTEST pane (fixed overlay, hidden by default) -->
 <div id="pane-backtest">
-  <div style="max-width:1080px;margin:0 auto">
+  <div style="max-width:75%;margin:0 auto">
   <div class="bt-title">BACKTEST RESULTS</div>
   <div class="bt-sub" id="bt-sub">Loading...</div>
   <div class="bt-summary" id="bt-cards"></div>
@@ -492,7 +492,7 @@ def generate_combined_html(
 
 <!-- PORTFOLIO pane -->
 <div id="pane-portfolio">
-  <div style="max-width:1080px;margin:0 auto">
+  <div style="max-width:75%;margin:0 auto">
   <div class="pt-title">PORTFOLIO SIMULATION</div>
   <div class="pt-sub" id="pt-sub">Loading...</div>
 
@@ -561,7 +561,7 @@ function renderPortfolio() {{
   const p = PT;
 
   document.getElementById('pt-sub').textContent =
-    `${{p.n_taken}} trades taken  ·  ${{p.n_skipped}} skipped (insufficient cash)`;
+    `${{p.n_taken}} trades  ·  ${{p.n_skipped}} skipped  ·  Cash available: ฿${{(p.current_cash||0).toLocaleString()}}`;
 
   // ── Summary cards ────────────────────────────────────────────────────────
   const retCol = p.total_ret_pct >= 0 ? 'var(--green)' : 'var(--red)';
@@ -652,17 +652,14 @@ function renderPortfolio() {{
   const skipRows = skipLog.map(([date, ticker, reason]) => ({{
     _isSkip: true, date, ticker, reason
   }}));
+
+  // Compute order: events already oldest→newest (correct cash flow)
+  // Merge skip rows by date, then reverse everything for display (newest first)
   const allRows = [
     ...p.events.map(e => ({{ ...e, _isSkip: false }})),
     ...skipRows
-  ].sort((a, b) => {{
-    if(a.date < b.date) return -1;
-    if(a.date > b.date) return 1;
-    // Within same date: OPEN and SKIP go last
-    const aLate = a._isSkip || a.action === 'OPEN' ? 1 : 0;
-    const bLate = b._isSkip || b.action === 'OPEN' ? 1 : 0;
-    return aLate - bLate;
-  }});
+  ].sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+   .reverse();
 
   const tbody = document.getElementById('pt-tbody');
   let separatorAdded = false;
@@ -686,15 +683,16 @@ function renderPortfolio() {{
     const isTp2  = !isBuy && !isOpen && e.reason.startsWith('TP2');
     const isWin  = !isBuy && !isOpen && e.pnl > 0;
 
-    // Insert separator before first OPEN row
+    // Insert separator before first completed (non-OPEN, non-SKIP) row
     let separator = '';
-    if (isOpen && !separatorAdded) {{
+    const hasOpen = allRows.some(r => r.action === 'OPEN');
+    if (!isOpen && !e._isSkip && !separatorAdded && hasOpen) {{
       separatorAdded = true;
       separator = `<tr>
-        <td colspan="10" style="padding:8px 14px 4px;font-size:10px;color:var(--accent);
-          letter-spacing:.08em;text-transform:uppercase;background:rgba(0,229,204,.04);
-          border-top:1px solid rgba(0,229,204,.2)">
-          ▸ OPEN POSITIONS — still holding
+        <td colspan="10" style="padding:8px 14px 4px;font-size:10px;color:var(--text);
+          letter-spacing:.08em;text-transform:uppercase;background:rgba(255,255,255,.02);
+          border-top:1px solid rgba(255,255,255,.08)">
+          ▸ COMPLETED TRADES
         </td>
       </tr>`;
     }}
@@ -723,11 +721,11 @@ function renderPortfolio() {{
       <td ${{tickerClick}} style="color:var(--white);font-weight:600">${{e.ticker}}${{sidx!==undefined ? ' <span style="font-size:9px;color:var(--accent);opacity:.6">→</span>' : ''}}</td>
       <td class="r" style="color:${{isBuy&&e.stretch>4?'var(--red)':isBuy&&e.stretch>2?'var(--yellow)':'var(--text)'}}">${{isBuy&&e.stretch?e.stretch+'x':'—'}}</td>
       <td class="r" style="color:var(--text)">฿${{Math.round(e.sizing).toLocaleString()}}</td>
-      <td class="r" style="color:var(--text)">฿${{Math.round(e.cash_after).toLocaleString()}}</td>
+      <td class="r" style="color:var(--text)">${{isOpen ? '—' : '฿'+Math.round(e.cash_after).toLocaleString()}}</td>
       <td style="color:var(--text);font-size:11px">${{reasonStr}}</td>
       <td class="r" style="color:${{retCol}}">${{pnlStr}}</td>
       <td class="r" style="color:${{retCol}}">${{retStr}}</td>
-      <td class="r" style="color:var(--white);font-weight:500">฿${{Math.round(e.balance).toLocaleString()}}</td>
+      <td class="r" style="color:var(--white);font-weight:500">${{isOpen ? '—' : '฿'+Math.round(e.balance).toLocaleString()}}</td>
     </tr>`;
   }}).join('');
 }}
@@ -1089,6 +1087,7 @@ function drawChart() {{
     if(t.tp1_hit && t.tp1_bar!=null) drawArrow(t.tp1_bar, candles[t.tp1_bar]?.h, '#00e676', 6);
     if(t.tp2_hit && t.tp2_bar!=null) drawArrow(t.tp2_bar, candles[t.tp2_bar]?.h, '#00b862', 6);
     const exitCol = t.exit_reason==='SL' ? '#ef5350'
+                  : t.exit_reason==='BE'   ? '#ff9800'
                   : t.exit_reason==='EMA10' ? '#ffd740' : '#888';
     if(t.exit_bar!=null) drawArrow(t.exit_bar, candles[t.exit_bar]?.h, exitCol, 7);
   }});
@@ -1191,6 +1190,7 @@ function drawOverlay(sigIdx) {{
     if(trade.tp2_hit && trade.tp2_bar!=null)
       drawArrowHL(trade.tp2_bar, D.candles[trade.tp2_bar]?.h, '#00b862', 9);
     const exitCol = trade.exit_reason==='SL' ? '#ef5350'
+                  : trade.exit_reason==='BE'   ? '#ff9800'
                   : trade.exit_reason==='EMA10' ? '#ffd740' : '#888';
     if(trade.exit_bar!=null)
       drawArrowHL(trade.exit_bar, D.candles[trade.exit_bar]?.h, exitCol, 10);
@@ -1232,6 +1232,7 @@ function buildSignalList() {{
       const tp2str = trade.tp2_hit ? ' TP2✓' : '';
       const rsn    = trade.exit_reason==='EMA10' ? 'MA10'
                    : trade.exit_reason==='End'   ? 'Unrealized'
+                   : trade.exit_reason==='BE'    ? 'BE'
                    : (trade.exit_reason||'');
       retHtml = ` <span style="color:${{retCol}};font-weight:600">${{trade.ret_pct>=0?'+':''}}${{trade.ret_pct.toFixed(1)}}%${{tp1str}}${{tp2str}} ${{rsn}}</span>`;
     }}

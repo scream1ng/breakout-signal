@@ -675,6 +675,7 @@ function drawOverlay(sigIdx) {{
     if(trade.tp2_hit && trade.tp2_bar!=null)
       drawArrowHL(trade.tp2_bar, D.candles[trade.tp2_bar]?.h, '#00b862', 9);
     const exitCol = trade.exit_reason==='SL' ? '#ef5350'
+                  : trade.exit_reason==='BE'   ? '#ff9800'
                   : trade.exit_reason==='EMA10' ? '#ffd740' : '#888';
     if(trade.exit_bar!=null)
       drawArrowHL(trade.exit_bar, D.candles[trade.exit_bar]?.h, exitCol, 10);
@@ -718,6 +719,7 @@ function buildSignalList() {{
       const tp2str = trade.tp2_hit ? ' TP2✓' : '';
       const rsn    = trade.exit_reason==='EMA10' ? 'MA10'
                    : trade.exit_reason==='End'   ? 'Unrealized'
+                   : trade.exit_reason==='BE'    ? 'BE'
                    : (trade.exit_reason||'');
       retHtml = ` <span style="color:${{retCol}};font-weight:600">${{trade.ret_pct>=0?'+':''}}${{trade.ret_pct.toFixed(1)}}%${{tp1str}}${{tp2str}} ${{rsn}}</span>`;
     }}

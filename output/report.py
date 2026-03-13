@@ -28,60 +28,42 @@ def _criteria_sort_key(sig: dict) -> int:
 
 
 SCREEN_HDR = (
-    f'  {"Ticker":<12} {"T":<5} {"Criteria":<8} {"Level":>8}  {"Close":>8}  '
-    f'{"RVol":>5}  {"RSM":>5}  {"STR":>5}'
+    f'  {"Ticker":<8}  {"T":<3}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"RSM":>4}  {"STR":>5}'
 )
 
 
-def _screen_row(ticker, kind, level, close, rvol, rsm, stretch, sector='', crit_label=''):
-    kind_lbl = {'hz': 'Horiz', 'tl': 'TL'}.get(kind, kind)
+def _screen_row(s: dict, crit_label: str) -> str:
+    ticker   = s['ticker'].replace('.BK', '')
+    kind     = 'Hz' if s.get('kind') == 'hz' else 'TL'
+    stretch  = s.get('stretch', 0)
     col      = _criteria_color(crit_label)
     str_col  = R if stretch > 4 else G
+    str_disp = f'{stretch:.1f}x' if stretch else '—'
     return (
-        f'  {W}{ticker:<12}{RST} {DIM}{kind_lbl:<5}{RST} {col}{crit_label:<8}{RST} '
-        f'{level:>8.3f}  {close:>8.3f}  '
-        f'{rvol:>4.1f}x  {rsm:>5.0f}  {str_col}{stretch:>4.1f}x{RST}'
+        f'  {col}{ticker:<8}{RST}  {kind:<3}  {col}{crit_label:<6}{RST}  '
+        f'{s.get("bp",0):>8.2f}  {s.get("close",s.get("bp",0)):>8.2f}  '
+        f'{s.get("rvol",0):>5.1f}x  {s.get("rsm",0):>4.0f}  {str_col}{str_disp:>5}{RST}'
     )
 
 
 def print_screener(signals: list, pending: list, date_str: str):
     today = date_str.replace('_', '-')
-    SEP = '=' * 90; SEP2 = '-' * 90
+    SEP = '=' * 74; SEP2 = '-' * 74
 
     print(f'\n{SEP}')
-    print(f'  {W}BREAKOUT LIST{RST}  [{today}]  —  {len(signals)} triggered')
+    print(f'  {W}BREAKOUT SCANNER  |  {today}{RST}  —  {len(signals)} breakout{"s" if len(signals)!=1 else ""}')
     print(SEP)
     if signals:
         print(SCREEN_HDR); print(f'  {SEP2}')
+        last_crit = None
         for s in sorted(signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
-            crit    = _criteria_label(s)
-            stretch = s.get('stretch', 0)
-            sl_pct  = (s['sl']  - s['bp']) / s['bp'] * 100
-            tp1_pct = (s['tp1'] - s['bp']) / s['bp'] * 100
-            print(_screen_row(s['ticker'], s['kind'], s['bp'],
-                s.get('close', s['bp']), s['rvol'], s['rsm'], stretch,
-                s.get('sector', ''), crit))
-            print(f'  {"":12} {"":5} {"":8}  '
-                  f'SL {s["sl"]:>8.3f} ({R}{sl_pct:+.1f}%{RST})  '
-                  f'TP1 {s["tp1"]:>8.3f} ({G}{tp1_pct:+.1f}%{RST})')
+            crit = _criteria_label(s)
+            if last_crit is not None and crit != last_crit:
+                print()
+            last_crit = crit
+            print(_screen_row(s, crit))
     else:
         print(f'  No breakouts today.')
-    print(f'{SEP}\n')
-
-    print(f'{SEP}')
-    print(f'  {W}WATCHLIST{RST}  [{today}]  —  {len(pending)} stocks near a breakout level')
-    print(SEP)
-    if pending:
-        print(SCREEN_HDR); print(f'  {SEP2}')
-        for p in sorted(pending, key=lambda x: x['ticker']):
-            for lv in p['levels']:
-                stretch = p.get('stretch', 0)
-                crit    = _criteria_label(p)
-                print(_screen_row(p['ticker'], lv['kind'], lv['level'],
-                    p['close'], p['rvol'], p['rsm'], stretch,
-                    p.get('sector', ''), crit))
-    else:
-        print(f'  No stocks on watchlist.')
     print(f'{SEP}\n')
 
 
