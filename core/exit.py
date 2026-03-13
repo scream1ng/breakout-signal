@@ -101,12 +101,12 @@ def simulate(df, signal_bars, cfg):
 
         open_positions = still_open
 
-        # ── New entry: max(break price + 1 tick, open) to handle gap-ups ──
+        # ── New entry: bp+tick normally, open if gapped above (gap-up fills at open) ──
         if i in sigs and atr > 0:
             bp       = sigs[i]
             tick_ep  = round(bp + set_tick(bp), 6)
             open_i   = float(df['Open'].iloc[i])
-            ep       = max(tick_ep, open_i)          # gap-up fills at open
+            ep       = max(tick_ep, open_i)   # gap-up: fill at open; STR filter handles overextension
             sld = atr * sl_mult
             sh  = max(1, int((capital * risk_pct) / sld))
             rsm_val = df['RSM'].iloc[i]

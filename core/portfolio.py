@@ -33,8 +33,6 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
                 exit_dt  = Date.fromisoformat(str(xd))
             except ValueError:
                 continue
-            if exit_dt <= entry_dt:
-                continue
 
             tp1_hit  = bool(t.get('tp1_hit', False))
             tp2_hit  = bool(t.get('tp2_hit', False))
