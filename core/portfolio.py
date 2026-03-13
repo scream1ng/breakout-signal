@@ -134,18 +134,9 @@ def simulate_portfolio(results: list, cfg: dict, max_positions: int = 10) -> dic
     for t in raw:
         flush_exits_before(t['entry_date'])
 
-        if len(open_pos) >= max_positions:
-            n_skipped += 1
-            skip_log.append((str(t['entry_date']), t['ticker_short'], f'max_positions ({len(open_pos)}/{max_positions})'))
-            continue
         if t['cost'] > cash:
             n_skipped += 1
             skip_log.append((str(t['entry_date']), t['ticker_short'], f'insufficient_cash (need ฿{t["cost"]:,.0f}, have ฿{cash:,.0f})'))
-            continue
-        # Don't hold the same ticker twice at the same time
-        if any(p['ticker'] == t['ticker'] for p in open_pos.values()):
-            n_skipped += 1
-            skip_log.append((str(t['entry_date']), t['ticker_short'], 'duplicate_ticker'))
             continue
 
         # Deduct with commission
