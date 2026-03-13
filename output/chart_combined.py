@@ -522,21 +522,6 @@ def generate_combined_html(
     <tbody id="pt-tbody"></tbody>
   </table>
 
-  <div class="pt-section" id="skip-section" style="display:none">
-    SKIPPED SIGNALS — positions rejected by portfolio rules
-    <span id="skip-toggle" onclick="toggleSkipLog()"
-      style="cursor:pointer;font-size:10px;color:var(--accent);margin-left:10px">[show]</span>
-  </div>
-  <div id="skip-log-wrap" style="display:none;margin-bottom:32px">
-    <table class="pt-table">
-      <thead><tr>
-        <th style="width:110px">Date</th>
-        <th style="width:110px">Ticker</th>
-        <th>Reason</th>
-      </tr></thead>
-      <tbody id="skip-tbody"></tbody>
-    </table>
-  </div>
   </div>
 </div>
 
@@ -576,7 +561,7 @@ function renderPortfolio() {{
   const p = PT;
 
   document.getElementById('pt-sub').textContent =
-    `Max ${{p.max_positions}} concurrent positions  ·  ${{p.n_taken}} trades  ·  ${{p.n_skipped}} skipped`;
+    `${{p.n_taken}} trades taken  ·  ${{p.n_skipped}} skipped (insufficient cash)`;
 
   // ── Summary cards ────────────────────────────────────────────────────────
   const retCol = p.total_ret_pct >= 0 ? 'var(--green)' : 'var(--red)';
@@ -658,14 +643,43 @@ function renderPortfolio() {{
     }}
   }});
 
-  // ── Trade log (chronological BUY / TP1 / TP2 / SELL events) ────────────
-  // Build ticker → sidebar index map for click-through
+  // ── Trade log (chronological BUY / TP1 / TP2 / SELL events + skipped) ──
   const tickerIdx = {{}};
   ALL_STOCKS.forEach((s, i) => {{ tickerIdx[s.ticker] = i; }});
 
+  // Merge events + skip rows, sort by date then sort_key
+  const skipLog = p.skip_log || [];
+  const skipRows = skipLog.map(([date, ticker, reason]) => ({{
+    _isSkip: true, date, ticker, reason
+  }}));
+  const allRows = [
+    ...p.events.map(e => ({{ ...e, _isSkip: false }})),
+    ...skipRows
+  ].sort((a, b) => {{
+    if(a.date < b.date) return -1;
+    if(a.date > b.date) return 1;
+    // Within same date: OPEN and SKIP go last
+    const aLate = a._isSkip || a.action === 'OPEN' ? 1 : 0;
+    const bLate = b._isSkip || b.action === 'OPEN' ? 1 : 0;
+    return aLate - bLate;
+  }});
+
   const tbody = document.getElementById('pt-tbody');
   let separatorAdded = false;
-  tbody.innerHTML = p.events.map((e, rowI) => {{
+  tbody.innerHTML = allRows.map((e, rowI) => {{
+
+    // ── SKIPPED row ──────────────────────────────────────────────────────
+    if(e._isSkip) {{
+      return `<tr style="opacity:.45">
+        <td style="color:var(--text)">${{e.date}}</td>
+        <td><span class="pt-action" style="background:rgba(255,80,80,.15);color:#ef5350;font-size:9px;padding:2px 5px;border-radius:3px">SKIP</span></td>
+        <td style="color:var(--text);font-weight:600">${{e.ticker}}</td>
+        <td class="r">—</td><td class="r">—</td><td class="r">—</td>
+        <td style="color:#ef5350;font-size:11px">${{e.reason}}</td>
+        <td class="r">—</td><td class="r">—</td><td class="r">—</td>
+      </tr>`;
+    }}
+
     const isBuy  = e.action === 'BUY';
     const isOpen = e.action === 'OPEN';
     const isTp1  = !isBuy && !isOpen && e.reason.startsWith('TP1');
@@ -676,8 +690,10 @@ function renderPortfolio() {{
     let separator = '';
     if (isOpen && !separatorAdded) {{
       separatorAdded = true;
-      separator = `<tr style="height:1px;background:var(--accent);opacity:.25">
-        <td colspan="8" style="padding:0;font-size:10px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;padding:8px 14px 4px;opacity:1;background:var(--bg)">
+      separator = `<tr>
+        <td colspan="10" style="padding:8px 14px 4px;font-size:10px;color:var(--accent);
+          letter-spacing:.08em;text-transform:uppercase;background:rgba(0,229,204,.04);
+          border-top:1px solid rgba(0,229,204,.2)">
           ▸ OPEN POSITIONS — still holding
         </td>
       </tr>`;
@@ -696,7 +712,6 @@ function renderPortfolio() {{
     const reasonStr = isBuy ? '—' : isOpen ? 'Still holding at period end'
                     : isTp1 ? '30% at TP1' : isTp2 ? '30% at TP2' : e.reason || '—';
 
-    // Clickable ticker — jump to chart and highlight matching signal/trade
     const sidx = tickerIdx[e.ticker_full];
     const tickerClick = sidx !== undefined
       ? `onclick="ptGoToChart(${{sidx}}, '${{e.ticker}}', '${{e.date}}')" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--accent)"`
@@ -715,32 +730,9 @@ function renderPortfolio() {{
       <td class="r" style="color:var(--white);font-weight:500">฿${{Math.round(e.balance).toLocaleString()}}</td>
     </tr>`;
   }}).join('');
-
-  // ── Skip log ────────────────────────────────────────────────────────────────
-  const skipLog = p.skip_log || [];
-  if(skipLog.length) {{
-    document.getElementById('skip-section').style.display = '';
-    const sTbody = document.getElementById('skip-tbody');
-    sTbody.innerHTML = skipLog.map(([date, ticker, reason]) => {{
-      const rCol = reason.startsWith('max_pos') ? 'var(--yellow)'
-                 : reason.startsWith('dup')     ? 'var(--text)'
-                 : 'var(--red)';
-      return `<tr>
-        <td style="color:var(--text)">${{date}}</td>
-        <td style="color:var(--white);font-weight:600">${{ticker}}</td>
-        <td style="color:${{rCol}};font-size:11px">${{reason}}</td>
-      </tr>`;
-    }}).join('');
-  }}
 }}
 
-function toggleSkipLog() {{
-  const wrap = document.getElementById('skip-log-wrap');
-  const btn  = document.getElementById('skip-toggle');
-  const open = wrap.style.display === 'none';
-  wrap.style.display = open ? '' : 'none';
-  btn.textContent    = open ? '[hide]' : '[show]';
-}}
+function toggleSkipLog() {{}}  // no-op kept for safety
 
 function ptGoToChart(idx, ticker, date) {{
   switchNav('chart');
