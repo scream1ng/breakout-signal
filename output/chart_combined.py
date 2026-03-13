@@ -67,8 +67,8 @@ def generate_combined_html(
                     wr=round(len(tw)/len(ts)*100,1) if ts else 0,
                     avg_win=round(sum(t.get('ret_pct',0) for t in tw)/len(tw),2) if tw else None,
                     avg_loss=round(sum(t.get('ret_pct',0) for t in tl)/len(tl),2) if tl else None,
-                    pnl_pct=round(sum(t.get('ret_pct',0) for t in ts)/len(ts),2) if ts else 0,
-                    pnl_sum=round(sum(t.get('ret_pct',0) for t in ts), 2),
+                    # pnl_capital: sum of (trade_profit / starting_capital) — same units as total_pnl_pct
+                    pnl_capital=round(sum(t.get('pnl_pct',0) for t in ts), 2),
                     avg_stretch=round(sum(t.get('stretch',0) for t in ts if t.get('stretch',0)>0)/
                                       max(1,sum(1 for t in ts if t.get('stretch',0)>0)),2)
                               if any(t.get('stretch',0)>0 for t in ts) else None,
@@ -767,16 +767,17 @@ function getActiveFilters() {{
 }}
 
 function mergeByType(row, types) {{
-  // Combine by_type stats for selected types
-  let n=0, wins=0, sumWin=0, nWin=0, sumLoss=0, nLoss=0, sumStretch=0, nStr=0;
+  let n=0, wins=0, sumWin=0, nWin=0, sumLoss=0, nLoss=0, sumStretch=0, nStr=0, pnlCap=0;
   types.forEach(ft => {{
     const d = row.by_type[ft];
     if(!d) return;
     n      += d.n;
-    wins   += Math.round(d.wr / 100 * d.n);
-    if(d.avg_win  != null) {{ sumWin  += d.avg_win  * Math.round(d.wr/100*d.n); nWin  += Math.round(d.wr/100*d.n); }}
-    if(d.avg_loss != null) {{ sumLoss += d.avg_loss * (d.n - Math.round(d.wr/100*d.n)); nLoss += (d.n - Math.round(d.wr/100*d.n)); }}
+    const w = Math.round(d.wr / 100 * d.n);
+    wins   += w;
+    if(d.avg_win  != null) {{ sumWin  += d.avg_win  * w;       nWin  += w; }}
+    if(d.avg_loss != null) {{ sumLoss += d.avg_loss * (d.n-w); nLoss += (d.n-w); }}
     if(d.avg_stretch != null) {{ sumStretch += d.avg_stretch * d.n; nStr += d.n; }}
+    pnlCap += (d.pnl_capital || 0);
   }});
   return {{
     trades:     n,
@@ -784,6 +785,7 @@ function mergeByType(row, types) {{
     avg_win:    nWin  ? +(sumWin/nWin).toFixed(2)    : null,
     avg_loss:   nLoss ? +(sumLoss/nLoss).toFixed(2)  : null,
     avg_stretch:nStr  ? +(sumStretch/nStr).toFixed(2): null,
+    pnl_pct:    +pnlCap.toFixed(2),
   }};
 }}
 
@@ -791,37 +793,35 @@ function applyBtFilter() {{
   const types = getActiveFilters();
   const b = BT;
 
-  // Recompute global summary from raw bt rows
-  let totTrades=0, totWins=0, sumW=0, nW=0, sumL=0, nL=0, totPnlSum=0;
+  let totTrades=0, totWins=0, sumW=0, nW=0, sumL=0, nL=0, totPnlCap=0, nStocks=0;
   b.rows.forEach(r => {{
     const m = mergeByType(r, types);
+    if(!m.trades) return;
+    nStocks++;
     totTrades += m.trades;
     const w = Math.round(m.wr/100*m.trades);
     totWins   += w;
     if(m.avg_win  != null) {{ sumW += m.avg_win  * w; nW += w; }}
     if(m.avg_loss != null) {{ const l = m.trades-w; sumL += m.avg_loss*l; nL += l; }}
-    // Sum pnl_sum across selected types for this row
-    types.forEach(ft => {{
-      const d = r.by_type[ft];
-      if(d) totPnlSum += (d.pnl_sum || 0);
-    }});
+    totPnlCap += m.pnl_pct;
   }});
-  const wr      = totTrades ? +(totWins/totTrades*100).toFixed(1) : 0;
-  const avgWin  = nW ? +(sumW/nW).toFixed(2) : 0;
-  const avgLoss = nL ? +(sumL/nL).toFixed(2) : 0;
-  const totPnl  = +totPnlSum.toFixed(2);
+  const wr     = totTrades ? +(totWins/totTrades*100).toFixed(1) : 0;
+  const avgWin = nW ? +(sumW/nW).toFixed(2) : 0;
+  const avgLoss= nL ? +(sumL/nL).toFixed(2) : 0;
+  // Avg PnL per stock (return on 100k capital averaged across active stocks)
+  const avgPnl = nStocks ? +(totPnlCap/nStocks).toFixed(2) : 0;
 
   document.getElementById('bt-sub').textContent =
     `${{b.n_stocks}} stocks · ${{totTrades}} trades · WR ${{wr}}% · ` +
     `Avg win ${{avgWin>=0?'+':''}}${{avgWin}}% · Avg loss ${{avgLoss}}%`;
 
   const cards = [
-    {{ label:'Stocks',   val: b.n_stocks }},
-    {{ label:'Trades',   val: totTrades }},
-    {{ label:'Win Rate', val: wr+'%' }},
-    {{ label:'Avg Win',  val: (avgWin>=0?'+':'')+avgWin+'%' }},
-    {{ label:'Avg Loss', val: avgLoss+'%' }},
-    {{ label:'Total PnL',val: (totPnl>=0?'+':'')+totPnl+'%' }},
+    {{ label:'Stocks',        val: b.n_stocks }},
+    {{ label:'Trades',        val: totTrades }},
+    {{ label:'Win Rate',      val: wr+'%' }},
+    {{ label:'Avg Win',       val: (avgWin>=0?'+':'')+avgWin+'%' }},
+    {{ label:'Avg Loss',      val: avgLoss+'%' }},
+    {{ label:'Avg PnL/Stock', val: (avgPnl>=0?'+':'')+avgPnl+'%' }},
   ];
   document.getElementById('bt-cards').innerHTML = cards.map(c => `
     <div class="bt-card">
@@ -829,12 +829,12 @@ function applyBtFilter() {{
       <div class="bt-card-val" style="color:${{
         c.label==='Win Rate'||c.label==='Avg Win' ? 'var(--green)' :
         c.label==='Avg Loss' ? 'var(--red)' :
-        c.label==='Total PnL' ? (totPnl>=0?'var(--green)':'var(--red)') :
+        c.label==='Avg PnL/Stock' ? (avgPnl>=0?'var(--green)':'var(--red)') :
         'var(--white)'
       }}">${{c.val}}</div>
     </div>`).join('');
 
-  // Rebuild rows with merged stats, sort by pnl descending
+  // Rebuild rows with merged stats, sort by pnl_pct descending
   const merged = b.rows.map(r => ({{ ...r, ...mergeByType(r, types) }}))
     .filter(r => r.trades > 0)
     .sort((a,b) => b.pnl_pct - a.pnl_pct);
