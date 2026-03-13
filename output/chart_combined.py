@@ -1230,7 +1230,9 @@ function buildSignalList() {{
       const retCol = trade.ret_pct >= 0 ? '#00e676' : '#ef5350';
       const tp1str = trade.tp1_hit ? ' TP1✓' : '';
       const tp2str = trade.tp2_hit ? ' TP2✓' : '';
-      const rsn    = trade.exit_reason==='EMA10' ? 'MA10' : (trade.exit_reason||'');
+      const rsn    = trade.exit_reason==='EMA10' ? 'MA10'
+                   : trade.exit_reason==='End'   ? 'Unrealized'
+                   : (trade.exit_reason||'');
       retHtml = ` <span style="color:${{retCol}};font-weight:600">${{trade.ret_pct>=0?'+':''}}${{trade.ret_pct.toFixed(1)}}%${{tp1str}}${{tp2str}} ${{rsn}}</span>`;
     }}
     el.innerHTML = `
