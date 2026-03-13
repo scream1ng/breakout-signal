@@ -359,6 +359,30 @@ def main():
 
     print_scan_results(today_signals, pending_list, results, DATE_STR)
 
+    # ── Save watchlist.json for intraday scanner ──────────────────────────
+    import json
+    watchlist = []
+    for r in results:
+        p = r.get('pending')
+        if not p:
+            continue
+        for lv in p['levels']:
+            watchlist.append(dict(
+                ticker     = p['ticker'],
+                desc       = p.get('desc', ''),
+                level      = lv['level'],
+                kind       = lv['kind'],
+                rsm        = p.get('rsm', 0),
+                atr        = p.get('atr', 0),
+                close      = p.get('close', 0),
+                rvol       = p.get('rvol', 0),
+                date_added = DATE_STR,
+            ))
+    wl_path = os.path.join(SCRIPT_DIR, 'watchlist.json')
+    with open(wl_path, 'w') as f:
+        json.dump(watchlist, f, indent=2)
+    print(f'  Watchlist saved → {len(watchlist)} levels')
+
     # Generate/update chart
     regime_results = [r for r in results if r.get('in_regime')]
     stocks_data    = [r['chart_data'] for r in regime_results if r.get('chart_data')]

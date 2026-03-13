@@ -2,34 +2,42 @@ name: Daily Scan
 
 on:
   schedule:
-    # SET closes 16:30 Bangkok (UTC+7) = 09:30 UTC
-    # Run at 09:35 UTC Mon–Fri to get EOD data
+    # ── EOD scan: 16:35 BKK = 09:35 UTC ─────────────────────────────────────
     - cron: '35 9 * * 1-5'
 
-  # Also allow manual trigger from GitHub Actions tab
+    # ── Intraday: every 30min during SET hours, skipping lunch break ─────────
+    # Morning session: 10:00–12:30 BKK = 03:00–05:30 UTC
+    - cron: '0,30 3,4,5 * * 1-5'   # 03:00–05:30 UTC
+    # Afternoon session: 14:00–16:00 BKK = 07:00–09:00 UTC
+    - cron: '0,30 7,8 * * 1-5'     # 07:00–08:30 UTC
+    - cron: '0 9 * * 1-5'          # 09:00 UTC (16:00 BKK)
+
   workflow_dispatch:
 
 permissions:
-  contents: write   # needed to commit web/index.html back to repo
+  contents: write
 
 jobs:
-  scan:
+
+  # ── EOD scan ───────────────────────────────────────────────────────────────
+  eod-scan:
+    name: EOD Scan + Chart
     runs-on: ubuntu-latest
     environment: env
     permissions:
       contents: write
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && startsWith(github.event.schedule, '35 9'))
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Cache pip packages
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -38,17 +46,48 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run screener
+      - name: Run EOD scan
         run: python main.py --discord
         env:
           CI: true
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 
-      - name: Commit updated chart
+      - name: Commit chart + watchlist
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/index.html
+          git add docs/index.html watchlist.json
           git diff --cached --quiet && echo "No changes" && exit 0
-          git commit -m "auto: daily scan $(date '+%Y-%m-%d')"
+          git commit -m "auto: EOD scan $(date '+%Y-%m-%d')"
           git push
+
+  # ── Intraday scan ──────────────────────────────────────────────────────────
+  intraday-scan:
+    name: Intraday Scan
+    runs-on: ubuntu-latest
+    environment: env
+    if: |
+      github.event_name == 'schedule' &&
+      !startsWith(github.event.schedule, '35 9')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run intraday scan
+        run: python intraday.py --discord
+        env:
+          CI: true
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
