@@ -107,6 +107,34 @@ def generate_combined_html(
         n_stocks  = len(results),
     ))
 
+    # ── Watchlist tab data: only pending stocks grouped by MA position ────
+    wl_groups = {'> MA10': [], '> MA20': [], '> MA50': []}
+    for r in sorted(results, key=lambda x: x['ticker']):
+        if not r.get('pending'):   # only stocks with active hz/tl level
+            continue
+        t  = r['ticker'].replace('.BK', '')
+        tv = 'SET:' + t
+        if r.get('above_ema10'):
+            wl_groups['> MA10'].append(tv)
+        elif r.get('above_ema20'):
+            wl_groups['> MA20'].append(tv)
+        else:
+            wl_groups['> MA50'].append(tv)
+
+    # Build copy-paste string: ###> MA10,SET:X,SET:Y,###> MA20,...
+    wl_parts = []
+    for label, tickers in wl_groups.items():
+        if tickers:
+            wl_parts.append('###' + label)
+            wl_parts.extend(tickers)
+    watchlist_copystr = ','.join(wl_parts)
+
+    watchlist_json = json.dumps(dict(
+        groups   = wl_groups,
+        copy_str = watchlist_copystr,
+        date     = date_str,
+    ))
+
     n_sig = len(sig_stocks)
     n_wtc = len(wtc_stocks)
     total = len(stocks_data)
@@ -414,6 +442,7 @@ def generate_combined_html(
       <div class="nav-tab active" id="nav-chart"     onclick="switchNav('chart')">CHART</div>
       <div class="nav-tab"        id="nav-backtest"  onclick="switchNav('backtest')">BACKTEST</div>
       <div class="nav-tab"        id="nav-portfolio" onclick="switchNav('portfolio')">PORTFOLIO</div>
+      <div class="nav-tab"        id="nav-watchlist" onclick="switchNav('watchlist')">WATCHLIST</div>
     </div>
   </header>
 
@@ -525,24 +554,103 @@ def generate_combined_html(
   </div>
 </div>
 
+<div id="pane-watchlist" style="display:none;position:fixed;top:48px;left:0;right:0;bottom:0;
+     background:var(--bg);overflow-y:auto;padding:20px 8px;z-index:50;">
+  <div style="max-width:75%;margin:0 auto">
+    <div class="bt-title">WATCHLIST</div>
+    <div class="bt-sub" id="wl-sub">Loading...</div>
+
+    <!-- Copy-paste box -->
+    <div style="margin-bottom:32px">
+      <div style="font-size:11px;color:var(--text);letter-spacing:.08em;text-transform:uppercase;
+                  margin-bottom:8px">TradingView — copy &amp; paste into watchlist</div>
+      <textarea id="wl-copybox" readonly onclick="this.select()"
+        style="width:100%;min-height:110px;background:var(--panel);border:1px solid var(--border);
+               border-radius:6px;padding:12px 14px;color:var(--white);font-size:11px;
+               font-family:monospace;resize:none;line-height:1.6;cursor:text;display:block"></textarea>
+      <div style="margin-top:8px;text-align:right">
+        <button onclick="wlCopy()" id="wl-copy-btn"
+          style="background:var(--accent);color:#000;border:none;border-radius:4px;
+                 padding:5px 18px;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:.05em">COPY</button>
+      </div>
+    </div>
+
+    <!-- Groups -->
+    <div id="wl-groups"></div>
+  </div>
+</div>
+
 <script>
 // ── All stock data ─────────────────────────────────────────────────────────────
 const ALL_STOCKS = {all_stocks_json};
 const BT         = {backtest_json};
 const PT         = {portfolio_json};
+const WL         = {watchlist_json};
 let D = null;
 let currentStockIdx = null;
 let selectedSigIdx  = null;
 
 // ── Nav tab switching ─────────────────────────────────────────────────────────
 function switchNav(name) {{
-  ['chart','backtest','portfolio'].forEach(n => {{
+  ['chart','backtest','portfolio','watchlist'].forEach(n => {{
     document.getElementById('nav-'+n).classList.toggle('active', n===name);
   }});
   document.getElementById('pane-backtest').style.display  = name==='backtest'  ? 'block' : 'none';
   document.getElementById('pane-portfolio').style.display = name==='portfolio' ? 'block' : 'none';
+  document.getElementById('pane-watchlist').style.display = name==='watchlist' ? 'block' : 'none';
   if(name==='backtest')  renderBacktest();
   if(name==='portfolio') renderPortfolio();
+  if(name==='watchlist') renderWatchlist();
+}}
+
+// ── Watchlist tab ─────────────────────────────────────────────────────────────
+function wlCopy() {{
+  const box = document.getElementById('wl-copybox');
+  box.select();
+  navigator.clipboard.writeText(box.value).then(() => {{
+    const btn = document.getElementById('wl-copy-btn');
+    btn.textContent = 'COPIED!';
+    setTimeout(() => btn.textContent = 'COPY', 1500);
+  }});
+}}
+
+function renderWatchlist() {{
+  if(!WL) return;
+
+  const total = Object.values(WL.groups).reduce((a,g) => a + g.length, 0);
+  document.getElementById('wl-sub').textContent =
+    WL.date.replace(/_/g,'-') + '  ·  ' + total + ' stocks waiting for breakout';
+
+  document.getElementById('wl-copybox').value = WL.copy_str;
+
+  const colours = {{'> MA10':'var(--green)','> MA20':'var(--yellow)','> MA50':'var(--accent)'}};
+  const container = document.getElementById('wl-groups');
+
+  const cols = Object.entries(WL.groups).map(([label, tickers]) => {{
+    const col = colours[label] || 'var(--white)';
+    const rows = tickers.length ? tickers.map(t => {{
+      const short = t.replace('SET:','');
+      const idx   = ALL_STOCKS.findIndex(s => s.ticker.replace('.BK','') === short);
+      const click = idx >= 0
+        ? `onclick="switchNav('chart');loadStock(${{idx}});document.getElementById('sb-${{idx}}')?.scrollIntoView({{block:'center'}})"` : '';
+      return `<div ${{click}} style="padding:7px 14px;border-bottom:1px solid rgba(255,255,255,.04);
+        display:flex;align-items:center;gap:10px;${{idx>=0?'cursor:pointer;':''}}">
+        <span style="font-weight:600;color:var(--white);min-width:70px">${{short}}</span>
+        ${{idx>=0 ? '<span style="font-size:9px;color:var(--accent);opacity:.6">→</span>' : ''}}
+      </div>`;
+    }}).join('') : `<div style="padding:10px 14px;font-size:11px;color:var(--text)">—</div>`;
+
+    return `<div style="flex:1;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="padding:10px 14px;background:rgba(255,255,255,.03);
+        border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;font-weight:700;color:${{col}};letter-spacing:.06em;text-transform:uppercase">${{label}}</span>
+        <span style="font-size:11px;color:var(--text)">${{tickers.length}}</span>
+      </div>
+      ${{rows}}
+    </div>`;
+  }});
+
+  container.innerHTML = `<div style="display:flex;gap:16px;align-items:flex-start">${{cols.join('')}}</div>`;
 }}
 
 function goToChart(idx) {{

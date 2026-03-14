@@ -140,8 +140,15 @@ def process_ticker(stock: dict, bench: pd.Series):
     rsm_last    = float(df['RSM'].iloc[-1]) if not pd.isna(df['RSM'].iloc[-1]) else 0.0
     rvol_last   = round(float(rvol_arr[-1]), 2)
     today_fired = any(b['bar'] == last_bar for b in all_breaks)
+    last_ema10  = float(df['EMA10'].iloc[-1]) if not pd.isna(df['EMA10'].iloc[-1]) else 0
+    last_ema20  = float(df['EMA20'].iloc[-1]) if not pd.isna(df['EMA20'].iloc[-1]) else 0
     last_sma50  = float(df['SMA50'].iloc[-1]) if not pd.isna(df['SMA50'].iloc[-1]) else 0
     last_regime = last_close > last_sma50
+
+    # MA position: which MAs is price above?
+    above_ema10 = last_close > last_ema10
+    above_ema20 = last_close > last_ema20
+    above_sma50 = last_close > last_sma50
 
     # Watchlist: active line, in regime, no breakout today
     pending_info = None
@@ -269,6 +276,8 @@ def process_ticker(stock: dict, bench: pd.Series):
         today_signal=today_info, pending=pending_info,
         trades=all_trades_chart, chart_data=chart_data,
         in_regime=last_regime,
+        above_ema10=above_ema10, above_ema20=above_ema20, above_sma50=above_sma50,
+        last_close=last_close, last_ema10=last_ema10, last_ema20=last_ema20, last_sma50=last_sma50,
     )
 
 
