@@ -139,7 +139,12 @@ def process_ticker(stock: dict, bench: pd.Series):
     last_atr    = float(df['ATR'].iloc[-1]) if not pd.isna(df['ATR'].iloc[-1]) else 0
     rsm_last    = float(df['RSM'].iloc[-1]) if not pd.isna(df['RSM'].iloc[-1]) else 0.0
     rvol_last   = round(float(rvol_arr[-1]), 2)
-    today_fired = any(b['bar'] == last_bar for b in all_breaks)
+    # Only suppress pending if a strong signal fired today (regime + RVOL or RSM)
+    # Weak signals (SMA50 only) should not hide a stock from the watchlist
+    today_fired = any(
+        b['bar'] == last_bar and (b.get('rvol_ok') or b.get('rsm_ok'))
+        for b in all_breaks
+    )
     last_ema10  = float(df['EMA10'].iloc[-1]) if not pd.isna(df['EMA10'].iloc[-1]) else 0
     last_ema20  = float(df['EMA20'].iloc[-1]) if not pd.isna(df['EMA20'].iloc[-1]) else 0
     last_sma50  = float(df['SMA50'].iloc[-1]) if not pd.isna(df['SMA50'].iloc[-1]) else 0
@@ -153,10 +158,13 @@ def process_ticker(stock: dict, bench: pd.Series):
     # Watchlist: active line, in regime, no breakout today
     pending_info = None
     if pending_levels and not today_fired and last_regime:
+        last_avg_vol = float(avg_vol[-1]) if len(avg_vol) > 0 else 0
         pending_info = dict(
             ticker=ticker, desc=stock['desc'], sector=stock['sector'],
             close=last_close, atr=round(last_atr, 4),
             rsm=round(rsm_last, 1), rvol=rvol_last,
+            avg_volume=round(last_avg_vol),
+            sma50=round(last_sma50, 4),
             levels=pending_levels,
         )
 
@@ -376,15 +384,23 @@ def main():
         if not p:
             continue
         for lv in p['levels']:
+            atr        = p.get('atr', 0)
+            close      = p.get('close', 0)
+            sma50      = p.get('sma50', 0)
+            _atr_pct   = (atr / lv['level'] * 100) if lv['level'] > 0 else 0
+            _dist      = ((lv['level'] - sma50) / sma50 * 100) if sma50 > 0 else 0
+            _stretch   = round(_dist / _atr_pct, 2) if _atr_pct > 0 else 0
             watchlist.append(dict(
                 ticker     = p['ticker'],
                 desc       = p.get('desc', ''),
                 level      = lv['level'],
                 kind       = lv['kind'],
                 rsm        = p.get('rsm', 0),
-                atr        = p.get('atr', 0),
-                close      = p.get('close', 0),
+                atr        = atr,
+                close      = close,
                 rvol       = p.get('rvol', 0),
+                avg_volume = p.get('avg_volume', 0),
+                stretch    = _stretch,
                 date_added = DATE_STR,
             ))
     wl_path = os.path.join(SCRIPT_DIR, 'watchlist.json')
