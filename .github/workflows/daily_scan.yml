@@ -4,6 +4,8 @@ on:
   schedule:
     # ── EOD scan: 16:35 BKK = 09:35 UTC ─────────────────────────────────────
     - cron: '35 9 * * 1-5'
+    # ── Intraday scan: 12:30 BKK = 05:30 UTC ─────────────────────────────────
+    - cron: '30 5 * * 1-5'
 
   workflow_dispatch:
 
@@ -19,6 +21,9 @@ jobs:
     environment: env
     permissions:
       contents: write
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'schedule' && github.event.schedule == '35 9 * * 1-5')
 
     steps:
       - uses: actions/checkout@v4
@@ -50,3 +55,34 @@ jobs:
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "auto: EOD scan $(date '+%Y-%m-%d')"
           git push
+
+  # ── Intraday scan ──────────────────────────────────────────────────────────
+  intraday-scan:
+    name: Intraday Scan
+    runs-on: ubuntu-latest
+    environment: env
+    if: |
+      github.event_name == 'schedule' &&
+      github.event.schedule == '30 5 * * 1-5'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run intraday scan
+        run: python intraday.py --discord
+        env:
+          CI: true
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}

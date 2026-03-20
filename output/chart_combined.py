@@ -17,6 +17,7 @@ def generate_combined_html(
     date_str:    str,
     filename:    str  = None,
     portfolio:   dict = None,
+    tv_prefix:   str  = 'SET',
 ) -> str:
     if not stocks_data:
         return None
@@ -110,10 +111,11 @@ def generate_combined_html(
     # ── Watchlist tab data: only pending stocks grouped by MA position ────
     wl_groups = {'> MA10': [], '> MA20': [], '> MA50': []}
     for r in sorted(results, key=lambda x: x['ticker']):
-        if not r.get('pending'):   # only stocks with active hz/tl level
+        if not r.get('pending'):
             continue
-        t  = r['ticker'].replace('.BK', '')
-        tv = 'SET:' + t
+        suffix = '.BK' if tv_prefix == 'SET' else '.AX'
+        t  = r['ticker'].replace(suffix, '')
+        tv = f'{tv_prefix}:{t}'
         if r.get('above_ema10'):
             wl_groups['> MA10'].append(tv)
         elif r.get('above_ema20'):
@@ -586,6 +588,8 @@ const ALL_STOCKS = {all_stocks_json};
 const BT         = {backtest_json};
 const PT         = {portfolio_json};
 const WL         = {watchlist_json};
+const TV_PREFIX  = '{tv_prefix}';
+const TICKER_SUFFIX = TV_PREFIX === 'SET' ? '.BK' : '.AX';
 let D = null;
 let currentStockIdx = null;
 let selectedSigIdx  = null;
@@ -629,8 +633,8 @@ function renderWatchlist() {{
   const cols = Object.entries(WL.groups).map(([label, tickers]) => {{
     const col = colours[label] || 'var(--white)';
     const rows = tickers.length ? tickers.map(t => {{
-      const short = t.replace('SET:','');
-      const idx   = ALL_STOCKS.findIndex(s => s.ticker.replace('.BK','') === short);
+      const short = t.replace(TV_PREFIX + ':', '');
+      const idx   = ALL_STOCKS.findIndex(s => s.ticker.replace(TICKER_SUFFIX,'') === short);
       const click = idx >= 0
         ? `onclick="switchNav('chart');loadStock(${{idx}});document.getElementById('sb-${{idx}}')?.scrollIntoView({{block:'center'}})"` : '';
       return `<div ${{click}} style="padding:7px 14px;border-bottom:1px solid rgba(255,255,255,.04);
