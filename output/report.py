@@ -51,7 +51,7 @@ def print_screener(signals: list, pending: list, date_str: str):
     SEP = '=' * 74; SEP2 = '-' * 74
 
     print(f'\n{SEP}')
-    print(f'  {W}BREAKOUT SCANNER  |  {today}{RST}  —  {len(signals)} breakout{"s" if len(signals)!=1 else ""}')
+    print(f'  {W}END OF DAY SCAN  |  {today}{RST}  —  {len(signals)} breakout{"s" if len(signals)!=1 else ""}')
     print(SEP)
     if signals:
         print(SCREEN_HDR); print(f'  {SEP2}')
@@ -64,6 +64,41 @@ def print_screener(signals: list, pending: list, date_str: str):
             print(_screen_row(s, crit))
     else:
         print(f'  No breakouts today.')
+    print(f'{SEP}\n')
+
+
+INTRADAY_HDR = (
+    f'  {"Ticker":<8}  {"T":<3}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"Proj":>6}  {"RSM":>4}  {"STR":>5}'
+)
+
+
+def print_intraday(signals: list, date_str: str, time_str: str):
+    SEP = '=' * 78; SEP2 = '-' * 78
+    sort_key = {'Prime': 0, 'RVOL': 1, 'RSM': 2, 'SMA50': 3}
+
+    print(f'\n{SEP}')
+    print(f'  {W}INTRADAY SCAN  |  {date_str}  {time_str} BKK{RST}  —  {len(signals)} breakout{"s" if len(signals)!=1 else ""}')
+    print(SEP)
+    if signals:
+        print(INTRADAY_HDR); print(f'  {SEP2}')
+        last_crit = None
+        for s in sorted(signals, key=lambda x: (sort_key.get(x['criteria'], 9), x['ticker'])):
+            crit    = s['criteria']
+            col     = _criteria_color(crit)
+            stretch = s.get('stretch', 0)
+            str_col = R if stretch > 4 else G
+            str_disp= f'{stretch:.1f}x' if stretch else '—'
+            if last_crit is not None and crit != last_crit:
+                print()
+            last_crit = crit
+            print(
+                f'  {col}{s["ticker"]:<8}{RST}  {s["kind"]:<3}  {col}{crit:<6}{RST}  '
+                f'{s["level"]:>8.2f}  {s["close"]:>8.2f}  '
+                f'{s["cur_rvol"]:>5.1f}x  {s["proj_rvol"]:>5.1f}x  '
+                f'{s["rsm"]:>4.0f}  {str_col}{str_disp:>5}{RST}'
+            )
+    else:
+        print(f'  No breakouts detected.')
     print(f'{SEP}\n')
 
 
