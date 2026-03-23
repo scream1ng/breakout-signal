@@ -19,6 +19,7 @@ import pandas as pd
 ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
+from output.report import print_intraday
 
 BKK     = pytz.timezone('Asia/Bangkok')
 WL_PATH = os.path.join(ROOT, 'watchlist.json')
@@ -214,23 +215,7 @@ def run():
         print('  No breakouts detected.')
         return
 
-    sort_key = {'Prime': 0, 'RVOL': 1, 'RSM': 2, 'SMA50': 3}
-    signals.sort(key=lambda x: (sort_key.get(x['criteria'], 9), x['ticker']))
-
-    HDR = f"  {'Ticker':<8}  {'T':<3}  {'Crit':<6}  {'Level':>7}  {'Close':>7}  {'RVol':>6}  {'ProjRVol':>9}  {'RSM':>4}  {'STR':>5}"
-    DIV = '  ' + '─' * 72
-    print(f'\n  {len(signals)} BREAKOUT(S)')
-    print(HDR); print(DIV)
-    last_crit = None
-    for s in signals:
-        if last_crit and s['criteria'] != last_crit:
-            print()
-        last_crit = s['criteria']
-        str_disp  = f"{s['stretch']:.1f}x" if s.get('stretch') else '—'
-        print(f"  {s['ticker']:<8}  {s['kind']:<3}  {s['criteria']:<6}  "
-              f"{s['level']:>7.2f}  {s['close']:>7.2f}  "
-              f"{s['cur_rvol']:>5.1f}x  {s['proj_rvol']:>8.1f}x  "
-              f"{s['rsm']:>4.0f}  {str_disp:>5}")
+    print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
     if args.discord:
         alert = [s for s in signals if s['criteria'] in ('Prime', 'RVOL', 'RSM')]
