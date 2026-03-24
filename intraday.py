@@ -94,35 +94,57 @@ def send_discord(signals, now):
         print('  DISCORD_WEBHOOK not set.')
         return
 
-    header = (
-        f"**⚡ INTRADAY  |  {now.strftime('%Y-%m-%d')}  {now.strftime('%H:%M')} BKK**\n"
-        f"`{len(signals)} signal{'s' if len(signals)!=1 else ''}`"
+    date_str   = now.strftime('%Y-%m-%d')
+    time_str   = now.strftime('%H:%M')
+    n          = len(signals)
+
+    HDR = f"{'Ticker':<8}  {'T':<3}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>6}  {'Proj':>6}  {'RSM':>4}  {'STR':>5}"
+    DIV = '─' * len(HDR)
+
+    header_msg = (
+        f"**⚡ INTRADAY SCAN  |  {date_str}  {time_str} BKK**\n"
+        f"`{n} signal{'s' if n!=1 else ''}`"
     )
 
-    groups = {'Prime': [], 'RVOL': [], 'RSM': []}
-    for s in sorted(signals, key=lambda x: x['ticker']):
-        if s['criteria'] in groups:
-            groups[s['criteria']].append(s)
+    sort_key = {'Prime': 0, 'RVOL': 1, 'RSM': 2, 'SMA50': 3}
+    rows      = []
+    last_crit = None
+    for s in sorted(signals, key=lambda x: (sort_key.get(x['criteria'], 9), x['ticker'])):
+        crit     = s['criteria']
+        col      = _ANSI.get(crit, '')
+        rst      = _ANSI['RESET']
+        stretch  = s.get('stretch', 0)
+        str_disp = f'{stretch:.1f}x' if stretch else '—'
+        if last_crit is not None and crit != last_crit:
+            rows.append('')
+        last_crit = crit
+        rows.append(
+            f"{col}{s['ticker']:<8}{rst}  {s['kind']:<3}  {col}{crit:<6}{rst}  "
+            f"{s['level']:>8.2f}  {s['close']:>8.2f}  "
+            f"{s['cur_rvol']:>5.1f}x  {s['proj_rvol']:>5.1f}x  "
+            f"{s['rsm']:>4.0f}  {str_disp:>5}"
+        )
 
-    lines = []
-    for crit in ('Prime', 'RVOL', 'RSM'):
-        if not groups[crit]:
-            continue
-        col = _ANSI[crit]
-        rst = _ANSI['RESET']
-        lines.append(f'{col}{crit}{rst}')
-        for s in groups[crit]:
-            str_disp  = f"{s['stretch']:.1f}x" if s.get('stretch') else '—'
-            lines.append(
-                f"{s['ticker']} | broke ฿{s['level']:.2f} → now ฿{s['close']:.2f}"
-                f"  RVol {s['cur_rvol']:.1f}x (proj {s['proj_rvol']:.1f}x)"
-                f"  RSM {s['rsm']:.0f}  STR {str_disp}"
-            )
-        lines.append('')
+    def make_block(row_list):
+        return f"```ansi\n{HDR}\n{DIV}\n" + "\n".join(row_list) + f"\n{_ANSI['RESET']}```"
 
-    block = '```ansi\n' + '\n'.join(lines).rstrip() + f'\n{_ANSI["RESET"]}```'
+    LIMIT = 1900
+    chunks = []
+    current_rows = []
+    for row in rows:
+        if len(make_block(current_rows + [row])) > LIMIT and current_rows:
+            while current_rows and current_rows[-1] == '':
+                current_rows.pop()
+            chunks.append(make_block(current_rows))
+            current_rows = [row] if row else []
+        else:
+            current_rows.append(row)
+    while current_rows and current_rows[-1] == '':
+        current_rows.pop()
+    if current_rows:
+        chunks.append(make_block(current_rows))
 
-    for msg in [header, block]:
+    for msg in [header_msg] + chunks:
         try:
             requests.post(url, json={'content': msg}, timeout=10)
             time.sleep(0.5)

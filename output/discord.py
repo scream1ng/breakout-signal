@@ -93,11 +93,11 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
     n_watchlist= len(pending_list)
 
     # ── Header ──────────────────────────────────────────────────────────────
-    HDR = f"{'Ticker':<7}  {'T':<3}  {'Crit':<6}  {'Level':>7}  {'Close':>7}  {'RVol':>6}  {'RSM':>4}  {'STR':>5}"
+    HDR = f"{'Ticker':<8}  {'T':<3}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>6}  {'RSM':>4}  {'STR':>5}"
     DIV = "─" * len(HDR)
 
     header_msg = (
-        f"**BREAKOUT SCANNER  |  {date_fmt}**\n"
+        f"**END OF DAY SCAN  |  {date_fmt}**\n"
         f"`{n_watchlist} watchlist  ·  {n_breakout} breakout{'s' if n_breakout != 1 else ''}`"
     )
 
@@ -105,21 +105,19 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
     rows = []
     last_crit = None
     for s in sorted(today_signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
-        t        = s['ticker'].replace('.BK', '')
+        t        = s['ticker'].replace('.BK', '').replace('.AX', '')
         kind     = 'Hz' if s.get('kind') == 'hz' else 'TL'
         crit     = _criteria_label(s)
         stretch  = s.get('stretch', 0)
         str_disp = f'{stretch:.1f}x' if stretch else '—'
         col      = _ANSI.get(crit, '')
         rst      = _ANSI['RESET']
-        # Blank line between groups
         if last_crit is not None and crit != last_crit:
             rows.append('')
         last_crit = crit
-        # Colour the criteria label + ticker
         rows.append(
-            f"{col}{t:<7}{rst}  {kind:<3}  {col}{crit:<6}{rst}  "
-            f"{s.get('bp',0):>7.2f}  {s.get('close',0):>7.2f}  "
+            f"{col}{t:<8}{rst}  {kind:<3}  {col}{crit:<6}{rst}  "
+            f"{s.get('bp',0):>8.2f}  {s.get('close',0):>8.2f}  "
             f"{s.get('rvol',0):>5.1f}x  {s.get('rsm',0):>4.0f}  {str_disp:>5}"
         )
 

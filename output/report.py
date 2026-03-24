@@ -33,7 +33,7 @@ SCREEN_HDR = (
 
 
 def _screen_row(s: dict, crit_label: str) -> str:
-    ticker   = s['ticker'].replace('.BK', '')
+    ticker   = s['ticker'].replace('.BK', '').replace('.AX', '')
     kind     = 'Hz' if s.get('kind') == 'hz' else 'TL'
     stretch  = s.get('stretch', 0)
     col      = _criteria_color(crit_label)
