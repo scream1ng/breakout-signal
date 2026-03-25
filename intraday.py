@@ -26,6 +26,7 @@ WL_PATH = os.path.join(ROOT, 'watchlist.json')
 
 _ANSI = {
     'Prime': '\033[1;35m',
+    'STR':   '\033[1;31m',
     'RVOL':  '\033[1;34m',
     'RSM':   '\033[1;32m',
     'RESET': '\033[0m',
@@ -78,9 +79,10 @@ def fetch_today(ticker):
         return None
 
 
-def criteria_label(rsm, rvol):
+def criteria_label(rsm, rvol, stretch=0):
     rvol_ok = rvol >= CFG.get('rvol_min', 1.5)
     rsm_ok  = rsm  >= CFG.get('rs_momentum_min', 70)
+    if (rvol_ok or rsm_ok) and stretch > 4: return 'STR'
     if rvol_ok and rsm_ok: return 'Prime'
     if rvol_ok:            return 'RVOL'
     if rsm_ok:             return 'RSM'
@@ -106,7 +108,7 @@ def send_discord(signals, now):
         f"`{n} signal{'s' if n!=1 else ''}`"
     )
 
-    sort_key = {'Prime': 0, 'RVOL': 1, 'RSM': 2, 'SMA50': 3}
+    sort_key = {'Prime': 0, 'STR': 1, 'RVOL': 2, 'RSM': 3, 'SMA50': 4}
     rows      = []
     last_crit = None
     for s in sorted(signals, key=lambda x: (sort_key.get(x['criteria'], 9), x['ticker'])):
@@ -219,7 +221,7 @@ def run():
         avg_vol  = w.get('avg_volume', 0)
         cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
         proj_rv  = proj_volume(d['volume'], avg_vol, now)
-        crit     = criteria_label(w.get('rsm', 0), cur_rvol)
+        crit     = criteria_label(w.get('rsm', 0), cur_rvol, w.get('stretch', 0))
 
         signals.append(dict(
             ticker    = ticker.replace('.BK', ''),
@@ -240,7 +242,7 @@ def run():
     print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
     if args.discord:
-        alert = [s for s in signals if s['criteria'] in ('Prime', 'RVOL', 'RSM')]
+        alert = [s for s in signals if s['criteria'] in ('Prime', 'RVOL', 'RSM', 'STR')]
         if alert:
             send_discord(alert, now)
             print(f'  ✅ Discord sent ({len(alert)} signals)')
