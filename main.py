@@ -192,7 +192,7 @@ def process_ticker(stock: dict, bench: pd.Series):
             tp2=round(bp + atr * CFG['tp2_mult'], 2),
             atr=atr, rsm=today_sig['rsm'], rvol=today_sig['rvol'],
             rsm_ok=today_sig['rsm_ok'], rvol_ok=today_sig['rvol_ok'],
-            stretch=_stretch,
+            stretch=_stretch, tl_angle=today_sig.get('tl_angle'),
         )
 
     # Backtest simulations (3 filter tiers)
@@ -401,6 +401,7 @@ def main():
                 rvol       = p.get('rvol', 0),
                 avg_volume = p.get('avg_volume', 0),
                 stretch    = _stretch,
+                tl_angle   = lv.get('tl_angle'),
                 date_added = DATE_STR,
             ))
     wl_path = os.path.join(SCRIPT_DIR, 'watchlist.json')

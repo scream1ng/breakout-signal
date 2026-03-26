@@ -100,7 +100,7 @@ def send_discord(signals, now):
     time_str   = now.strftime('%H:%M')
     n          = len(signals)
 
-    HDR = f"{'Ticker':<8}  {'T':<3}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>6}  {'Proj':>6}  {'RSM':>4}  {'STR':>5}"
+    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>6}  {'Proj':>6}  {'RSM':>4}  {'STR':>5}"
     DIV = '─' * len(HDR)
 
     header_msg = (
@@ -120,8 +120,10 @@ def send_discord(signals, now):
         if last_crit is not None and crit != last_crit:
             rows.append('')
         last_crit = crit
+        ang      = s.get('tl_angle')
+        kind_lbl = f"TL ({ang:.0f}\u00b0)" if s.get('kind')=='tl' and ang is not None else ('TL' if s.get('kind')=='tl' else 'Hz')
         rows.append(
-            f"{col}{s['ticker']:<8}{rst}  {s['kind']:<3}  {col}{crit:<6}{rst}  "
+            f"{col}{kind_lbl:<10}{rst}  {col}{crit:<6}{rst}  "
             f"{s['level']:>8.2f}  {s['close']:>8.2f}  "
             f"{s['cur_rvol']:>5.1f}x  {s['proj_rvol']:>5.1f}x  "
             f"{s['rsm']:>4.0f}  {str_disp:>5}"
