@@ -123,7 +123,7 @@ def send_discord(signals, now):
         ang      = s.get('tl_angle')
         kind_lbl = f"TL ({ang:.0f}\u00b0)" if s.get('kind')=='tl' and ang is not None else ('TL' if s.get('kind')=='tl' else 'Hz')
         rows.append(
-            f"{col}{kind_lbl:<10}{rst}  {col}{crit:<6}{rst}  "
+            f"{col}{s['ticker']:<8}{rst}  {kind_lbl:<10}  {col}{crit:<6}{rst}  "
             f"{s['level']:>8.2f}  {s['close']:>8.2f}  "
             f"{s['cur_rvol']:>5.1f}x  {s['proj_rvol']:>5.1f}x  "
             f"{s['rsm']:>4.0f}  {str_disp:>5}"
