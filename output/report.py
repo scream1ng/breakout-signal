@@ -27,20 +27,27 @@ def _criteria_sort_key(sig: dict) -> int:
         _criteria_label(sig), 9)
 
 
+def _kind_label(s: dict) -> str:
+    if s.get('kind') == 'tl':
+        ang = s.get('tl_angle')
+        return f"TL ({ang:.0f}\u00b0)" if ang is not None else 'TL'
+    return 'Hz'
+
+
 SCREEN_HDR = (
-    f'  {"Ticker":<8}  {"T":<3}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"RSM":>4}  {"STR":>5}'
+    f'  {"Ticker":<8}  {"T":<10}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"RSM":>4}  {"STR":>5}'
 )
 
 
 def _screen_row(s: dict, crit_label: str) -> str:
     ticker   = s['ticker'].replace('.BK', '').replace('.AX', '')
-    kind     = 'Hz' if s.get('kind') == 'hz' else 'TL'
+    kind     = _kind_label(s)
     stretch  = s.get('stretch', 0)
     col      = _criteria_color(crit_label)
     str_col  = R if stretch > 4 else G
     str_disp = f'{stretch:.1f}x' if stretch else '—'
     return (
-        f'  {col}{ticker:<8}{RST}  {kind:<3}  {col}{crit_label:<6}{RST}  '
+        f'  {col}{ticker:<8}{RST}  {kind:<10}  {col}{crit_label:<6}{RST}  '
         f'{s.get("bp",0):>8.2f}  {s.get("close",s.get("bp",0)):>8.2f}  '
         f'{s.get("rvol",0):>5.1f}x  {s.get("rsm",0):>4.0f}  {str_col}{str_disp:>5}{RST}'
     )
@@ -68,7 +75,7 @@ def print_screener(signals: list, pending: list, date_str: str):
 
 
 INTRADAY_HDR = (
-    f'  {"Ticker":<8}  {"T":<3}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"Proj":>6}  {"RSM":>4}  {"STR":>5}'
+    f'  {"Ticker":<8}  {"T":<10}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"Proj":>6}  {"RSM":>4}  {"STR":>5}'
 )
 
 
@@ -92,7 +99,7 @@ def print_intraday(signals: list, date_str: str, time_str: str):
                 print()
             last_crit = crit
             print(
-                f'  {col}{s["ticker"]:<8}{RST}  {s["kind"]:<3}  {col}{crit:<6}{RST}  '
+                f'  {col}{s["ticker"]:<8}{RST}  {_kind_label(s):<10}  {col}{crit:<6}{RST}  '
                 f'{s["level"]:>8.2f}  {s["close"]:>8.2f}  '
                 f'{s["cur_rvol"]:>5.1f}x  {s["proj_rvol"]:>5.1f}x  '
                 f'{s["rsm"]:>4.0f}  {str_col}{str_disp:>5}{RST}'

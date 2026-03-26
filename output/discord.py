@@ -93,7 +93,7 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
     n_watchlist= len(pending_list)
 
     # ── Header ──────────────────────────────────────────────────────────────
-    HDR = f"{'Ticker':<8}  {'T':<3}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>6}  {'RSM':>4}  {'STR':>5}"
+    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>6}  {'RSM':>4}  {'STR':>5}"
     DIV = "─" * len(HDR)
 
     header_msg = (
@@ -106,7 +106,6 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
     last_crit = None
     for s in sorted(today_signals, key=lambda x: (_criteria_sort_key(x), x['ticker'])):
         t        = s['ticker'].replace('.BK', '').replace('.AX', '')
-        kind     = 'Hz' if s.get('kind') == 'hz' else 'TL'
         crit     = _criteria_label(s)
         stretch  = s.get('stretch', 0)
         str_disp = f'{stretch:.1f}x' if stretch else '—'
@@ -115,8 +114,10 @@ def send_discord(today_signals, pending_list, results, date_str, cfg):
         if last_crit is not None and crit != last_crit:
             rows.append('')
         last_crit = crit
+        ang      = s.get('tl_angle')
+        kind_lbl = f'TL ({ang:.0f}\u00b0)' if s.get('kind')=='tl' and ang is not None else ('TL' if s.get('kind')=='tl' else 'Hz')
         rows.append(
-            f"{col}{t:<8}{rst}  {kind:<3}  {col}{crit:<6}{rst}  "
+            f"{col}{t:<8}{rst}  {kind_lbl:<10}  {col}{crit:<6}{rst}  "
             f"{s.get('bp',0):>8.2f}  {s.get('close',0):>8.2f}  "
             f"{s.get('rvol',0):>5.1f}x  {s.get('rsm',0):>4.0f}  {str_disp:>5}"
         )
