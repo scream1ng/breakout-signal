@@ -152,6 +152,9 @@ def detect_pivots(
             atr_pct_val = (atr / bp * 100) if bp > 0 else 0
             price_dist  = ((bp - sma_i) / sma_i * 100) if (not np.isnan(sma_i) and sma_i > 0) else 0
             stretch_val = round(price_dist / atr_pct_val, 2) if atr_pct_val > 0 else 0
+            import math as _math
+            tl_angle = round(abs(_math.degrees(_math.atan(tl_slope))), 1) \
+                       if kind == 'tl' and not np.isnan(tl_slope) else None
             all_breaks.append(dict(
                 bar       = i,
                 bp        = bp,
@@ -163,6 +166,7 @@ def detect_pivots(
                 close     = round(cl_i, 4),
                 sma50     = round(sma_i, 4) if not np.isnan(sma_i) else None,
                 stretch   = stretch_val,
+                tl_angle  = tl_angle,
                 rsm_ok    = rsm_val >= rsm_min,
                 rvol_ok   = rv >= rvol_min,
                 regime_ok = in_regime and (not np.isnan(sma_i)) and (cl_i > sma_i),
@@ -202,6 +206,8 @@ def detect_pivots(
     if tl_active and not np.isnan(tl_slope) and tl_base_i >= 0:
         tl_now = tl_base + tl_slope * (last_i - tl_base_i)
         if not np.isnan(tl_now):
-            pending.append(dict(kind='tl', level=round(tl_now, 4)))
+            import math as _math
+            tl_ang = round(abs(_math.degrees(_math.atan(tl_slope))), 1)
+            pending.append(dict(kind='tl', level=round(tl_now, 4), tl_angle=tl_ang))
 
     return all_breaks, hz_lines, tl_lines, pending
