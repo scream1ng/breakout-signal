@@ -39,9 +39,11 @@ def detect_pivots(
     Returns ALL possible breaks with full metadata — no filters.
     Caller decides which to simulate and which to display.
     """
-    rsm_min  = cfg['rsm_min']
-    rvol_min = cfg['rvol_min']
-    N        = len(df)
+    rsm_min    = cfg['rsm_min']
+    rvol_min   = cfg['rvol_min']
+    N          = len(df)
+    price_range = float(df['High'].max() - df['Low'].min())
+    _ASPECT     = 2.0   # approximate chart width/height ratio
 
     all_breaks = []
     hz_lines   = []
@@ -153,8 +155,11 @@ def detect_pivots(
             price_dist  = ((bp - sma_i) / sma_i * 100) if (not np.isnan(sma_i) and sma_i > 0) else 0
             stretch_val = round(price_dist / atr_pct_val, 2) if atr_pct_val > 0 else 0
             import math as _math
-            tl_angle = round(abs(_math.degrees(_math.atan(tl_slope))), 1) \
-                       if kind == 'tl' and not np.isnan(tl_slope) else None
+            if kind == 'tl' and not np.isnan(tl_slope) and price_range > 0:
+                slope_norm = tl_slope * (N / price_range) / _ASPECT
+                tl_angle   = round(abs(_math.degrees(_math.atan(slope_norm))), 1)
+            else:
+                tl_angle = None
             all_breaks.append(dict(
                 bar       = i,
                 bp        = bp,
@@ -207,7 +212,8 @@ def detect_pivots(
         tl_now = tl_base + tl_slope * (last_i - tl_base_i)
         if not np.isnan(tl_now):
             import math as _math
-            tl_ang = round(abs(_math.degrees(_math.atan(tl_slope))), 1)
+            slope_norm = tl_slope * (N / price_range) / _ASPECT if price_range > 0 else 0
+            tl_ang     = round(abs(_math.degrees(_math.atan(slope_norm))), 1)
             pending.append(dict(kind='tl', level=round(tl_now, 4), tl_angle=tl_ang))
 
     return all_breaks, hz_lines, tl_lines, pending
