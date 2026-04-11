@@ -25,8 +25,8 @@ CFG = {
     "min_turnover": 5_000_000,
 
     # RS filter thresholds
-    "rs_rating_min":   70,
-    "rs_momentum_min": 70,
+    "rs_rating_min":   80,
+    "rs_momentum_min": 80,
 
     # Capital and risk per trade
     "capital":  100_000,
@@ -43,10 +43,11 @@ CFG = {
     "tp1_atr_mult":  2,
     "tp2_atr_mult":  4,
     "be_after_days": 3,    # bars before SL moves to breakeven
+    "min_atr_pct":   2.5,  # portfolio only: skip trades where ATR% < this
 
     # Pivot Breakout strategy settings
     "psth_fast":   3,      # fast pivot strength — catches more, less confirmed
-    "psth_slow":   7,      # slow pivot strength — fewer, stronger confirmed pivots
+    "psth_slow":   9,      # slow pivot strength — fewer, stronger confirmed pivots
     "tick_size":   0.01,   # 1 tick above breakpoint for entry price
 
     # --- Entry quality filters (toggle independently for backtesting) ---
@@ -54,5 +55,5 @@ CFG = {
     "filter_candle_body": True,  # require break candle body >= 50% of candle range
 
     "rvol_period": 20,     # lookback bars for relative volume
-    "rvol_min":    1.5,    # min RVol to qualify as high-conviction break
+    "rvol_min":    2.0,    # min RVol to qualify as high-conviction break
 }
