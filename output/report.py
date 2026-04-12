@@ -34,8 +34,21 @@ def _kind_label(s: dict) -> str:
     return 'Hz'
 
 
+# ── Thresholds (read from config at import time) ────────────────────────────
+try:
+    import sys as _sys, os as _os
+    _ns = {}
+    exec(open(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), 'config.py')).read(), _ns)
+    _CFG = _ns.get('CFG', {})
+except Exception:
+    _CFG = {}
+_RVOL_MIN = _CFG.get('rvol_min', 1.5)
+_RSM_MIN  = _CFG.get('rs_momentum_min', 70)
+
+def _tk(ok): return f'{G}✓{RST}' if ok else f'{R}✗{RST}'
+
 SCREEN_HDR = (
-    f'  {"Ticker":<8}  {"T":<10}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"RSM":>4}  {"STR":>5}'
+    f'  {"Ticker":<8}  {"T":<10}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>9}  {"RSM":>7}  {"STR":>8}'
 )
 
 
@@ -43,13 +56,18 @@ def _screen_row(s: dict, crit_label: str) -> str:
     ticker   = s['ticker'].replace('.BK', '').replace('.AX', '')
     kind     = _kind_label(s)
     stretch  = s.get('stretch', 0)
+    rvol     = s.get('rvol', 0)
+    rsm      = s.get('rsm', 0)
     col      = _criteria_color(crit_label)
     str_col  = R if stretch > 4 else G
     str_disp = f'{stretch:.1f}x' if stretch else '—'
+    rvol_str = f'{rvol:>5.1f}x{_tk(rvol >= _RVOL_MIN)}'
+    rsm_str  = f'{rsm:>4.0f}{_tk(rsm  >= _RSM_MIN)}'
+    str_str  = f'{str_col}{str_disp:>5}{_tk(stretch <= 4)}{RST}'
     return (
         f'  {col}{ticker:<8}{RST}  {kind:<10}  {col}{crit_label:<6}{RST}  '
         f'{s.get("bp",0):>8.2f}  {s.get("close",s.get("bp",0)):>8.2f}  '
-        f'{s.get("rvol",0):>5.1f}x  {s.get("rsm",0):>4.0f}  {str_col}{str_disp:>5}{RST}'
+        f'{rvol_str}  {rsm_str}  {str_str}'
     )
 
 
@@ -75,13 +93,13 @@ def print_screener(signals: list, pending: list, date_str: str):
 
 
 INTRADAY_HDR = (
-    f'  {"Ticker":<8}  {"T":<10}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"RVol":>6}  {"Proj":>6}  {"RSM":>4}  {"STR":>5}'
+    f'  {"Ticker":<8}  {"T":<10}  {"Crit":<6}  {"Level":>8}  {"Close":>8}  {"ProjRVol":>10}  {"RVol":>9}  {"RSM":>7}  {"STR":>8}'
 )
 
 
 def print_intraday(signals: list, date_str: str, time_str: str):
-    SEP = '=' * 78; SEP2 = '-' * 78
-    sort_key = {'Prime': 0, 'RVOL': 1, 'RSM': 2, 'SMA50': 3}
+    SEP = '=' * 90; SEP2 = '-' * 90
+    sort_key = {'Prime': 0, 'STR': 1, 'RVOL': 2, 'RSM': 3, 'SMA50': 4}
 
     print(f'\n{SEP}')
     print(f'  {W}INTRADAY SCAN  |  {date_str}  {time_str} BKK{RST}  —  {len(signals)} breakout{"s" if len(signals)!=1 else ""}')
@@ -90,19 +108,27 @@ def print_intraday(signals: list, date_str: str, time_str: str):
         print(INTRADAY_HDR); print(f'  {SEP2}')
         last_crit = None
         for s in sorted(signals, key=lambda x: (sort_key.get(x['criteria'], 9), x['ticker'])):
-            crit    = s['criteria']
-            col     = _criteria_color(crit)
-            stretch = s.get('stretch', 0)
-            str_col = R if stretch > 4 else G
-            str_disp= f'{stretch:.1f}x' if stretch else '—'
+            crit      = s['criteria']
+            col       = _criteria_color(crit)
+            stretch   = s.get('stretch', 0)
+            str_col   = R if stretch > 4 else G
+            str_disp  = f'{stretch:.1f}x' if stretch else '—'
+            cur_rvol  = s.get('cur_rvol', 0)
+            proj_rvol = s.get('proj_rvol', 0)
+            rsm       = s.get('rsm', 0)
+
+            proj_str = f'{proj_rvol:>8.1f}x{_tk(proj_rvol >= _RVOL_MIN)}'
+            rvol_str = f'{cur_rvol:>5.1f}x{_tk(cur_rvol  >= _RVOL_MIN)}'
+            rsm_str  = f'{rsm:>4.0f}{_tk(rsm >= _RSM_MIN)}'
+            str_str  = f'{str_col}{str_disp:>5}{_tk(stretch <= 4)}{RST}'
+
             if last_crit is not None and crit != last_crit:
                 print()
             last_crit = crit
             print(
                 f'  {col}{s["ticker"]:<8}{RST}  {_kind_label(s):<10}  {col}{crit:<6}{RST}  '
                 f'{s["level"]:>8.2f}  {s["close"]:>8.2f}  '
-                f'{s["cur_rvol"]:>5.1f}x  {s["proj_rvol"]:>5.1f}x  '
-                f'{s["rsm"]:>4.0f}  {str_col}{str_disp:>5}{RST}'
+                f'{proj_str}  {rvol_str}  {rsm_str}  {str_str}'
             )
     else:
         print(f'  No breakouts detected.')

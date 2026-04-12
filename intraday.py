@@ -52,14 +52,31 @@ def load_dotenv(path):
 
 
 def proj_volume(cur_volume, avg_volume, now):
-    """Project full morning session RVol (150min total: 10:00-12:30)."""
+    """Project full trading day RVol based on time elapsed.
+    SET hours: 10:00-12:30 (150min) + 14:00-16:30 (150min) = 300min total.
+    """
     if avg_volume <= 0:
         return 0.0
-    open_min    = 10 * 60
-    session_min = 150  # 2.5h morning session
-    elapsed     = max(now.hour * 60 + now.minute - open_min, 1)
-    elapsed     = min(elapsed, session_min)
-    proj_vol    = cur_volume * session_min / elapsed
+    open_min   = 10 * 60          # 10:00
+    lunch_s    = 12 * 60 + 30     # 12:30
+    lunch_e    = 14 * 60          # 14:00
+    close_min  = 16 * 60 + 30     # 16:30
+    total_min  = 300              # 150 + 150
+
+    now_min = now.hour * 60 + now.minute
+
+    if now_min <= lunch_s:
+        # Morning session — elapsed since open
+        elapsed = max(now_min - open_min, 1)
+    elif now_min < lunch_e:
+        # Lunch break — morning complete = 150min
+        elapsed = 150
+    else:
+        # Afternoon session — add 150min morning + elapsed since 14:00
+        elapsed = 150 + max(now_min - lunch_e, 1)
+
+    elapsed   = min(elapsed, total_min)
+    proj_vol  = cur_volume * total_min / elapsed
     return round(proj_vol / avg_volume, 2)
 
 
@@ -100,23 +117,37 @@ def send_discord(signals, now):
     time_str   = now.strftime('%H:%M')
     n          = len(signals)
 
-    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>6}  {'Proj':>6}  {'RSM':>4}  {'STR':>5}"
-    DIV = '─' * len(HDR)
+    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'ProjRVol':>10}  {'RVol':>9}  {'RSM':>7}  {'STR':>8}"
+    DIV = '─' * 90
 
     header_msg = (
         f"**⚡ INTRADAY SCAN  |  {date_str}  {time_str} BKK**\n"
         f"`{n} signal{'s' if n!=1 else ''}`"
     )
 
+    GG = '\033[1;32m'; RR = '\033[1;31m'; RST2 = '\033[0m'
+    def tk(ok): return f'{GG}✓{RST2}' if ok else f'{RR}✗{RST2}'
+    rvol_min = CFG.get('rvol_min', 1.5)
+    rsm_min  = CFG.get('rs_momentum_min', 70)
+
     sort_key = {'Prime': 0, 'STR': 1, 'RVOL': 2, 'RSM': 3, 'SMA50': 4}
     rows      = []
     last_crit = None
     for s in sorted(signals, key=lambda x: (sort_key.get(x['criteria'], 9), x['ticker'])):
-        crit     = s['criteria']
-        col      = _ANSI.get(crit, '')
-        rst      = _ANSI['RESET']
-        stretch  = s.get('stretch', 0)
-        str_disp = f'{stretch:.1f}x' if stretch else '—'
+        crit      = s['criteria']
+        col       = _ANSI.get(crit, '')
+        rst       = _ANSI['RESET']
+        stretch   = s.get('stretch', 0)
+        cur_rvol  = s.get('cur_rvol', 0)
+        proj_rvol = s.get('proj_rvol', 0)
+        rsm       = s.get('rsm', 0)
+        str_disp  = f'{stretch:.1f}x' if stretch else '—'
+
+        proj_str = f'{proj_rvol:>8.1f}x{tk(proj_rvol >= rvol_min)}'
+        rvol_str = f'{cur_rvol:>5.1f}x{tk(cur_rvol  >= rvol_min)}'
+        rsm_str  = f'{rsm:>4.0f}{tk(rsm >= rsm_min)}'
+        str_str  = f'{str_disp:>5}{tk(stretch <= 4)}'
+
         if last_crit is not None and crit != last_crit:
             rows.append('')
         last_crit = crit
@@ -125,8 +156,7 @@ def send_discord(signals, now):
         rows.append(
             f"{col}{s['ticker']:<8}{rst}  {kind_lbl:<10}  {col}{crit:<6}{rst}  "
             f"{s['level']:>8.2f}  {s['close']:>8.2f}  "
-            f"{s['cur_rvol']:>5.1f}x  {s['proj_rvol']:>5.1f}x  "
-            f"{s['rsm']:>4.0f}  {str_disp:>5}"
+            f"{proj_str}  {rvol_str}  {rsm_str}  {str_str}"
         )
 
     def make_block(row_list):
