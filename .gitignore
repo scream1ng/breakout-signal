@@ -16,9 +16,8 @@ cache/
 # ── Individual charts (large, regenerated on demand) ─────────────────────────
 output/charts/
 
-# ── GitHub Pages — index.html IS committed, individual stock files are NOT ───
-docs/*.html
-!docs/index.html
+# ── Local HTML output ─────────────────────────────────────────────────────────
+docs/
 
 # ── OS / IDE ──────────────────────────────────────────────────────────────────
 .DS_Store

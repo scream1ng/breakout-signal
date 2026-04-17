@@ -20,6 +20,11 @@ import numpy as np
 import pandas as pd
 warnings.filterwarnings('ignore')
 
+# Force UTF-8 output on Windows (Thai locale uses cp874 by default,
+# which cannot encode ✓/✗/● used in the terminal reports)
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
@@ -34,12 +39,10 @@ from output.chart_combined    import generate_combined_html
 from output.discord           import send_discord
 
 # ── Config ────────────────────────────────────────────────────────────────────
-_cfg_path = os.path.join(SCRIPT_DIR, 'config.py')
-CFG_FILE  = {}
-if os.path.exists(_cfg_path):
-    _ns = {}
-    exec(open(_cfg_path).read(), _ns)
-    CFG_FILE = _ns.get('CFG', {})
+try:
+    from config import CFG as CFG_FILE
+except ImportError:
+    CFG_FILE = {}
 
 def _cfg(key, fallback):
     return CFG_FILE.get(key, fallback)
@@ -402,7 +405,7 @@ def main():
                 avg_volume = p.get('avg_volume', 0),
                 stretch    = _stretch,
                 tl_angle   = lv.get('tl_angle'),
-                date_added = DATE_STR,
+                date_added = DATE_STR.replace('_', '-'),
             ))
     wl_path = os.path.join(SCRIPT_DIR, 'watchlist.json')
     with open(wl_path, 'w') as f:

@@ -137,6 +137,40 @@ def generate_combined_html(
         date     = date_str,
     ))
 
+    # ── Sector rotation data ──────────────────────────────────────────────────
+    from collections import defaultdict as _dd
+    _chart_map = {d['ticker']: d for d in stocks_data}
+    _sec = _dd(lambda: dict(rsm_sum=0.0, rsm_count=0, breakouts=0, stock_list=[]))
+    for r in results:
+        sec_name = (r.get('sector') or 'Unknown').strip() or 'Unknown'
+        s        = _sec[sec_name]
+        rsm      = r.get('rs_momentum', 0) or 0
+        if rsm > 0:
+            s['rsm_sum'] += rsm; s['rsm_count'] += 1
+        cd      = _chart_map.get(r['ticker'], {})
+        rvol    = round(float(cd.get('rvol_now', 0) or 0), 2)
+        sig     = r.get('today_signal')
+        stretch = round(float((sig or {}).get('stretch', 0) or 0), 2)
+        s['stock_list'].append(dict(
+            ticker     = r['ticker'].replace('.BK', '').replace('.AX', ''),
+            rsm        = round(rsm, 1),
+            rvol       = rvol,
+            stretch    = stretch,
+            has_signal = bool(sig),
+            has_pending= bool(r.get('pending')),
+        ))
+        if sig: s['breakouts'] += 1
+    _sec_rows = []
+    for name, s in _sec.items():
+        avg = round(s['rsm_sum'] / s['rsm_count'], 1) if s['rsm_count'] else 0
+        sl  = sorted(s['stock_list'], key=lambda x: (not x['has_signal'], not x['has_pending'], -x['rsm']))
+        _sec_rows.append(dict(
+            name=name, stocks=len(s['stock_list']),
+            avg_rsm=avg, breakouts=s['breakouts'], stock_list=sl,
+        ))
+    _sec_rows.sort(key=lambda x: x['avg_rsm'], reverse=True)
+    sector_json = json.dumps(_sec_rows)
+
     n_sig = len(sig_stocks)
     n_wtc = len(wtc_stocks)
     total = len(stocks_data)
@@ -430,6 +464,47 @@ def generate_combined_html(
   .pt-act-tp1  {{ background:rgba(255,215,64,.18); color:var(--yellow); }}
   .pt-act-tp2  {{ background:rgba(255,152,0,.18);  color:var(--orange); }}
   .pt-act-open {{ background:rgba(0,229,204,.12);  color:var(--accent); }}
+
+  /* ── Sector pane ── */
+  #pane-sector {{ display:none; position:fixed; top:48px; left:0; right:0; bottom:0;
+                  background:var(--bg); overflow-y:auto; padding:24px 16px; z-index:50; }}
+  .sec-grid   {{ display:grid; grid-template-columns:1fr; gap:14px; margin-top:20px; }}
+  .sec-block  {{ background:var(--panel); border:1px solid var(--border); border-radius:8px;
+                 overflow:hidden; transition:border-color .2s; }}
+  .sec-block:hover        {{ border-color:rgba(0,229,204,.3); }}
+  .sec-block.has-break    {{ border-color:rgba(255,110,199,.4); }}
+  .sec-hdr  {{ display:flex; align-items:center; gap:10px; padding:10px 14px;
+               border-bottom:1px solid var(--border); }}
+  .sec-hdr-bar  {{ width:4px; height:28px; border-radius:2px; flex-shrink:0; }}
+  .sec-hdr-name {{ font-family:'Syne',sans-serif; font-weight:700; font-size:12px;
+                   color:var(--white); flex:1; }}
+  .sec-hdr-rsm  {{ font-size:20px; font-weight:800; margin-left:auto; letter-spacing:-.02em; }}
+  .sec-hdr-track{{ flex:1; max-width:80px; height:4px; background:rgba(255,255,255,.08);
+                   border-radius:2px; overflow:hidden; }}
+  .sec-hdr-fill {{ height:100%; border-radius:2px; }}
+  .sec-hdr-meta {{ font-size:9px; color:var(--text); white-space:nowrap; }}
+  /* stock table inside sector */
+  .sec-tbl  {{ width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed; }}
+  .sec-tbl th {{ padding:6px 10px; text-align:right; font-size:10px; letter-spacing:.06em;
+                 color:var(--text); text-transform:uppercase; border-bottom:1px solid var(--border);
+                 background:rgba(0,0,0,.2); }}
+  .sec-tbl th:nth-child(1) {{ text-align:left; width:35%; }}
+  .sec-tbl th:nth-child(2) {{ width:20%; }}
+  .sec-tbl th:nth-child(3) {{ width:25%; }}
+  .sec-tbl th:nth-child(4) {{ width:20%; }}
+  .sec-tbl td {{ padding:7px 10px; text-align:right; border-bottom:1px solid rgba(42,46,57,.4);
+                 white-space:nowrap; }}
+  .sec-tbl td:first-child {{ text-align:left; font-weight:600; }}
+  .sec-tbl tr:last-child td {{ border-bottom:none; }}
+  .sec-tbl tr.is-signal td {{ background:rgba(255,110,199,.10); }}
+  .sec-tbl tr.is-signal td:first-child {{ border-left:3px solid var(--pink); }}
+  .sec-tbl tr.is-pending td {{ background:rgba(255,215,64,.06); }}
+  .sec-tbl tr.is-pending td:first-child {{ border-left:3px solid rgba(255,215,64,.6); }}
+  .sec-tbl tr:hover td {{ background:rgba(0,229,204,.05); cursor:pointer; }}
+  .sec-badge {{ font-size:8px; font-weight:700; padding:1px 5px; border-radius:3px;
+                margin-left:5px; vertical-align:middle; }}
+  .sec-badge.b {{ background:rgba(255,110,199,.25); color:var(--pink); }}
+  .sec-badge.w {{ background:rgba(255,215,64,.2);   color:var(--yellow); }}
 </style>
 </head>
 <body>
@@ -442,6 +517,7 @@ def generate_combined_html(
     <div class="hdate">{date_str.replace('_','-')} · {total} stocks · <span style="color:var(--pink)">{n_sig} signals</span> · <span style="color:var(--yellow)">{n_wtc} watching</span></div>
     <div class="nav-tabs">
       <div class="nav-tab active" id="nav-chart"     onclick="switchNav('chart')">CHART</div>
+      <div class="nav-tab"        id="nav-sector"    onclick="switchNav('sector')">SECTOR</div>
       <div class="nav-tab"        id="nav-backtest"  onclick="switchNav('backtest')">BACKTEST</div>
       <div class="nav-tab"        id="nav-portfolio" onclick="switchNav('portfolio')">PORTFOLIO</div>
       <div class="nav-tab"        id="nav-watchlist" onclick="switchNav('watchlist')">WATCHLIST</div>
@@ -556,6 +632,14 @@ def generate_combined_html(
   </div>
 </div>
 
+<div id="pane-sector">
+  <div style="max-width:700px;margin:0 auto">
+    <div class="pt-title">SECTOR ROTATION</div>
+    <div class="pt-sub" id="sec-sub">Loading...</div>
+    <div class="sec-grid" id="sec-grid"></div>
+  </div>
+</div>
+
 <div id="pane-watchlist" style="display:none;position:fixed;top:48px;left:0;right:0;bottom:0;
      background:var(--bg);overflow-y:auto;padding:20px 8px;z-index:50;">
   <div style="max-width:75%;margin:0 auto">
@@ -588,6 +672,7 @@ const ALL_STOCKS = {all_stocks_json};
 const BT         = {backtest_json};
 const PT         = {portfolio_json};
 const WL         = {watchlist_json};
+const SECTOR     = {sector_json};
 const TV_PREFIX  = '{tv_prefix}';
 const TICKER_SUFFIX = TV_PREFIX === 'SET' ? '.BK' : '.AX';
 let D = null;
@@ -596,15 +681,81 @@ let selectedSigIdx  = null;
 
 // ── Nav tab switching ─────────────────────────────────────────────────────────
 function switchNav(name) {{
-  ['chart','backtest','portfolio','watchlist'].forEach(n => {{
+  ['chart','backtest','portfolio','watchlist','sector'].forEach(n => {{
     document.getElementById('nav-'+n).classList.toggle('active', n===name);
   }});
   document.getElementById('pane-backtest').style.display  = name==='backtest'  ? 'block' : 'none';
   document.getElementById('pane-portfolio').style.display = name==='portfolio' ? 'block' : 'none';
   document.getElementById('pane-watchlist').style.display = name==='watchlist' ? 'block' : 'none';
+  document.getElementById('pane-sector').style.display    = name==='sector'    ? 'block' : 'none';
   if(name==='backtest')  renderBacktest();
   if(name==='portfolio') renderPortfolio();
   if(name==='watchlist') renderWatchlist();
+  if(name==='sector')    renderSector();
+}}
+
+// ── Sector tab ────────────────────────────────────────────────────────────────
+let _secRendered = false;
+
+function renderSector() {{
+  if(_secRendered) return;
+  _secRendered = true;
+
+  const RSM_MIN  = 80;
+  const RVOL_MIN = 2.0;
+  const total    = SECTOR.reduce((a,s) => a + s.stocks, 0);
+  document.getElementById('sec-sub').textContent =
+    `${{SECTOR.length}} sectors  ·  ${{total}} stocks  — sorted by Avg RSM`;
+
+  const grid = document.getElementById('sec-grid');
+  grid.innerHTML = SECTOR.map(s => {{
+    const rsm    = s.avg_rsm;
+    const pct    = Math.min(100, Math.round(rsm));
+    const strong = rsm >= RSM_MIN;
+    const mid    = rsm >= RSM_MIN - 20;
+    const barCol = strong ? 'var(--green)' : mid ? 'var(--yellow)' : '#ef5350';
+    const valCol = barCol;
+    const hasBrk = s.breakouts > 0;
+
+    const stockRows = s.stock_list.map(st => {{
+      const rvolCol  = st.rvol >= RVOL_MIN ? 'var(--green)' : 'var(--text)';
+      const rsmCol   = st.rsm  >= RSM_MIN  ? 'var(--green)' : st.rsm >= RSM_MIN-20 ? 'var(--yellow)' : '#ef5350';
+      const strCol   = st.stretch > 4 ? '#ef5350' : st.stretch > 0 ? 'var(--white)' : 'var(--text)';
+      const rvolStr  = st.rvol  > 0 ? st.rvol.toFixed(1)+'x'  : '—';
+      const strStr   = st.stretch > 0 ? st.stretch.toFixed(1)+'x' : '—';
+      const rowCls   = st.has_signal ? 'is-signal' : st.has_pending ? 'is-pending' : '';
+      const badge    = st.has_signal ? '<span class="sec-badge b">B</span>'
+                     : st.has_pending ? '<span class="sec-badge w">W</span>' : '';
+      // Click row to jump to chart
+      const idx = ALL_STOCKS.findIndex(d => d.ticker.replace(TICKER_SUFFIX,'') === st.ticker);
+      const click = idx >= 0
+        ? `onclick="switchNav('chart');loadStock(${{idx}});document.getElementById('sb-${{idx}}')?.scrollIntoView({{block:'center'}})"  style="cursor:pointer"`
+        : '';
+      return `<tr class="${{rowCls}}" ${{click}}>
+        <td style="color:var(--white)">${{st.ticker}}${{badge}}</td>
+        <td style="color:${{rvolCol}}">${{rvolStr}}</td>
+        <td style="color:${{rsmCol}}">${{st.rsm.toFixed(0)}}</td>
+        <td style="color:${{strCol}}">${{strStr}}</td>
+      </tr>`;
+    }}).join('');
+
+    return `
+    <div class="sec-block${{hasBrk ? ' has-break' : ''}}">
+      <div class="sec-hdr">
+        <div class="sec-hdr-bar" style="background:${{barCol}}"></div>
+        <div class="sec-hdr-name">${{s.name}}</div>
+        <div class="sec-hdr-track"><div class="sec-hdr-fill" style="width:${{pct}}%;background:${{barCol}}"></div></div>
+        <span class="sec-hdr-rsm" style="color:${{valCol}}">${{rsm.toFixed(1)}}</span>
+        <span class="sec-hdr-meta">&nbsp;· ${{s.stocks}} stocks${{hasBrk ? '  <span style="color:var(--pink)">· '+s.breakouts+' 🔥</span>' : ''}}</span>
+      </div>
+      <table class="sec-tbl">
+        <thead><tr>
+          <th>Ticker</th><th>RVol</th><th>RSM</th><th>STR</th>
+        </tr></thead>
+        <tbody>${{stockRows}}</tbody>
+      </table>
+    </div>`;
+  }}).join('');
 }}
 
 // ── Watchlist tab ─────────────────────────────────────────────────────────────

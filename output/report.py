@@ -36,11 +36,8 @@ def _kind_label(s: dict) -> str:
 
 # ── Thresholds (read from config at import time) ────────────────────────────
 try:
-    import sys as _sys, os as _os
-    _ns = {}
-    exec(open(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), 'config.py')).read(), _ns)
-    _CFG = _ns.get('CFG', {})
-except Exception:
+    from config import CFG as _CFG
+except ImportError:
     _CFG = {}
 _RVOL_MIN = _CFG.get('rvol_min', 1.5)
 _RSM_MIN  = _CFG.get('rs_momentum_min', 70)
@@ -206,7 +203,81 @@ def print_backtest_summary(results: list, cfg: dict):
     print(f'{SEP}\n')
 
 
+def print_sector_rotation(results: list, date_str: str):
+    """Print a sector rotation summary grouped by sector, sorted by avg RSM."""
+    from collections import defaultdict
+
+    sectors = defaultdict(lambda: dict(
+        stocks=0, rsm_sum=0.0, rsm_count=0,
+        in_regime=0, watchlist=0, breakouts=0,
+    ))
+
+    for r in results:
+        sec = (r.get('sector') or 'Unknown').strip() or 'Unknown'
+        s   = sectors[sec]
+        s['stocks'] += 1
+        rsm = r.get('rs_momentum', 0)
+        if rsm and rsm > 0:
+            s['rsm_sum']   += rsm
+            s['rsm_count'] += 1
+        if r.get('in_regime'):
+            s['in_regime'] += 1
+        if r.get('pending'):
+            s['watchlist'] += 1
+        if r.get('today_signal'):
+            s['breakouts'] += 1
+
+    if not sectors:
+        return
+
+    rows = []
+    for sec, s in sectors.items():
+        avg_rsm = s['rsm_sum'] / s['rsm_count'] if s['rsm_count'] else 0
+        rows.append((sec, s, avg_rsm))
+    rows.sort(key=lambda x: x[2], reverse=True)
+
+    today = date_str.replace('_', '-')
+    SEP  = '=' * 76
+    SEP2 = '-' * 76
+    HDR  = (f'  {"Sector":<28}  {"Stocks":>6}  {"AvgRSM":>7}  '
+            f'{"Regime":>7}  {"Watch":>5}  {"Break":>5}')
+
+    print(f'\n{SEP}')
+    print(f'  {W}SECTOR ROTATION  |  {today}{RST}')
+    print(SEP)
+    print(HDR)
+    print(f'  {SEP2}')
+
+    for sec, s, avg_rsm in rows:
+        n       = s['stocks']
+        regime  = s['in_regime']
+        watch   = s['watchlist']
+        brk     = s['breakouts']
+
+        # Colour-code by average RSM strength (thresholds from config)
+        if avg_rsm >= _RSM_MIN:
+            dot = f'{G}●{RST}'
+            col = G
+        elif avg_rsm >= _RSM_MIN - 20:
+            dot = f'{Y}●{RST}'
+            col = Y
+        else:
+            dot = f'{DIM}○{RST}'
+            col = DIM
+
+        regime_str = f'{regime}/{n}'
+        brk_str    = f'{M}{brk}{RST}' if brk else f'{DIM}{brk}{RST}'
+        watch_str  = f'{C}{watch}{RST}' if watch else f'{DIM}{watch}{RST}'
+        rsm_str    = f'{col}{avg_rsm:>6.1f}{RST}'
+
+        print(f'  {dot} {sec:<28}  {n:>6}  {rsm_str}  '
+              f'{regime_str:>7}  {watch_str:>14}  {brk_str:>14}')
+
+    print(f'{SEP}\n')
+
+
 def print_trade_list(r: dict):
+
     trades = r.get('trades', [])
     SEP = '=' * 86; SEP2 = '-' * 86
     print(f'\n{SEP}')
