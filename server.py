@@ -28,6 +28,35 @@ schedule.every().wednesday.at("11:00").do(run_eod_scan)
 schedule.every().thursday.at("11:00").do(run_eod_scan)
 schedule.every().friday.at("11:00").do(run_eod_scan)
 
+def run_intraday_scan(review=False):
+    lbl = "review" if review else "scan"
+    print(f"Running intraday {lbl}...", flush=True)
+    try:
+        cmd = ["python", "intraday.py", "--discord"]
+        if review: cmd.append("--review")
+        subprocess.run(cmd, check=False)
+        print(f"Intraday {lbl} completed.", flush=True)
+    except Exception as e:
+        print(f"Intraday {lbl} failed: {e}", flush=True)
+
+def schedule_intraday(time_bkk, is_review=False):
+    h, m = map(int, time_bkk.split(':'))
+    h_utc = (h - 7) % 24
+    utc_str = f"{h_utc:02d}:{m:02d}"
+    
+    for day in [schedule.every().monday, schedule.every().tuesday, 
+                schedule.every().wednesday, schedule.every().thursday, 
+                schedule.every().friday]:
+        day.at(utc_str).do(run_intraday_scan, review=is_review)
+
+# 15-minute Normal Intraday Scans
+for t in ["10:30", "10:45", "11:00", "11:15", "11:30", "11:45", "12:00", "12:15", "12:30",
+          "14:30", "14:45", "15:00", "15:15", "15:30", "15:45", "16:00"]:
+    schedule_intraday(t)
+
+# 16:15 Fakeout Review Scan
+schedule_intraday("16:15", is_review=True)
+
 def scheduler_thread():
     while True:
         schedule.run_pending()

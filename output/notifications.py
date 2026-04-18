@@ -178,8 +178,8 @@ def send_intraday_alert(signals, now, cfg):
     time_str   = now.strftime('%H:%M')
     n          = len(signals)
 
-    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'ProjRVol':>10}  {'RVol':>9}  {'RSM':>7}  {'STR':>8}"
-    DIV = '─' * 90
+    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'ProjRVol':>10}  {'RSM':>7}  {'STR':>8}"
+    DIV = '─' * len(HDR)
 
     header_msg = (
         f"**⚡ INTRADAY SCAN  |  {date_str}  {time_str} BKK**\n"
@@ -199,13 +199,11 @@ def send_intraday_alert(signals, now, cfg):
         col       = _ANSI.get(crit, '')
         rst       = _ANSI['RESET']
         stretch   = s.get('stretch', 0)
-        cur_rvol  = s.get('cur_rvol', 0)
         proj_rvol = s.get('proj_rvol', 0)
         rsm       = s.get('rsm', 0)
         str_disp  = f'{stretch:.1f}x' if stretch else '—'
 
         proj_str = f'{proj_rvol:>8.1f}x{tk(proj_rvol >= rvol_min)}'
-        rvol_str = f'{cur_rvol:>5.1f}x{tk(cur_rvol  >= rvol_min)}'
         rsm_str  = f'{rsm:>4.0f}{tk(rsm >= rsm_min)}'
         str_str  = f'{str_disp:>5}{tk(stretch <= 4)}'
 
@@ -217,7 +215,7 @@ def send_intraday_alert(signals, now, cfg):
         rows.append(
             f"{col}{s['ticker']:<8}{rst}  {kind_lbl:<10}  {col}{crit:<6}{rst}  "
             f"{s['level']:>8.2f}  {s['close']:>8.2f}  "
-            f"{proj_str}  {rvol_str}  {rsm_str}  {str_str}"
+            f"{proj_str}  {rsm_str}  {str_str}"
         )
 
     def make_block(row_list):
@@ -246,3 +244,76 @@ def send_intraday_alert(signals, now, cfg):
     if discord_url:
         ok = _post_chunks(discord_url, messages)
         print(f'  {"✅ Notification sent" if ok else "❌ Notification failed"} — {n} signals')
+
+
+# ── Review Alerts (intraday.py --review) ──────────────────────────────────────
+
+def send_review_alert(signals, now, cfg):
+    """Formats and sends the 16:15 Failed Breakout review alert."""
+    _load_env()
+    
+    discord_url = os.environ.get('DISCORD_WEBHOOK', '').strip()
+    if not discord_url:
+        print('  DISCORD_WEBHOOK not set — skipping notifications.')
+        return
+
+    date_str = now.strftime('%Y-%m-%d')
+    time_str = now.strftime('%H:%M')
+    n = len(signals)
+
+    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'RVol':>9}  {'RSM':>7}  {'STR':>8}"
+    DIV = '─' * len(HDR)
+
+    header_msg = (
+        f"**⚠️ FAILED BREAKOUTS | {date_str} {time_str} BKK**\n"
+        f"`{n} failed signal{'s' if n!=1 else ''} fallen below pivot`"
+    )
+
+    rvol_min = cfg.get('rvol_min', 1.5)
+    rsm_min  = cfg.get('rs_momentum_min', 70)
+    GG = '\033[1;32m'; RR = '\033[1;31m'; RST2 = '\033[0m'
+    def tk(ok): return f'{GG}✓{RST2}' if ok else f'{RR}✗{RST2}'
+
+    rows = []
+    RST = _ANSI['RESET']
+    for s in sorted(signals, key=lambda x: x['ticker']):
+        crit     = s.get('criteria', '')
+        col      = _ANSI.get(crit, '')
+        stretch  = s.get('stretch', 0)
+        rvol     = s.get('cur_rvol', 0)
+        rsm      = s.get('rsm', 0)
+        str_disp = f'{stretch:.1f}x' if stretch else '—'
+        ang      = s.get('tl_angle')
+        kind_lbl = f"TL ({ang:.0f}\u00b0)" if s.get('kind')=='TL' and ang is not None else ('TL' if str(s.get('kind')).lower()=='tl' else 'Hz')
+        
+        rvol_str = f'{rvol:>5.1f}x{tk(rvol >= rvol_min)}'
+        rsm_str  = f'{rsm:>4.0f}{tk(rsm >= rsm_min)}'
+        str_str  = f'{str_disp:>5}{tk(stretch <= 4)}'
+        
+        rows.append(
+            f"{RR}{s['ticker']:<8}{RST}  {kind_lbl:<10}  {col}{crit:<6}{RST}  "
+            f"{s['level']:>8.2f}  {s['close']:>8.2f}{tk(s['close'] >= s['level'])} "
+            f"{rvol_str}  {rsm_str}  {str_str}"
+        )
+
+    def make_block(row_list):
+        return f"```ansi\n{HDR}\n{DIV}\n" + "\n".join(row_list) + f"\n{RST}```"
+
+    chunks = []
+    current_rows = []
+    for row in rows:
+        if len(make_block(current_rows + [row])) > MESSAGE_LIMIT and current_rows:
+            chunks.append(make_block(current_rows))
+            current_rows = [row]
+        else:
+            current_rows.append(row)
+    if current_rows:
+        chunks.append(make_block(current_rows))
+
+    if chunks:
+        chunks[0] = f"{header_msg}\n{chunks[0]}"
+    messages = chunks
+    
+    if discord_url:
+        ok = _post_chunks(discord_url, messages)
+        print(f'  {"✅ Notification sent" if ok else "❌ Notification failed"} — {n} failed breakouts')

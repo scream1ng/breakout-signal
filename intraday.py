@@ -20,13 +20,15 @@ ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
 from output.report import print_intraday
-from output.notifications import send_intraday_alert
+from output.notifications import send_intraday_alert, send_review_alert
 
 BKK     = pytz.timezone('Asia/Bangkok')
 WL_PATH = os.path.join(ROOT, 'data', 'watchlist.json')
+STATE_PATH = os.path.join(ROOT, 'data', 'alert_state.json')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--discord', action='store_true')
+parser.add_argument('--review', action='store_true')
 args = parser.parse_args()
 
 
@@ -87,6 +89,17 @@ def criteria_label(rsm, rvol, stretch=0):
 
 def run():
     now = datetime.now(BKK)
+    date_str = now.strftime('%Y-%m-%d')
+
+    alert_state = {"date": date_str, "alerted": []}
+    if os.path.exists(STATE_PATH):
+        try:
+            with open(STATE_PATH) as f:
+                saved = json.load(f)
+                if saved.get('date') == date_str:
+                    alert_state = saved
+        except Exception:
+            pass
 
     if not os.path.exists(WL_PATH):
         print('  watchlist.json not found — run main.py first.')
@@ -172,12 +185,41 @@ def run():
         ticker = w['ticker']
         level  = w['level']
         d      = data.get(ticker)
-        if not d or d['close'] <= level:
+        if not d:
             continue
+            
         key = (ticker, level)
         if key in seen:
             continue
         seen.add(key)
+
+        if args.review:
+            if ticker in alert_state['alerted'] and d['close'] < level:
+                avg_vol  = w.get('avg_volume', 0)
+                cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
+                rsm      = w.get('rsm', 0)
+                stretch  = w.get('stretch', 0)
+                crit     = criteria_label(rsm, cur_rvol, stretch)
+                signals.append(dict(
+                    ticker    = ticker.replace('.BK', ''),
+                    level     = level,
+                    close     = d['close'],
+                    cur_rvol  = cur_rvol,
+                    kind      = 'Hz' if w.get('kind') == 'hz' else 'TL',
+                    rsm       = rsm,
+                    stretch   = stretch,
+                    criteria  = crit,
+                    tl_angle  = w.get('tl_angle')
+                ))
+            continue
+
+        if d['close'] <= level:
+            continue
+            
+        if ticker in alert_state['alerted']:
+            continue
+            
+        alert_state['alerted'].append(ticker)
 
         avg_vol  = w.get('avg_volume', 0)
         cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
@@ -196,9 +238,22 @@ def run():
             criteria  = crit,
         ))
 
+    if args.review:
+        if not signals:
+            print('  No false breakouts detected.')
+            return
+        print(f"  {len(signals)} failed breakouts detected.")
+        if args.discord:
+            send_review_alert(signals, now, CFG)
+        return
+
     if not signals:
         print('  No breakouts detected.')
         return
+
+    # Save state to prevent duplicate alerts
+    with open(STATE_PATH, 'w') as f:
+        json.dump(alert_state, f)
 
     print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
