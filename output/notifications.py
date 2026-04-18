@@ -7,7 +7,9 @@ import os
 import requests
 import time
 
-CHART_URL = "https://scream1ng.github.io/breakout-signal/"
+def get_chart_url():
+    domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+    return f"https://{domain}/" if domain else "https://breakout-signal.up.railway.app/"
 MESSAGE_LIMIT = 1900  # safe buffer under 2000 chars
 
 # ANSI color codes for Discord ```ansi blocks
@@ -150,7 +152,10 @@ def send_eod_alert(today_signals, pending_list, results, date_str, cfg):
     if current_rows:
         chunks.append(make_block(current_rows))
 
-    messages = [header_msg] + chunks + [CHART_URL]
+    if chunks:
+        chunks[0] = f"{header_msg}\n{chunks[0]}"
+        chunks[-1] = f"{chunks[-1]}\n**View charts:** {get_chart_url()}"
+    messages = chunks
     
     # Dispatch
     if discord_url:
@@ -233,7 +238,9 @@ def send_intraday_alert(signals, now, cfg):
     if current_rows:
         chunks.append(make_block(current_rows))
 
-    messages = [header_msg] + chunks
+    if chunks:
+        chunks[0] = f"{header_msg}\n{chunks[0]}"
+    messages = chunks
     
     # Dispatch
     if discord_url:
