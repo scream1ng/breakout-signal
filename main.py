@@ -36,7 +36,7 @@ from core.exit               import simulate
 from core.portfolio          import simulate_portfolio
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
-from output.discord           import send_discord
+from output.notifications     import send_eod_alert
 
 # ── Config ────────────────────────────────────────────────────────────────────
 try:
@@ -331,8 +331,17 @@ def main():
         return
 
     cs = cache_stats()
+    
+    try:
+        from core.settrade_client import get_market_data
+        get_market_data()  # test auth
+        data_source = "SETTRADE OpenAPI"
+    except Exception:
+        data_source = "Yahoo Finance (Fallback)"
+
     print(f'\n{"="*64}')
     print(f'  BREAKOUT SCANNER  {DATE_STR.replace("_","-")}  RSM>{CFG["rsm_min"]}  Capital {CFG["capital"]:,.0f}')
+    print(f'  Data Source: {data_source}')
     print(f'  Cache: {cs["valid"]}/{cs["total"]} cached  BKK {cs["bkk_time"]}')
     print(f'{"="*64}')
 
@@ -422,7 +431,7 @@ def main():
         print(f'  Chart updated → python main.py --view\n')
 
     if args.discord:
-        send_discord(today_signals, pending_list, results, DATE_STR, CFG)
+        send_eod_alert(today_signals, pending_list, results, DATE_STR, CFG)
 
 
 if __name__ == '__main__':

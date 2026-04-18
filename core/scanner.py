@@ -8,7 +8,6 @@ import sys
 import warnings
 import requests
 import pandas as pd
-import yfinance as yf
 
 warnings.filterwarnings('ignore')
 
@@ -48,16 +47,3 @@ def fetch_tv_stocks(cfg: dict) -> list[dict]:
     return rows
 
 
-def load_benchmark(cfg: dict) -> pd.Series:
-    """Download 2y of daily closes for the benchmark index."""
-    benchmark = cfg['benchmark']
-    print(f'  Downloading benchmark {benchmark}...')
-    br = yf.download(benchmark, period='2y', interval='1d',
-                     auto_adjust=True, progress=False)
-    if br.empty:
-        sys.exit(f'  ERROR: Cannot download {benchmark}')
-    if isinstance(br.columns, pd.MultiIndex):
-        br.columns = br.columns.get_level_values(0)
-    bench = br['Close'].dropna()
-    print(f'  Benchmark: {len(bench)} bars')
-    return bench

@@ -8,10 +8,10 @@
     "atr": 0.3,
     "close": 2.86,
     "rvol": 1.65,
-    "avg_volume": 17838043,
+    "avg_volume": 17844335,
     "stretch": 6.21,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "ASW.BK",
@@ -22,24 +22,10 @@
     "atr": 0.1464,
     "close": 7.45,
     "rvol": 0.13,
-    "avg_volume": 751223,
+    "avg_volume": 751281,
     "stretch": 7.68,
     "tl_angle": null,
-    "date_added": "2026-04-17"
-  },
-  {
-    "ticker": "ATLAS.BK",
-    "desc": "Atlas Energy Public Company Limited",
-    "level": 2.06,
-    "kind": "hz",
-    "rsm": 57.4,
-    "atr": 0.0814,
-    "close": 1.82,
-    "rvol": 0.19,
-    "avg_volume": 14401821,
-    "stretch": 3.71,
-    "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "BBGI.BK",
@@ -49,11 +35,11 @@
     "rsm": 49.0,
     "atr": 0.1843,
     "close": 3.96,
-    "rvol": 0.54,
-    "avg_volume": 3984814,
-    "stretch": 7.18,
+    "rvol": 0.52,
+    "avg_volume": 3984666,
+    "stretch": 6.66,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "BBGI.BK",
@@ -63,11 +49,11 @@
     "rsm": 49.0,
     "atr": 0.1843,
     "close": 3.96,
-    "rvol": 0.54,
-    "avg_volume": 3984814,
-    "stretch": 3.71,
-    "tl_angle": 69.5,
-    "date_added": "2026-04-17"
+    "rvol": 0.52,
+    "avg_volume": 3984666,
+    "stretch": 3.29,
+    "tl_angle": 70.5,
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "BBIK.BK",
@@ -77,11 +63,11 @@
     "rsm": 52.5,
     "atr": 0.7143,
     "close": 19.5,
-    "rvol": 0.91,
-    "avg_volume": 1352768,
+    "rvol": 0.86,
+    "avg_volume": 1349486,
     "stretch": 7.07,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "BIOTEC.BK",
@@ -92,10 +78,10 @@
     "atr": 0.0314,
     "close": 0.28,
     "rvol": 0.08,
-    "avg_volume": 44602393,
+    "avg_volume": 44622256,
     "stretch": 7.44,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "BJC.BK",
@@ -105,11 +91,11 @@
     "rsm": 72.2,
     "atr": 0.4357,
     "close": 15.0,
-    "rvol": 0.61,
-    "avg_volume": 7218152,
+    "rvol": 0.56,
+    "avg_volume": 7199496,
     "stretch": 1.47,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "BKIH.BK",
@@ -119,11 +105,11 @@
     "rsm": 67.1,
     "atr": 4.6429,
     "close": 317.0,
-    "rvol": 0.58,
-    "avg_volume": 30124,
-    "stretch": 5.71,
+    "rvol": 0.53,
+    "avg_volume": 30114,
+    "stretch": 4.94,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "BTG.BK",
@@ -133,53 +119,11 @@
     "rsm": 84.0,
     "atr": 1.0393,
     "close": 24.0,
-    "rvol": 0.89,
-    "avg_volume": 11012391,
-    "stretch": 6.74,
+    "rvol": 0.82,
+    "avg_volume": 10970797,
+    "stretch": 5.75,
     "tl_angle": null,
-    "date_added": "2026-04-17"
-  },
-  {
-    "ticker": "CCET.BK",
-    "desc": "Cal-Comp Electronics (Thailand) Public Co., Ltd.",
-    "level": 5.35,
-    "kind": "hz",
-    "rsm": 80.9,
-    "atr": 0.22,
-    "close": 5.3,
-    "rvol": 0.85,
-    "avg_volume": 41147412,
-    "stretch": 2.34,
-    "tl_angle": null,
-    "date_added": "2026-04-17"
-  },
-  {
-    "ticker": "CK.BK",
-    "desc": "CH. Karnchang Public Co. Ltd.",
-    "level": 18.107,
-    "kind": "hz",
-    "rsm": 76.8,
-    "atr": 0.6571,
-    "close": 17.2,
-    "rvol": 1.24,
-    "avg_volume": 8674056,
-    "stretch": 5.14,
-    "tl_angle": null,
-    "date_added": "2026-04-17"
-  },
-  {
-    "ticker": "CPN.BK",
-    "desc": "Central Pattana Public Co. Ltd.",
-    "level": 67.9069,
-    "kind": "hz",
-    "rsm": 61.2,
-    "atr": 1.5714,
-    "close": 64.75,
-    "rvol": 0.6,
-    "avg_volume": 8577184,
-    "stretch": 3.7,
-    "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "DMT.BK",
@@ -189,11 +133,11 @@
     "rsm": 61.6,
     "atr": 0.1429,
     "close": 11.2,
-    "rvol": 0.88,
-    "avg_volume": 1601738,
-    "stretch": 1.48,
+    "rvol": 0.86,
+    "avg_volume": 1599987,
+    "stretch": 0.78,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "ETC.BK",
@@ -203,11 +147,11 @@
     "rsm": 78.6,
     "atr": 0.0314,
     "close": 0.71,
-    "rvol": 0.28,
-    "avg_volume": 25954356,
+    "rvol": 0.2,
+    "avg_volume": 25875918,
     "stretch": 4.65,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "FM.BK",
@@ -217,11 +161,11 @@
     "rsm": 71.9,
     "atr": 0.1,
     "close": 4.14,
-    "rvol": 0.35,
-    "avg_volume": 3023472,
+    "rvol": 0.33,
+    "avg_volume": 3019552,
     "stretch": 4.25,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "FORTH.BK",
@@ -231,25 +175,25 @@
     "rsm": 65.5,
     "atr": 0.3286,
     "close": 7.2,
-    "rvol": 0.42,
-    "avg_volume": 1521486,
-    "stretch": 2.04,
+    "rvol": 0.4,
+    "avg_volume": 1519767,
+    "stretch": 1.62,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "GULF.BK",
     "desc": "Gulf Development Public Company Limited",
-    "level": 60.8821,
+    "level": 64.25,
     "kind": "hz",
     "rsm": 67.4,
     "atr": 1.5536,
     "close": 57.75,
-    "rvol": 1.09,
-    "avg_volume": 44715928,
-    "stretch": 3.49,
+    "rvol": 0.95,
+    "avg_volume": 44397858,
+    "stretch": 5.19,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "GUNKUL.BK",
@@ -259,11 +203,11 @@
     "rsm": 71.2,
     "atr": 0.0986,
     "close": 2.36,
-    "rvol": 0.84,
-    "avg_volume": 54328343,
+    "rvol": 0.78,
+    "avg_volume": 54172451,
     "stretch": 3.77,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "GUNKUL.BK",
@@ -273,39 +217,39 @@
     "rsm": 71.2,
     "atr": 0.0986,
     "close": 2.36,
-    "rvol": 0.84,
-    "avg_volume": 54328343,
+    "rvol": 0.78,
+    "avg_volume": 54172451,
     "stretch": 1.57,
-    "tl_angle": 62.5,
-    "date_added": "2026-04-17"
+    "tl_angle": 63.3,
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "HANA.BK",
     "desc": "Hana Microelectronics Public Co., Ltd.",
     "level": 29.5,
     "kind": "hz",
-    "rsm": 83.2,
+    "rsm": 79.3,
     "atr": 1.825,
     "close": 28.0,
-    "rvol": 1.1,
-    "avg_volume": 37976252,
-    "stretch": 5.82,
+    "rvol": 1.05,
+    "avg_volume": 37900960,
+    "stretch": 5.48,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "INSET.BK",
     "desc": "Infraset Public Co., Ltd.",
-    "level": 2.8543,
+    "level": 2.9,
     "kind": "hz",
     "rsm": 72.7,
     "atr": 0.1457,
     "close": 2.8,
-    "rvol": 1.0,
-    "avg_volume": 6634359,
-    "stretch": 2.93,
+    "rvol": 0.93,
+    "avg_volume": 6609611,
+    "stretch": 3.17,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "IRPC.BK",
@@ -315,11 +259,11 @@
     "rsm": 90.5,
     "atr": 0.0971,
     "close": 1.63,
-    "rvol": 0.42,
-    "avg_volume": 288721000,
-    "stretch": 7.92,
+    "rvol": 0.39,
+    "avg_volume": 288381707,
+    "stretch": 7.85,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "ITD.BK",
@@ -329,11 +273,11 @@
     "rsm": 74.5,
     "atr": 0.025,
     "close": 0.25,
-    "rvol": 0.42,
-    "avg_volume": 18311470,
+    "rvol": 0.36,
+    "avg_volume": 18261672,
     "stretch": 5.37,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "IVL.BK",
@@ -343,11 +287,11 @@
     "rsm": 90.5,
     "atr": 1.1107,
     "close": 25.0,
-    "rvol": 0.68,
-    "avg_volume": 50008553,
+    "rvol": 0.64,
+    "avg_volume": 49905400,
     "stretch": 4.01,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "KCG.BK",
@@ -357,11 +301,11 @@
     "rsm": 67.2,
     "atr": 0.2607,
     "close": 9.75,
-    "rvol": 0.87,
-    "avg_volume": 918930,
+    "rvol": 0.86,
+    "avg_volume": 918645,
     "stretch": 3.27,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "KKP.BK",
@@ -372,10 +316,10 @@
     "atr": 1.6429,
     "close": 78.75,
     "rvol": 1.08,
-    "avg_volume": 4211244,
+    "avg_volume": 4213993,
     "stretch": 4.65,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "MCS.BK",
@@ -386,10 +330,10 @@
     "atr": 0.1607,
     "close": 9.4,
     "rvol": 2.22,
-    "avg_volume": 1185980,
+    "avg_volume": 1186717,
     "stretch": 2.92,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "NER.BK",
@@ -400,10 +344,10 @@
     "atr": 0.0786,
     "close": 4.88,
     "rvol": 0.7,
-    "avg_volume": 9835011,
+    "avg_volume": 9840347,
     "stretch": 1.47,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "NTF.BK",
@@ -417,7 +361,7 @@
     "avg_volume": 3919147,
     "stretch": 8.74,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "NYT.BK",
@@ -428,10 +372,10 @@
     "atr": 0.1071,
     "close": 4.48,
     "rvol": 0.83,
-    "avg_volume": 5324216,
+    "avg_volume": 5324538,
     "stretch": 8.57,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "PCE.BK",
@@ -442,10 +386,10 @@
     "atr": 0.0886,
     "close": 2.54,
     "rvol": 0.38,
-    "avg_volume": 5623015,
+    "avg_volume": 5636693,
     "stretch": 4.58,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "PTL.BK",
@@ -456,10 +400,10 @@
     "atr": 0.4536,
     "close": 9.9,
     "rvol": 0.4,
-    "avg_volume": 1459355,
+    "avg_volume": 1460361,
     "stretch": 5.62,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "PTTEP.BK",
@@ -469,11 +413,11 @@
     "rsm": 56.1,
     "atr": 4.75,
     "close": 145.0,
-    "rvol": 0.88,
-    "avg_volume": 27651017,
-    "stretch": 5.47,
+    "rvol": 0.91,
+    "avg_volume": 27720897,
+    "stretch": 5.09,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "PTTGC.BK",
@@ -484,10 +428,10 @@
     "atr": 1.7679,
     "close": 36.75,
     "rvol": 0.58,
-    "avg_volume": 44426646,
-    "stretch": 5.97,
+    "avg_volume": 44431170,
+    "stretch": 5.83,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "RBF.BK",
@@ -498,10 +442,10 @@
     "atr": 0.1443,
     "close": 3.92,
     "rvol": 0.31,
-    "avg_volume": 2698955,
+    "avg_volume": 2704276,
     "stretch": 4.59,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "RCL.BK",
@@ -512,10 +456,10 @@
     "atr": 0.9286,
     "close": 31.5,
     "rvol": 0.69,
-    "avg_volume": 4448897,
-    "stretch": 6.2,
+    "avg_volume": 4450626,
+    "stretch": 5.14,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "ROJNA.BK",
@@ -526,10 +470,10 @@
     "atr": 0.1179,
     "close": 5.3,
     "rvol": 0.69,
-    "avg_volume": 2315353,
+    "avg_volume": 2315526,
     "stretch": 5.44,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "RPC.BK",
@@ -540,10 +484,10 @@
     "atr": 0.0521,
     "close": 0.39,
     "rvol": 0.21,
-    "avg_volume": 15769622,
+    "avg_volume": 15769735,
     "stretch": 5.66,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "SC.BK",
@@ -554,24 +498,24 @@
     "atr": 0.0471,
     "close": 1.99,
     "rvol": 1.34,
-    "avg_volume": 6991686,
+    "avg_volume": 6992591,
     "stretch": 1.72,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "SCGP.BK",
     "desc": "SCG Packaging Public Co Ltd",
     "level": 21.3,
     "kind": "hz",
-    "rsm": 90.2,
-    "atr": 0.8098,
+    "rsm": 89.0,
+    "atr": 0.8143,
     "close": 21.3,
     "rvol": 0.49,
-    "avg_volume": 18065978,
-    "stretch": 2.55,
+    "avg_volume": 18071210,
+    "stretch": 2.14,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "SIS.BK",
@@ -582,10 +526,10 @@
     "atr": 0.5429,
     "close": 22.4,
     "rvol": 0.34,
-    "avg_volume": 684226,
-    "stretch": 3.36,
+    "avg_volume": 684355,
+    "stretch": 2.2,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "SMO.BK",
@@ -596,10 +540,10 @@
     "atr": 0.1486,
     "close": 5.0,
     "rvol": 0.72,
-    "avg_volume": 8004750,
+    "avg_volume": 8004751,
     "stretch": 7.32,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "STA.BK",
@@ -610,10 +554,10 @@
     "atr": 0.5714,
     "close": 16.7,
     "rvol": 0.25,
-    "avg_volume": 13337137,
+    "avg_volume": 13348327,
     "stretch": 6.55,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "STA.BK",
@@ -624,24 +568,24 @@
     "atr": 0.5714,
     "close": 16.7,
     "rvol": 0.25,
-    "avg_volume": 13337137,
+    "avg_volume": 13348327,
     "stretch": 4.77,
     "tl_angle": 37.5,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "STECON.BK",
     "desc": "Stecon Group Public Company Limited",
-    "level": 12.9818,
+    "level": 13.6,
     "kind": "hz",
     "rsm": 49.0,
     "atr": 0.7214,
     "close": 12.0,
     "rvol": 0.5,
-    "avg_volume": 30991295,
-    "stretch": 3.13,
+    "avg_volume": 30997315,
+    "stretch": 3.86,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "STGT.BK",
@@ -652,10 +596,10 @@
     "atr": 0.4464,
     "close": 10.6,
     "rvol": 0.11,
-    "avg_volume": 10437766,
+    "avg_volume": 10440993,
     "stretch": 4.79,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "SVI.BK",
@@ -666,10 +610,10 @@
     "atr": 0.0607,
     "close": 7.45,
     "rvol": 0.74,
-    "avg_volume": 1062809,
+    "avg_volume": 1063132,
     "stretch": 1.3,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TAE.BK",
@@ -680,10 +624,10 @@
     "atr": 0.1164,
     "close": 1.03,
     "rvol": 0.1,
-    "avg_volume": 15585625,
+    "avg_volume": 15585757,
     "stretch": 16.16,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TASCO.BK",
@@ -694,10 +638,10 @@
     "atr": 0.2643,
     "close": 13.9,
     "rvol": 0.94,
-    "avg_volume": 3099520,
-    "stretch": 2.58,
+    "avg_volume": 3100131,
+    "stretch": 2.21,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TFG.BK",
@@ -708,10 +652,10 @@
     "atr": 0.4607,
     "close": 9.05,
     "rvol": 0.67,
-    "avg_volume": 35454310,
-    "stretch": 8.95,
+    "avg_volume": 35459225,
+    "stretch": 8.5,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TFM.BK",
@@ -722,10 +666,10 @@
     "atr": 0.2,
     "close": 6.55,
     "rvol": 1.94,
-    "avg_volume": 1075101,
-    "stretch": 2.74,
+    "avg_volume": 1075199,
+    "stretch": 2.14,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "THCOM.BK",
@@ -736,10 +680,10 @@
     "atr": 0.5286,
     "close": 12.4,
     "rvol": 0.24,
-    "avg_volume": 17776018,
+    "avg_volume": 17781239,
     "stretch": 6.05,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "THG.BK",
@@ -750,10 +694,10 @@
     "atr": 0.275,
     "close": 8.75,
     "rvol": 0.34,
-    "avg_volume": 1126316,
-    "stretch": 2.82,
+    "avg_volume": 1126398,
+    "stretch": 2.49,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TISCO.BK",
@@ -764,10 +708,10 @@
     "atr": 1.2857,
     "close": 113.5,
     "rvol": 1.05,
-    "avg_volume": 4308123,
+    "avg_volume": 4315263,
     "stretch": 1.83,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TQM.BK",
@@ -778,10 +722,10 @@
     "atr": 0.4214,
     "close": 13.7,
     "rvol": 0.3,
-    "avg_volume": 717407,
-    "stretch": 4.52,
+    "avg_volume": 717547,
+    "stretch": 3.59,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TRUBB.BK",
@@ -792,10 +736,10 @@
     "atr": 0.1336,
     "close": 1.02,
     "rvol": 0.52,
-    "avg_volume": 25471036,
+    "avg_volume": 25471232,
     "stretch": 7.09,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TRUE.BK",
@@ -806,10 +750,10 @@
     "atr": 0.3714,
     "close": 14.1,
     "rvol": 0.68,
-    "avg_volume": 182527906,
+    "avg_volume": 182536452,
     "stretch": 2.98,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TRUE.BK",
@@ -820,10 +764,10 @@
     "atr": 0.3714,
     "close": 14.1,
     "rvol": 0.68,
-    "avg_volume": 182527906,
+    "avg_volume": 182536452,
     "stretch": 2.67,
-    "tl_angle": 32.4,
-    "date_added": "2026-04-17"
+    "tl_angle": 33.3,
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TSE.BK",
@@ -834,10 +778,10 @@
     "atr": 0.0679,
     "close": 0.76,
     "rvol": 0.27,
-    "avg_volume": 38954318,
+    "avg_volume": 38954594,
     "stretch": 5.83,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TSTH.BK",
@@ -848,24 +792,24 @@
     "atr": 0.0386,
     "close": 0.85,
     "rvol": 0.61,
-    "avg_volume": 11448653,
+    "avg_volume": 11448680,
     "stretch": 3.54,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TTA.BK",
     "desc": "Thoresen Thai Agencies Public Co. Ltd.",
-    "level": 5.2725,
+    "level": 5.15,
     "kind": "hz",
-    "rsm": 76.8,
+    "rsm": 71.2,
     "atr": 0.1136,
     "close": 5.1,
     "rvol": 1.19,
-    "avg_volume": 3531344,
-    "stretch": 6.61,
+    "avg_volume": 3531592,
+    "stretch": 3.66,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TTB.BK",
@@ -876,24 +820,24 @@
     "atr": 0.06,
     "close": 2.22,
     "rvol": 1.61,
-    "avg_volume": 313822507,
+    "avg_volume": 313862628,
     "stretch": 3.08,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "TVO.BK",
     "desc": "Thai Vegetable Oil Public Co. Ltd.",
-    "level": 26.0,
+    "level": 25.75,
     "kind": "hz",
     "rsm": 68.2,
     "atr": 0.5107,
     "close": 24.9,
     "rvol": 0.38,
-    "avg_volume": 871883,
-    "stretch": 4.43,
+    "avg_volume": 872761,
+    "stretch": 2.47,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "UBE.BK",
@@ -904,10 +848,10 @@
     "atr": 0.06,
     "close": 0.66,
     "rvol": 0.15,
-    "avg_volume": 74806900,
-    "stretch": 9.58,
+    "avg_volume": 74808094,
+    "stretch": 9.28,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "UBE.BK",
@@ -918,24 +862,24 @@
     "atr": 0.06,
     "close": 0.66,
     "rvol": 0.15,
-    "avg_volume": 74806900,
-    "stretch": 3.01,
-    "tl_angle": 73.2,
-    "date_added": "2026-04-17"
+    "avg_volume": 74808094,
+    "stretch": 2.82,
+    "tl_angle": 73.6,
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "UKEM.BK",
     "desc": "Union Petrochemical Public Co., Ltd.",
-    "level": 0.992,
+    "level": 1.01,
     "kind": "hz",
-    "rsm": 90.4,
-    "atr": 0.0548,
+    "rsm": 90.1,
+    "atr": 0.0557,
     "close": 0.84,
     "rvol": 0.21,
-    "avg_volume": 18700181,
-    "stretch": 7.99,
+    "avg_volume": 18700241,
+    "stretch": 8.02,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "VPO.BK",
@@ -945,11 +889,11 @@
     "rsm": 71.4,
     "atr": 0.055,
     "close": 0.57,
-    "rvol": 0.09,
-    "avg_volume": 34335605,
+    "rvol": 0.08,
+    "avg_volume": 34649191,
     "stretch": 10.01,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   },
   {
     "ticker": "XBIO.BK",
@@ -960,9 +904,9 @@
     "atr": 0.01,
     "close": 0.07,
     "rvol": 12.39,
-    "avg_volume": 75758244,
+    "avg_volume": 75766129,
     "stretch": 0.36,
     "tl_angle": null,
-    "date_added": "2026-04-17"
+    "date_added": "2026-04-18"
   }
 ]

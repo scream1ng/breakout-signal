@@ -66,22 +66,38 @@ def load_ticker(ticker: str, period: str = '2y', force: bool = False) -> pd.Data
         except Exception:
             pass  # corrupt cache → re-download
 
-    # Download fresh
+    # Download fresh via Settrade, with a fallback to yfinance
     try:
-        raw = yf.download(ticker, period='2y', interval='1d',
-                          auto_adjust=True, progress=False)
+        from core.settrade_client import get_market_data
+        market = get_market_data()
+        symbol = ticker.replace('.BK', '')
+        if symbol == '^SET':
+            symbol = '.SET'
+            
+        candles = market.get_candlestick(symbol=symbol, interval="1d", limit=500)
+        df_new = pd.DataFrame(candles)
+        df_new['time'] = pd.to_datetime(df_new['time'], unit='s')
+        df_new.set_index('time', inplace=True)
+        df_new.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'volume': 'Volume'}, inplace=True)
+        df = df_new[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
+        
     except Exception as e:
-        return None
+        # Fallback to yfinance if API key is invalid or SETTRADE is down
+        # print(f"  [data] Settrade failed for {ticker} ({e}). Falling back to yfinance.")
+        try:
+            raw = yf.download(ticker, period='2y', interval='1d',
+                              auto_adjust=True, progress=False)
+            if raw is None or raw.empty:
+                return None
+            if isinstance(raw.columns, pd.MultiIndex):
+                raw.columns = raw.columns.get_level_values(0)
+            if 'Close' not in raw.columns:
+                return None
+            df = raw[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
+            df.index = pd.to_datetime(df.index)
+        except Exception:
+            return None
 
-    if raw is None or raw.empty:
-        return None
-    if isinstance(raw.columns, pd.MultiIndex):
-        raw.columns = raw.columns.get_level_values(0)
-    if 'Close' not in raw.columns:
-        return None
-
-    df = raw[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
-    df.index = pd.to_datetime(df.index)
     if len(df) < 60:
         return None
 

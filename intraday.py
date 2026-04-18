@@ -20,35 +20,14 @@ ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
 from output.report import print_intraday
+from output.notifications import send_intraday_alert
 
 BKK     = pytz.timezone('Asia/Bangkok')
 WL_PATH = os.path.join(ROOT, 'watchlist.json')
 
-_ANSI = {
-    'Prime': '\033[1;35m',
-    'STR':   '\033[1;31m',
-    'RVOL':  '\033[1;34m',
-    'RSM':   '\033[1;32m',
-    'RESET': '\033[0m',
-}
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--discord', action='store_true')
 args = parser.parse_args()
-
-
-def load_dotenv(path):
-    if not os.path.exists(path):
-        return
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#') or '=' not in line:
-                continue
-            key, _, val = line.partition('=')
-            key = key.strip(); val = val.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = val
 
 
 def proj_volume(cur_volume, avg_volume, now):
@@ -106,86 +85,6 @@ def criteria_label(rsm, rvol, stretch=0):
     return 'SMA50'
 
 
-def send_discord(signals, now):
-    load_dotenv(os.path.join(ROOT, '.env'))
-    url = os.environ.get('DISCORD_WEBHOOK', '').strip()
-    if not url:
-        print('  DISCORD_WEBHOOK not set.')
-        return
-
-    date_str   = now.strftime('%Y-%m-%d')
-    time_str   = now.strftime('%H:%M')
-    n          = len(signals)
-
-    HDR = f"{'Ticker':<8}  {'T':<10}  {'Crit':<6}  {'Level':>8}  {'Close':>8}  {'ProjRVol':>10}  {'RVol':>9}  {'RSM':>7}  {'STR':>8}"
-    DIV = '─' * 90
-
-    header_msg = (
-        f"**⚡ INTRADAY SCAN  |  {date_str}  {time_str} BKK**\n"
-        f"`{n} signal{'s' if n!=1 else ''}`"
-    )
-
-    GG = '\033[1;32m'; RR = '\033[1;31m'; RST2 = '\033[0m'
-    def tk(ok): return f'{GG}✓{RST2}' if ok else f'{RR}✗{RST2}'
-    rvol_min = CFG.get('rvol_min', 1.5)
-    rsm_min  = CFG.get('rs_momentum_min', 70)
-
-    sort_key = {'Prime': 0, 'STR': 1, 'RVOL': 2, 'RSM': 3, 'SMA50': 4}
-    rows      = []
-    last_crit = None
-    for s in sorted(signals, key=lambda x: (sort_key.get(x['criteria'], 9), x['ticker'])):
-        crit      = s['criteria']
-        col       = _ANSI.get(crit, '')
-        rst       = _ANSI['RESET']
-        stretch   = s.get('stretch', 0)
-        cur_rvol  = s.get('cur_rvol', 0)
-        proj_rvol = s.get('proj_rvol', 0)
-        rsm       = s.get('rsm', 0)
-        str_disp  = f'{stretch:.1f}x' if stretch else '—'
-
-        proj_str = f'{proj_rvol:>8.1f}x{tk(proj_rvol >= rvol_min)}'
-        rvol_str = f'{cur_rvol:>5.1f}x{tk(cur_rvol  >= rvol_min)}'
-        rsm_str  = f'{rsm:>4.0f}{tk(rsm >= rsm_min)}'
-        str_str  = f'{str_disp:>5}{tk(stretch <= 4)}'
-
-        if last_crit is not None and crit != last_crit:
-            rows.append('')
-        last_crit = crit
-        ang      = s.get('tl_angle')
-        kind_lbl = f"TL ({ang:.0f}\u00b0)" if s.get('kind')=='tl' and ang is not None else ('TL' if s.get('kind')=='tl' else 'Hz')
-        rows.append(
-            f"{col}{s['ticker']:<8}{rst}  {kind_lbl:<10}  {col}{crit:<6}{rst}  "
-            f"{s['level']:>8.2f}  {s['close']:>8.2f}  "
-            f"{proj_str}  {rvol_str}  {rsm_str}  {str_str}"
-        )
-
-    def make_block(row_list):
-        return f"```ansi\n{HDR}\n{DIV}\n" + "\n".join(row_list) + f"\n{_ANSI['RESET']}```"
-
-    LIMIT = 1900
-    chunks = []
-    current_rows = []
-    for row in rows:
-        if len(make_block(current_rows + [row])) > LIMIT and current_rows:
-            while current_rows and current_rows[-1] == '':
-                current_rows.pop()
-            chunks.append(make_block(current_rows))
-            current_rows = [row] if row else []
-        else:
-            current_rows.append(row)
-    while current_rows and current_rows[-1] == '':
-        current_rows.pop()
-    if current_rows:
-        chunks.append(make_block(current_rows))
-
-    for msg in [header_msg] + chunks:
-        try:
-            requests.post(url, json={'content': msg}, timeout=10)
-            time.sleep(0.5)
-        except Exception as e:
-            print(f'  Discord error: {e}')
-
-
 def run():
     now = datetime.now(BKK)
 
@@ -200,32 +99,62 @@ def run():
         print('  Watchlist is empty.')
         return
 
-    tickers = list({w['ticker'] for w in watchlist})
-    print(f'\n  [{now.strftime("%H:%M")}] Checking {len(tickers)} stocks...')
+    try:
+        from core.settrade_client import get_market_data
+        get_market_data()
+        data_source = "SETTRADE OpenAPI"
+    except Exception:
+        data_source = "Yahoo Finance (Fallback)"
 
-    # Batch download all tickers at once — faster, avoids rate limiting
+    tickers = list({w['ticker'] for w in watchlist})
+    print(f'\n  [{now.strftime("%H:%M")}] Checking {len(tickers)} stocks... (Data Source: {data_source})')
+
+    # Batch download data
     print(f'  Downloading data...', flush=True)
     data = {}
+    use_yfinance = False
+    
     try:
-        raw = yf.download(tickers, period='5d', interval='1d',
-                          auto_adjust=True, progress=False, group_by='ticker')
+        from core.settrade_client import get_market_data
+        market = get_market_data()
         for ticker in tickers:
+            symbol = ticker.replace('.BK', '')
             try:
-                if len(tickers) == 1:
-                    df = raw
-                else:
-                    df = raw[ticker]
-                if df is None or len(df) == 0:
-                    continue
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = [c[0] for c in df.columns]
-                last = df.iloc[-1]
-                data[ticker] = dict(close=float(last['Close']), volume=float(last['Volume']))
+                quote = market.get_quote_symbol(symbol)
+                last_price = quote.get('last') or quote.get('close') or quote.get('result', {}).get('last')
+                vol = quote.get('totalVolume') or quote.get('volume') or quote.get('result', {}).get('totalVolume')
+                if last_price:
+                    data[ticker] = dict(close=float(last_price), volume=float(vol))
             except Exception:
                 continue
+        if not data:
+            # If settrade connected but returned empty for all
+            raise ValueError("No data returned from Settrade")
     except Exception as e:
-        print(f'  Download error: {e}')
-        return
+        print(f'  [fallback] Settrade failed for intraday ({e}). Using yfinance.', flush=True)
+        use_yfinance = True
+        
+    if use_yfinance:
+        try:
+            raw = yf.download(tickers, period='5d', interval='1d',
+                              auto_adjust=True, progress=False, group_by='ticker')
+            for ticker in tickers:
+                try:
+                    if len(tickers) == 1:
+                        df = raw
+                    else:
+                        df = raw[ticker]
+                    if df is None or len(df) == 0:
+                        continue
+                    if isinstance(df.columns, pd.MultiIndex):
+                        df.columns = [c[0] for c in df.columns]
+                    last = df.iloc[-1]
+                    data[ticker] = dict(close=float(last['Close']), volume=float(last['Volume']))
+                except Exception:
+                    continue
+        except Exception as e:
+            print(f'  Download error: {e}')
+            return
 
     for ticker in tickers:
         short   = ticker.replace('.BK', '')
@@ -276,8 +205,7 @@ def run():
     if args.discord:
         alert = [s for s in signals if s['criteria'] in ('Prime', 'RVOL', 'RSM', 'STR')]
         if alert:
-            send_discord(alert, now)
-            print(f'  ✅ Discord sent ({len(alert)} signals)')
+            send_intraday_alert(alert, now, CFG)
         else:
             print('  No alertable signals — Discord skipped')
 
