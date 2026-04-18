@@ -92,7 +92,11 @@ This project is built to be deployed automatically to Railway, completely elimin
 3. Once the environment builds, go to your new Railway Service's **Variables** tab and paste your `.env` secrets into the cloud:
    * `DISCORD_WEBHOOK`
    * `SETTRADE_APP_ID`, `SETTRADE_APP_SECRET`, `SETTRADE_BROKER_ID`, `SETTRADE_APP_CODE`
-4. Go to **Settings** -> **Networking / Domains** and click **Generate Domain**.
+4. Go to **Settings** -> **Networking / Domains** and click **Generate Domain**. (Your Discord messages will automatically detect this domain and securely link to your charts).
 
 **How it works:**
-Railway spins up `server.py` in the background endlessly. It hosts your `docs/index.html` folder natively on the generated web domain, while a background python scheduler actively watches the clock. At exactly 18:00 Bangkok Time (Mon-Fri), it runs `main.py --discord` to scan the market, build your new webpage, and beam your alerts to your phone.
+Railway spins up `server.py` in the background endlessly. It hosts your `docs/` folder entirely locally on the generated web domain (no GitHub Pages required), while a background Python scheduler actively drives your automated trading lifecycle:
+
+* **Intraday Sniper (10:30–16:00 BKK):** Every 15 minutes, it runs `intraday.py` to catch live breakouts from the watchlist and instantly sends highly detailed ProjRVol alerts to Discord. A localized "Anti-Spam Memory" loop ensures you only ever get 1 notification per stock per day.
+* **The Safety Net (16:15 BKK):** Runs a dedicated `intraday.py --review` Fakeout Check. If a stock broke out earlier but has now plunged back below its pivot, it sends a red "Failed Breakout" warning so you can instantly cut the position before the market closes.
+* **The Analysis (18:00 BKK):** Runs the heavy `main.py` End-of-Day scan. It re-evaluates the entire SET market mathematically, builds tomorrow's curated watchlist, fully regenerates your interactive HTML dashboard, and beams a daily wrap-up straight to your phone.
