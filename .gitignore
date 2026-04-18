@@ -19,11 +19,15 @@ output/charts/
 # ── Local HTML output ─────────────────────────────────────────────────────────
 docs/
 
+# ── Dynamic Application Data ──────────────────────────────────────────────────
+data/
+
 # ── OS / IDE ──────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
 .vscode/
+*.code-workspace
 .idea/
 .ipynb_checkpoints/
 

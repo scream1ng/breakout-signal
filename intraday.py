@@ -23,7 +23,7 @@ from output.report import print_intraday
 from output.notifications import send_intraday_alert
 
 BKK     = pytz.timezone('Asia/Bangkok')
-WL_PATH = os.path.join(ROOT, 'watchlist.json')
+WL_PATH = os.path.join(ROOT, 'data', 'watchlist.json')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--discord', action='store_true')

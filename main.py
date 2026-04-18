@@ -416,7 +416,9 @@ def main():
                 tl_angle   = lv.get('tl_angle'),
                 date_added = DATE_STR.replace('_', '-'),
             ))
-    wl_path = os.path.join(SCRIPT_DIR, 'watchlist.json')
+    wl_dir = os.path.join(SCRIPT_DIR, 'data')
+    os.makedirs(wl_dir, exist_ok=True)
+    wl_path = os.path.join(wl_dir, 'watchlist.json')
     with open(wl_path, 'w') as f:
         json.dump(watchlist, f, indent=2)
     print(f'  Watchlist saved → {len(watchlist)} levels')

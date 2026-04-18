@@ -90,7 +90,7 @@ def action_intraday():
     print('  Intraday Check\n')
 
     # Show watchlist age if available
-    wl_path = os.path.join(SCRIPT_DIR, 'watchlist.json')
+    wl_path = os.path.join(SCRIPT_DIR, 'data', 'watchlist.json')
     if os.path.exists(wl_path):
         mtime   = datetime.fromtimestamp(os.path.getmtime(wl_path))
         age_hrs = (datetime.now() - mtime).total_seconds() / 3600
@@ -140,7 +140,7 @@ def action_optimize():
     _header()
     print('  Backtest Optimizer\n')
     print('  This will test parameter combinations across all SET stocks.')
-    print('  Results are saved to optimization_results.csv\n')
+    print('  Results are saved to data/optimization_results.csv\n')
 
     top     = _ask('Show top N results', '10')
     workers = _ask('Parallel workers', '4')

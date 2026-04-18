@@ -323,8 +323,10 @@ def save_results(results: list):
     if not results:
         return
     df = pd.DataFrame(results)
-    df = df.sort_values('sharpe', ascending=False)
-    path = os.path.join(ROOT, 'optimization_results.csv')
+    print(f'  Saved: data/optimization_results.csv ({len(df)} combos)')
+    data_dir = os.path.join(ROOT, 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    path = os.path.join(data_dir, 'optimization_results.csv')
     df.to_csv(path, index=False)
     print(f'  Results saved → {path}')
 
