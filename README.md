@@ -48,6 +48,17 @@ Before running the application, you must configure your `.env` file at the root 
 # Messaging Output
 DISCORD_WEBHOOK="https://discord.com/api/webhooks/your-url-here"
 
+# LINE Messaging API (optional)
+LINE_CHANNEL_ACCESS_TOKEN="your_line_channel_access_token"
+# Comma-separated LINE user/group/room IDs, or use LINE_USER_ID / LINE_GROUP_ID
+LINE_TO="your_line_target_id"
+
+# Public app URL for links in alerts (recommended on Railway)
+APP_BASE_URL="https://your-service.up.railway.app"
+
+# Railway Postgres (optional but recommended for persistent paper trades)
+DATABASE_URL="postgresql://..."
+
 # Data Provider (SETTRADE OpenAPI)
 SETTRADE_APP_ID="your_app_id"
 SETTRADE_APP_SECRET="your_app_secret"
@@ -67,7 +78,10 @@ Run End-of-Day scan. Prints breakout list to terminal and generates `docs/index.
 Run live Intraday scan checking current prices against the generated watchlist.
 
 **`python main.py --discord`**
-Run scan and push the alerts instantly to Discord. (Works with intraday too: `python intraday.py --discord`)
+Run scan and send the full ANSI-formatted Discord report. For intraday runs, the same flag also allows LINE paper-trade entry and exit updates when LINE is configured.
+
+**`py -3 test_notifications.py`**
+Send dummy messages through all notification functions now, using your current `.env` targets. This is the fastest way to preview tomorrow's LINE and Discord output before market open.
 
 **`python main.py --view`**
 Opens the interactive chart in the browser automatically.
@@ -98,5 +112,17 @@ This project is built to be deployed automatically to Railway, completely elimin
 Railway spins up `server.py` in the background endlessly. It hosts your `docs/` folder entirely locally on the generated web domain (no GitHub Pages required), while a background Python scheduler actively drives your automated trading lifecycle:
 
 * **Intraday Sniper (10:30–16:00 BKK):** Every 15 minutes, it runs `intraday.py` to catch live breakouts from the watchlist and instantly sends highly detailed ProjRVol alerts to Discord. A localized "Anti-Spam Memory" loop ensures you only ever get 1 notification per stock per day.
-* **The Safety Net (16:15 BKK):** Runs a dedicated `intraday.py --review` Fakeout Check. If a stock broke out earlier but has now plunged back below its pivot, it sends a red "Failed Breakout" warning so you can instantly cut the position before the market closes.
+* **The Safety Net (16:15 BKK):** Runs a dedicated `intraday.py --review` fakeout check. If a stock broke out earlier but has now plunged back below its pivot, it sends a red "False Breakout" warning so you can instantly cut the position before the market closes.
 * **The Analysis (18:00 BKK):** Runs the heavy `main.py` End-of-Day scan. It re-evaluates the entire SET market mathematically, builds tomorrow's curated watchlist, fully regenerates your interactive HTML dashboard, and beams a daily wrap-up straight to your phone.
+
+Paper trades are tracked in Railway Postgres automatically when `DATABASE_URL` is available. If not, the app falls back to `data/paper_portfolio.json` for local use.
+
+## Notification Notes
+
+- `main.py --discord` sends the End-of-Day scan message to Discord only.
+- `intraday.py --discord` sends intraday signal and false breakout review messages to Discord only.
+- LINE currently receives paper-trade entry and exit updates only.
+- Paper-trade summary notifications are currently disabled.
+- If both Discord and LINE are configured in `.env`, Discord receives intraday, false breakout, and EOD reports while LINE receives paper-trade buy and sell updates only.
+- If `LINE_MODE="broadcast"`, LINE sends to every account that added the bot. In that mode, `LINE_TO` is ignored.
+- Every app-sent message is appended to `data/notification_outbox.jsonl` so you can inspect what the app sent.

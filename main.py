@@ -16,6 +16,7 @@ OPTIONS:
 
 import os, sys, warnings, argparse, time, webbrowser
 from datetime import datetime
+import json
 import numpy as np
 import pandas as pd
 warnings.filterwarnings('ignore')
@@ -33,10 +34,11 @@ from core.rsm                import calc_rsm_series
 from core.scanner            import fetch_tv_stocks
 from core.entry              import detect_pivots
 from core.exit               import simulate
+from core.paper_trade        import get_summary as get_paper_trade_summary
 from core.portfolio          import simulate_portfolio
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
-from output.notifications     import send_eod_alert
+from output.notifications     import send_eod_alert, send_paper_trade_summary
 
 # ── Config ────────────────────────────────────────────────────────────────────
 try:
@@ -79,10 +81,54 @@ CFG = dict(
 
 PERIOD      = args.period
 WEB_DIR     = os.path.join(SCRIPT_DIR, 'docs')
+ALERT_STATE_PATH = os.path.join(SCRIPT_DIR, 'data', 'alert_state.json')
 DATE_STR    = datetime.today().strftime('%Y_%m_%d')
 os.makedirs(WEB_DIR, exist_ok=True)
 
 PERIOD_BARS = {'6mo': 126, '12mo': 252, '18mo': 378, '2y': 504}
+
+
+def build_intraday_recap(today_signals, date_str):
+    if not os.path.exists(ALERT_STATE_PATH):
+        return []
+
+    try:
+        with open(ALERT_STATE_PATH) as f:
+            state = json.load(f)
+    except Exception:
+        return []
+
+    if state.get('date') != date_str.replace('_', '-'):
+        return []
+
+    signal_keys = set()
+    for sig in today_signals:
+        kind_part = str(sig.get('kind', '')).lower()
+        level = float(sig.get('bp', 0) or 0)
+        signal_keys.add(f"{sig.get('ticker')}|{kind_part}|{level:.4f}")
+
+    failed_map = {item.get('key'): item for item in state.get('failed', []) if item.get('key')}
+    recap = []
+    for item in state.get('alerted', []):
+        key = item.get('key')
+        status = 'INTRADAY ONLY'
+        note = 'Did not qualify in close scan.'
+        if key in failed_map:
+            status = 'FAILED'
+            close_px = failed_map[key].get('close')
+            note = f'Closed back below level. Last review close {close_px:.2f}.' if close_px is not None else 'Closed back below level.'
+        elif key in signal_keys:
+            status = 'HELD INTO CLOSE'
+            note = 'Still qualified in the EOD close scan.'
+
+        recap.append(dict(
+            ticker=str(item.get('ticker', '')).replace('.BK', ''),
+            level=item.get('level'),
+            alerted_at=(item.get('alerted_at') or '').replace('T', ' '),
+            status=status,
+            note=note,
+        ))
+    return recap
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -389,7 +435,6 @@ def main():
     print_scan_results(today_signals, pending_list, results, DATE_STR)
 
     # ── Save watchlist.json for intraday scanner ──────────────────────────
-    import json
     watchlist = []
     for r in results:
         p = r.get('pending')
@@ -433,7 +478,8 @@ def main():
         print(f'  Chart updated → python main.py --view\n')
 
     if args.discord:
-        send_eod_alert(today_signals, pending_list, results, DATE_STR, CFG)
+        send_eod_alert(today_signals, pending_list, results, DATE_STR, CFG, intraday_recap=build_intraday_recap(today_signals, DATE_STR))
+        send_paper_trade_summary(get_paper_trade_summary(CFG), DATE_STR.replace('_', '-'))
 
 
 if __name__ == '__main__':

@@ -19,8 +19,9 @@ import pandas as pd
 ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
+from core.paper_trade import close_positions, open_positions
 from output.report import print_intraday
-from output.notifications import send_intraday_alert, send_review_alert
+from output.notifications import send_intraday_alert, send_paper_trade_update, send_review_alert
 
 BKK     = pytz.timezone('Asia/Bangkok')
 WL_PATH = os.path.join(ROOT, 'data', 'watchlist.json')
@@ -30,6 +31,67 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--discord', action='store_true')
 parser.add_argument('--review', action='store_true')
 args = parser.parse_args()
+
+
+def _alert_key(ticker, level, kind=None):
+    kind_part = str(kind or '').lower()
+    return f'{ticker}|{kind_part}|{float(level):.4f}'
+
+
+def _load_alert_state(date_str):
+    state = {'date': date_str, 'alerted': [], 'failed': []}
+    if not os.path.exists(STATE_PATH):
+        return state
+
+    try:
+        with open(STATE_PATH) as f:
+            saved = json.load(f)
+    except Exception:
+        return state
+
+    if saved.get('date') != date_str:
+        return state
+
+    normalized = []
+    for item in saved.get('alerted', []):
+        if isinstance(item, dict):
+            ticker = item.get('ticker')
+            level = item.get('level')
+            if ticker and level is not None:
+                normalized.append(dict(
+                    ticker=ticker,
+                    level=float(level),
+                    kind=item.get('kind', ''),
+                    key=item.get('key') or _alert_key(ticker, level, item.get('kind')),
+                    alerted_at=item.get('alerted_at'),
+                ))
+        elif isinstance(item, str):
+            normalized.append(dict(ticker=item, level=None, kind='', key=item, alerted_at=None))
+
+    failed = []
+    for item in saved.get('failed', []):
+        if isinstance(item, dict):
+            ticker = item.get('ticker')
+            level = item.get('level')
+            if ticker and level is not None:
+                failed.append(dict(
+                    ticker=ticker,
+                    level=float(level),
+                    kind=item.get('kind', ''),
+                    key=item.get('key') or _alert_key(ticker, level, item.get('kind')),
+                    failed_at=item.get('failed_at'),
+                    close=item.get('close'),
+                ))
+
+    state['alerted'] = normalized
+    state['failed'] = failed
+    return state
+
+
+def _save_alert_state(state):
+    os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
+    with open(STATE_PATH, 'w') as f:
+        json.dump(state, f, indent=2)
 
 
 def proj_volume(cur_volume, avg_volume, now):
@@ -91,15 +153,10 @@ def run():
     now = datetime.now(BKK)
     date_str = now.strftime('%Y-%m-%d')
 
-    alert_state = {"date": date_str, "alerted": []}
-    if os.path.exists(STATE_PATH):
-        try:
-            with open(STATE_PATH) as f:
-                saved = json.load(f)
-                if saved.get('date') == date_str:
-                    alert_state = saved
-        except Exception:
-            pass
+    alert_state = _load_alert_state(date_str)
+    alerted_keys = {item.get('key') for item in alert_state['alerted']}
+    legacy_tickers = {item.get('ticker') for item in alert_state['alerted'] if item.get('level') is None}
+    failed_keys = {item.get('key') for item in alert_state.get('failed', [])}
 
     if not os.path.exists(WL_PATH):
         print('  watchlist.json not found — run main.py first.')
@@ -194,7 +251,9 @@ def run():
         seen.add(key)
 
         if args.review:
-            if ticker in alert_state['alerted'] and d['close'] < level:
+            key_id = _alert_key(ticker, level, w.get('kind'))
+            was_alerted = key_id in alerted_keys or ticker in legacy_tickers
+            if was_alerted and d['close'] < level:
                 avg_vol  = w.get('avg_volume', 0)
                 cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
                 rsm      = w.get('rsm', 0)
@@ -202,6 +261,7 @@ def run():
                 crit     = criteria_label(rsm, cur_rvol, stretch)
                 signals.append(dict(
                     ticker    = ticker.replace('.BK', ''),
+                    ticker_full = ticker,
                     level     = level,
                     close     = d['close'],
                     cur_rvol  = cur_rvol,
@@ -209,25 +269,48 @@ def run():
                     rsm       = rsm,
                     stretch   = stretch,
                     criteria  = crit,
+                    atr       = w.get('atr', 0),
                     tl_angle  = w.get('tl_angle')
                 ))
+                if key_id not in failed_keys:
+                    alert_state.setdefault('failed', []).append(dict(
+                        ticker=ticker,
+                        level=float(level),
+                        kind=w.get('kind', ''),
+                        key=key_id,
+                        failed_at=now.isoformat(timespec='seconds'),
+                        close=round(float(d['close']), 4),
+                    ))
+                    failed_keys.add(key_id)
             continue
 
         if d['close'] <= level:
             continue
-            
-        if ticker in alert_state['alerted']:
-            continue
-            
-        alert_state['alerted'].append(ticker)
 
         avg_vol  = w.get('avg_volume', 0)
         cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
         proj_rv  = proj_volume(d['volume'], avg_vol, now)
         crit     = criteria_label(w.get('rsm', 0), cur_rvol, w.get('stretch', 0))
 
+        if crit not in ('Prime', 'RVOL', 'RSM', 'STR'):
+            continue
+
+        key_id = _alert_key(ticker, level, w.get('kind'))
+        if key_id in alerted_keys:
+            continue
+
+        alert_state['alerted'].append(dict(
+            ticker=ticker,
+            level=float(level),
+            kind=w.get('kind', ''),
+            key=key_id,
+            alerted_at=now.isoformat(timespec='seconds'),
+        ))
+        alerted_keys.add(key_id)
+
         signals.append(dict(
             ticker    = ticker.replace('.BK', ''),
+            ticker_full = ticker,
             level     = level,
             close     = d['close'],
             cur_rvol  = cur_rvol,
@@ -235,16 +318,22 @@ def run():
             kind      = 'Hz' if w.get('kind') == 'hz' else 'TL',
             rsm       = w.get('rsm', 0),
             stretch   = w.get('stretch', 0),
+            atr       = w.get('atr', 0),
             criteria  = crit,
+            tl_angle  = w.get('tl_angle'),
         ))
 
     if args.review:
         if not signals:
             print('  No false breakouts detected.')
             return
-        print(f"  {len(signals)} failed breakouts detected.")
+        print(f"  {len(signals)} false breakouts detected.")
+        closed_events = close_positions(signals, now, CFG, reason='FALSE_BREAKOUT')
+        _save_alert_state(alert_state)
         if args.discord:
             send_review_alert(signals, now, CFG)
+            if closed_events:
+                send_paper_trade_update(closed_events, now, title='PAPER TRADE EXIT')
         return
 
     if not signals:
@@ -252,17 +341,20 @@ def run():
         return
 
     # Save state to prevent duplicate alerts
-    with open(STATE_PATH, 'w') as f:
-        json.dump(alert_state, f)
+    _save_alert_state(alert_state)
 
     print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
+    alert = signals
+    opened_events = open_positions(alert, now, CFG) if alert else []
+
     if args.discord:
-        alert = [s for s in signals if s['criteria'] in ('Prime', 'RVOL', 'RSM', 'STR')]
         if alert:
             send_intraday_alert(alert, now, CFG)
+            if opened_events:
+                send_paper_trade_update(opened_events, now, title='PAPER TRADE ENTRY')
         else:
-            print('  No alertable signals — Discord skipped')
+            print('  No alertable signals — notifications skipped')
 
 
 if __name__ == '__main__':
