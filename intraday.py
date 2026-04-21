@@ -299,9 +299,10 @@ def run():
             if was_alerted and d['close'] < level:
                 avg_vol  = w.get('avg_volume', 0)
                 cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
+                proj_rv  = proj_volume(d['volume'], avg_vol, now)
                 rsm      = w.get('rsm', 0)
                 stretch  = w.get('stretch', 0)
-                crit     = criteria_label(rsm, cur_rvol, stretch)
+                crit     = criteria_label(rsm, proj_rv, stretch)
                 signals.append(dict(
                     ticker    = ticker.replace('.BK', ''),
                     ticker_full = ticker,
@@ -333,7 +334,7 @@ def run():
         avg_vol  = w.get('avg_volume', 0)
         cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
         proj_rv  = proj_volume(d['volume'], avg_vol, now)
-        crit     = criteria_label(w.get('rsm', 0), cur_rvol, w.get('stretch', 0))
+        crit     = criteria_label(w.get('rsm', 0), proj_rv, w.get('stretch', 0))
 
         if crit not in ('Prime', 'RVOL'):
             continue

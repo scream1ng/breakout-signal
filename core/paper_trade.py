@@ -387,7 +387,7 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
             sl = entry
             updated = True
 
-        def _sell(sh, price, reason):
+        def _sell(sh, price, reason, next_tp=None):
             nonlocal updated
             net   = sh * price * (1.0 - commission)
             cost  = sh * entry * (1.0 + commission)
@@ -403,10 +403,16 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
                 at=_now_iso(now),
                 price=round(price, 4),
                 shares=sh,
+                shares_remaining=pos['shares_remaining'],
+                shares_total=pos['shares'],
                 cash_after=round(state['cash'], 2),
                 pnl=round(pnl, 2),
+                running_pnl=round(float(pos['realized_pnl']), 2),
                 ret_pct=round((price - entry) / entry * 100, 2),
                 reason=reason,
+                next_tp=round(next_tp, 4) if next_tp else None,
+                entry_price=round(entry, 4),
+                sl=pos.get('sl'),
                 kind=pos.get('kind', ''),
                 criteria=pos.get('criteria', ''),
             )
@@ -418,13 +424,13 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
         # TP1 — sell 30% at tp1 price
         if not pos['tp1_hit'] and tp1 and close >= tp1:
             sh = max(1, int(pos['shares_remaining'] * 0.30))
-            _sell(sh, tp1, 'TP1')
+            _sell(sh, tp1, 'TP1', next_tp=tp2)
             pos['tp1_hit'] = True
 
         # TP2 — sell 3/7 of remaining (≈30% of original) at tp2 price
         if pos['tp1_hit'] and not pos['tp2_hit'] and tp2 and close >= tp2:
             sh = max(1, int(pos['shares_remaining'] * (3 / 7)))
-            _sell(sh, tp2, 'TP2')
+            _sell(sh, tp2, 'TP2', next_tp=None)
             pos['tp2_hit'] = True
 
         # Full exit: SL / breakeven / EMA10 trail
@@ -456,7 +462,7 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
 def get_summary(cfg: dict) -> dict:
     state = load_state(cfg)
     open_positions = [p for p in state['positions'] if p.get('status') == 'OPEN']
-    recent_closed = state.get('closed_positions', [])[-5:]
+    recent_closed = state.get('closed_positions', [])[-10:]
     return dict(
         capital=round(float(state.get('capital', 0)), 2),
         cash=round(float(state.get('cash', 0)), 2),

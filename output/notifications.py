@@ -427,40 +427,57 @@ def _build_line_trade_open(event: dict, cfg: dict) -> dict:
 
 
 def _build_line_trade_close(event: dict) -> dict:
-    """Flex bubble for paper trade SELL event."""
-    ticker      = event.get('ticker', '')
-    price       = float(event.get('price', 0))
-    shares      = int(event.get('shares', 0))
-    pnl         = float(event.get('pnl', 0))
-    ret_pct     = float(event.get('ret_pct', 0))
-    reason      = str(event.get('reason', 'SELL'))
-    stamp       = str(event.get('at', ''))[:16].replace('T', ' ')
-    is_profit   = pnl >= 0
+    """Flex bubble for paper trade SELL event — handles TP1/TP2/SL/EMA10/BE."""
+    ticker          = event.get('ticker', '')
+    price           = float(event.get('price', 0))
+    shares          = int(event.get('shares', 0))
+    shares_rem      = event.get('shares_remaining')
+    shares_total    = event.get('shares_total')
+    pnl             = float(event.get('pnl', 0))
+    running_pnl     = event.get('running_pnl')
+    ret_pct         = float(event.get('ret_pct', 0))
+    reason          = str(event.get('reason', 'SELL'))
+    stamp           = str(event.get('at', ''))[:16].replace('T', ' ')
+    next_tp         = event.get('next_tp')
+    sl              = event.get('sl')
+    is_profit       = pnl >= 0
+    is_partial      = reason in ('TP1', 'TP2')
 
-    # Title from reason
     title_map = {
         'TP1':            'TP1 hit — 30% exit',
         'TP2':            'TP2 hit — partial exit',
         'EMA10':          'Trade closed — trail stop',
-        'FALSE_BREAKOUT': 'False breakout — position closed',
+        'FALSE_BREAKOUT': 'False breakout — closed',
         'SL':             'Stop loss hit',
         'BE':             'Breakeven stop hit',
-        'End':            'End of period — position closed',
+        'End':            'End of period — closed',
     }
-    title       = title_map.get(reason, f'Trade closed — {reason}')
-    header_col  = '#00b900' if is_profit else '#e03131'
+    title      = title_map.get(reason, f'Trade closed — {reason}')
+    header_col = '#e67700' if is_partial else ('#00b900' if is_profit else '#e03131')
 
-    pnl_str     = f'+฿{pnl:,.0f}' if is_profit else f'-฿{abs(pnl):,.0f}'
-    pnl_col     = '#00b900' if is_profit else '#e03131'
-    ret_str     = f'{ret_pct:+.2f}%'
+    pnl_str  = f'+฿{pnl:,.0f}' if is_profit else f'-฿{abs(pnl):,.0f}'
+    pnl_col  = '#00b900' if is_profit else '#e03131'
+    ret_str  = f'{ret_pct:+.2f}%'
 
     body_contents = [
         _ltext(ticker, color='#1a1a1a', size='xl', weight='bold'),
         _lsep(),
-        _lrow('Sell price',  f'฿{price:.2f}'),
+        _lrow('Exit price', f'฿{price:.2f}'),
         _lrow('Shares sold', f'{shares:,}'),
-        _lrow('Profit',      f'{pnl_str} ({ret_str})', pnl_col),
+        _lrow('Tranche P&L', f'{pnl_str} ({ret_str})', pnl_col),
     ]
+
+    if is_partial and shares_rem is not None:
+        body_contents.append(_lsep())
+        body_contents.append(_lrow('Shares left', f'{int(shares_rem):,}'))
+        if running_pnl is not None:
+            rpnl_col = '#00b900' if running_pnl >= 0 else '#e03131'
+            rpnl_str = f'+฿{running_pnl:,.0f}' if running_pnl >= 0 else f'-฿{abs(running_pnl):,.0f}'
+            body_contents.append(_lrow('Running P&L', rpnl_str, rpnl_col))
+        if next_tp:
+            body_contents.append(_lrow('Next target', f'฿{next_tp:.2f}'))
+        elif sl:
+            body_contents.append(_lrow('Trail / SL', f'฿{float(sl):.2f}'))
 
     return {
         'type': 'flex',
@@ -527,6 +544,65 @@ def _build_line_portfolio(summary: dict, date_label: str) -> dict:
         'contents': {
             'type': 'bubble', 'size': 'kilo',
             'header': _lheader('◑ Portfolio snapshot', date_label, '#e67700'),
+            'body':   {'type': 'box', 'layout': 'vertical', 'spacing': 'xs',
+                       'paddingAll': '12px', 'contents': body_contents},
+            'footer': _lbtn('View dashboard', get_chart_url()),
+            'styles': {'footer': {'separator': True}},
+        },
+    }
+
+
+def _build_line_history(closed_trades: list) -> dict:
+    """Flex bubble showing last N closed trades as a table."""
+    rows = []
+    wins = [t for t in closed_trades if float(t.get('pnl', 0)) > 0]
+    losses = [t for t in closed_trades if float(t.get('pnl', 0)) <= 0]
+    win_rate = len(wins) / len(closed_trades) * 100 if closed_trades else 0
+    avg_win  = sum(float(t.get('pnl', 0)) for t in wins) / len(wins) if wins else 0
+    avg_loss = sum(float(t.get('pnl', 0)) for t in losses) / len(losses) if losses else 0
+
+    for t in closed_trades:
+        pnl    = float(t.get('pnl', 0))
+        col    = '#00b900' if pnl >= 0 else '#e03131'
+        label  = 'Win' if pnl > 0 else 'Loss'
+        reason = str(t.get('close_reason') or t.get('reason') or '—')[:6]
+        rows.append({
+            'type': 'box', 'layout': 'horizontal', 'margin': 'xs',
+            'contents': [
+                _ltext(t.get('ticker', '?'), color='#1a1a1a', size='xs', weight='bold', flex=3),
+                _ltext(label, color=col, size='xs', flex=2),
+                _ltext(reason, color='#888888', size='xs', flex=3),
+                _ltext(f'{"+"if pnl>=0 else ""}฿{abs(pnl):,.0f}', color=col, size='xs',
+                       weight='bold', flex=4, align='end'),
+            ],
+        })
+
+    body_contents = [
+        {
+            'type': 'box', 'layout': 'horizontal', 'margin': 'none',
+            'contents': [
+                _ltext('TICKER', color='#888888', size='xs', flex=3),
+                _ltext('RESULT', color='#888888', size='xs', flex=2),
+                _ltext('REASON', color='#888888', size='xs', flex=3),
+                _ltext('P&L', color='#888888', size='xs', flex=4, align='end'),
+            ],
+        },
+        {'type': 'separator', 'color': '#EEEEEE', 'margin': 'xs'},
+    ] + rows + [
+        _lsep(),
+        _lrow('Win rate', f'{win_rate:.0f}%  ({len(wins)}/{len(closed_trades)})',
+              '#00b900' if win_rate >= 50 else '#e03131'),
+        _lrow('Avg win',  f'+฿{avg_win:,.0f}',  '#00b900'),
+        _lrow('Avg loss', f'-฿{abs(avg_loss):,.0f}', '#e03131'),
+    ]
+
+    return {
+        'type': 'flex',
+        'altText': f'Trade history — last {len(closed_trades)} trades',
+        'contents': {
+            'type': 'bubble', 'size': 'kilo',
+            'header': _lheader(f'Trade history — last {len(closed_trades)}',
+                               'Closed positions', '#555555'),
             'body':   {'type': 'box', 'layout': 'vertical', 'spacing': 'xs',
                        'paddingAll': '12px', 'contents': body_contents},
             'footer': _lbtn('View dashboard', get_chart_url()),
@@ -627,4 +703,15 @@ def send_paper_trade_summary(summary: dict, date_label: str) -> bool:
     flex_message = _build_line_portfolio(summary, date_label)
     ok = _send_line(f'PORTFOLIO {date_label}', [flex_message])
     print(f'  {"LINE sent" if ok else "LINE failed"} — portfolio summary')
+    return ok
+
+
+def send_line_history(closed_trades: list, n: int = 10) -> bool:
+    """LINE only — trade history table bubble, last N closed trades."""
+    recent = closed_trades[-n:] if len(closed_trades) > n else closed_trades
+    if not recent:
+        return False
+    flex_message = _build_line_history(recent)
+    ok = _send_line('TRADE HISTORY', [flex_message])
+    print(f'  {"LINE sent" if ok else "LINE failed"} — trade history ({len(recent)} trades)')
     return ok

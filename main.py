@@ -38,7 +38,7 @@ from core.paper_trade        import get_summary as get_paper_trade_summary
 from core.portfolio          import simulate_portfolio
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
-from output.notifications     import send_eod_alert, send_paper_trade_summary
+from output.notifications     import send_eod_alert, send_paper_trade_summary, send_line_history
 
 # ── Config ────────────────────────────────────────────────────────────────────
 try:
@@ -479,7 +479,9 @@ def main():
 
     if args.discord:
         send_eod_alert(today_signals, pending_list, results, DATE_STR, CFG, intraday_recap=build_intraday_recap(today_signals, DATE_STR))
-        send_paper_trade_summary(get_paper_trade_summary(CFG), DATE_STR.replace('_', '-'))
+        pt_summary = get_paper_trade_summary(CFG)
+        send_paper_trade_summary(pt_summary, DATE_STR.replace('_', '-'))
+        send_line_history(pt_summary.get('recent_closed', []))
 
 
 if __name__ == '__main__':
