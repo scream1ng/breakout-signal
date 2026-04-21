@@ -111,18 +111,17 @@ This project is built to be deployed automatically to Railway, completely elimin
 **How it works:**
 Railway spins up `server.py` in the background endlessly. It hosts your `docs/` folder entirely locally on the generated web domain (no GitHub Pages required), while a background Python scheduler actively drives your automated trading lifecycle:
 
-* **Intraday Sniper (10:30–16:00 BKK):** Every 15 minutes, it runs `intraday.py` to catch live breakouts from the watchlist and instantly sends highly detailed ProjRVol alerts to Discord. A localized "Anti-Spam Memory" loop ensures you only ever get 1 notification per stock per day.
+* **Intraday Sniper (10:30–16:00 BKK):** Every 15 minutes, it runs `intraday.py` to catch live breakouts from the watchlist. Only **Prime** and **RVOL** signals trigger Discord alerts. A localized "Anti-Spam Memory" loop ensures you only ever get 1 notification per stock per day.
 * **The Safety Net (16:15 BKK):** Runs a dedicated `intraday.py --review` fakeout check. If a stock broke out earlier but has now plunged back below its pivot, it sends a red "False Breakout" warning so you can instantly cut the position before the market closes.
-* **The Analysis (18:00 BKK):** Runs the heavy `main.py` End-of-Day scan. It re-evaluates the entire SET market mathematically, builds tomorrow's curated watchlist, fully regenerates your interactive HTML dashboard, and beams a daily wrap-up straight to your phone.
+* **The Analysis (16:45 BKK):** Runs the heavy `main.py` End-of-Day scan 15 minutes after market close. It re-evaluates the entire SET market mathematically, builds tomorrow's curated watchlist, fully regenerates your interactive HTML dashboard, and sends a daily wrap-up to Discord with all criteria (Prime / RVOL / RSM / STR / SMA50).
 
 Paper trades are tracked in Railway Postgres automatically when `DATABASE_URL` is available. If not, the app falls back to `data/paper_portfolio.json` for local use.
 
 ## Notification Notes
 
-- `main.py --discord` sends the End-of-Day scan message to Discord only.
-- `intraday.py --discord` sends intraday signal and false breakout review messages to Discord only.
-- LINE currently receives paper-trade entry and exit updates only.
-- Paper-trade summary notifications are currently disabled.
-- If both Discord and LINE are configured in `.env`, Discord receives intraday, false breakout, and EOD reports while LINE receives paper-trade buy and sell updates only.
+- **Discord** receives all market alerts: intraday breakouts (Prime + RVOL only), false breakout warnings, and EOD summary (all criteria).
+- **LINE** receives paper-trade updates only: BUY cards on Prime intraday entries, SELL cards on exits, and portfolio snapshot at EOD.
+- Paper trades only open for **Prime** signals (RVOL ✓ + RSM ✓ + stretch ≤ 4). RVOL signals generate Discord alerts but do not open paper positions.
+- **STR** (stretch > 4 = overextended) appears in EOD summary for awareness but never triggers intraday alerts or paper trades.
 - If `LINE_MODE="broadcast"`, LINE sends to every account that added the bot. In that mode, `LINE_TO` is ignored.
 - Every app-sent message is appended to `data/notification_outbox.jsonl` so you can inspect what the app sent.

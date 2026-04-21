@@ -21,12 +21,12 @@ def run_eod_scan():
     except Exception as e:
         print(f"EOD scan failed: {e}", flush=True)
 
-# Railway system time is UTC. BKK (UTC+7) 18:00 = 11:00 UTC.
-schedule.every().monday.at("11:00").do(run_eod_scan)
-schedule.every().tuesday.at("11:00").do(run_eod_scan)
-schedule.every().wednesday.at("11:00").do(run_eod_scan)
-schedule.every().thursday.at("11:00").do(run_eod_scan)
-schedule.every().friday.at("11:00").do(run_eod_scan)
+# Railway system time is UTC. BKK (UTC+7) 16:45 = 09:45 UTC (15 min after market close).
+schedule.every().monday.at("09:45").do(run_eod_scan)
+schedule.every().tuesday.at("09:45").do(run_eod_scan)
+schedule.every().wednesday.at("09:45").do(run_eod_scan)
+schedule.every().thursday.at("09:45").do(run_eod_scan)
+schedule.every().friday.at("09:45").do(run_eod_scan)
 
 def run_intraday_scan(review=False):
     lbl = "review" if review else "scan"

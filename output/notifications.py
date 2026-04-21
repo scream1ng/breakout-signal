@@ -225,8 +225,11 @@ def _build_intraday_embed(signals: list, time_str: str, cfg: dict) -> dict:
     lines = []
     for s in sorted_sigs:
         ticker   = s.get('ticker', '').replace('.BK', '')
-        price    = _fmt(s.get('close'), 2)
-        chg      = _fmt(s.get('change_pct', 0), 1) if 'change_pct' in s else '—'
+        close_v  = float(s.get('close', 0) or 0)
+        level_v  = float(s.get('level', close_v) or close_v)
+        price    = _fmt(close_v, 2)
+        chg_pct  = (close_v - level_v) / level_v * 100 if level_v > 0 else 0
+        chg      = f'{chg_pct:+.1f}'
         kind     = _kind_label(s.get('kind'), s.get('tl_angle'))
         crit     = _criteria_label_intraday(s)
         lines.append(f'`{ticker:<8}` `{price:>7}` `{chg:>6}%` `{kind:<10}` **{crit}**')
@@ -274,7 +277,7 @@ def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
     rvol_min = cfg.get('rvol_min', 1.5)
     rsm_min  = cfg.get('rs_momentum_min', cfg.get('rsm_min', 70))
 
-    sort_order = {'Prime': 0, 'STR': 1, 'RVOL': 2, 'RSM': 3, 'SMA50': 4}
+    sort_order = {'Prime': 0, 'RVOL': 1, 'RSM': 2, 'STR': 3, 'SMA50': 4}
     sorted_sigs = sorted(signals, key=lambda s: (sort_order.get(_criteria_label(s), 9), s.get('ticker', '')))
 
     lines = []

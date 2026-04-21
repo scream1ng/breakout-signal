@@ -292,7 +292,7 @@ def run():
         proj_rv  = proj_volume(d['volume'], avg_vol, now)
         crit     = criteria_label(w.get('rsm', 0), cur_rvol, w.get('stretch', 0))
 
-        if crit not in ('Prime', 'RVOL', 'RSM', 'STR'):
+        if crit not in ('Prime', 'RVOL'):
             continue
 
         key_id = _alert_key(ticker, level, w.get('kind'))
@@ -346,7 +346,8 @@ def run():
     print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
     alert = signals
-    opened_events = open_positions(alert, now, CFG) if alert else []
+    prime_only = [s for s in alert if s.get('criteria') == 'Prime']
+    opened_events = open_positions(prime_only, now, CFG) if prime_only else []
 
     if args.discord:
         if alert:
