@@ -199,6 +199,8 @@ def open_positions(signals: list, now, cfg: dict) -> list:
         ticker_full = sig.get('ticker_full') or sig.get('ticker')
         if not ticker_full or ticker_full in open_tickers:
             continue
+        if sig.get('criteria') != 'Prime':   # paper trade: Prime only
+            continue
 
         entry_price = float(sig.get('close', 0) or 0)
         atr = float(sig.get('atr', 0) or 0)
@@ -234,6 +236,7 @@ def open_positions(signals: list, now, cfg: dict) -> list:
             tp2=round(entry_price + atr * tp2_mult, 4) if atr > 0 else None,
             rsm=float(sig.get('rsm', 0) or 0),
             stretch=float(sig.get('stretch', 0) or 0),
+            rvol=float(sig.get('rvol', sig.get('cur_rvol', 0)) or 0),
         )
         state['positions'].append(position)
         open_tickers.add(ticker_full)
@@ -251,6 +254,11 @@ def open_positions(signals: list, now, cfg: dict) -> list:
             sl=position['sl'],
             tp1=position['tp1'],
             tp2=position['tp2'],
+            kind=position.get('kind', ''),
+            entry_level=position.get('entry_level', round(entry_price, 4)),
+            rvol=position.get('rvol', 0),
+            rsm=position.get('rsm', 0),
+            stretch=position.get('stretch', 0),
         )
         _append_event(state, event)
         opened.append(event)
