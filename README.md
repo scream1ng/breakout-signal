@@ -1,127 +1,199 @@
 # BREAKOUT SCANNER — Swing Trading Scanner for Thai SET
 
 Scans SET stocks daily for horizontal and trendline breakouts.
-Filters by regime (above SMA50), relative volume, and RS Momentum.
-Simulates trades with risk-based sizing, partial TP exits, and EMA10 trail.
-Publishes an interactive HTML chart and backtest portfolio locally or to the cloud via Railway.
+Filters by regime (above SMA50), projected relative volume, and RS Momentum.
+Simulates trades with risk-based sizing, partial TP exits, and EMA10 trail stop.
+Publishes an interactive HTML chart and backtest portfolio locally or to Railway cloud.
+
+---
 
 ## PROJECT STRUCTURE
 
 ```text
-swing_trader/
-├── main.py                     ← single entry point (End of Day Scan)
-├── intraday.py                 ← live trading hours scan
-├── config.py                   ← your global settings (edit this)
-├── requirements.txt            ← python dependencies
-├── .env                        ← Webhooks & API keys (Never commit this!)
+breakout-signal/
+├── main.py                     ← EOD scan entry point
+├── intraday.py                 ← live intraday scanner (runs every 15 min on Railway)
+├── server.py                   ← Railway: HTTP server + automated job scheduler
+├── config.py                   ← global settings (edit this)
+├── requirements.txt
+├── .env                        ← secrets — NEVER commit
+├── test_notifications.py       ← send dummy messages to verify Discord + LINE format
 │
 ├── core/
-│   ├── data.py                 ← download + cache price data
-│   ├── settrade_client.py      ← SETTRADE API session logic
-│   ├── entry.py                ← pivot detection, breakout signals
-│   ├── exit.py                 ← trade simulation (SL/TP/BE/EMA10)
-│   ├── portfolio.py            ← cash-aware portfolio simulation
-│   ├── rsm.py                  ← RS Momentum calculation
-│   └── scanner.py              ← TradingView pre-screen
+│   ├── data.py                 ← price download + daily cache
+│   ├── settrade_client.py      ← SETTRADE OpenAPI session
+│   ├── entry.py                ← pivot detection (horizontal + trendline breakouts)
+│   ├── exit.py                 ← backtest trade simulator (SL/TP/BE/EMA10)
+│   ├── paper_trade.py          ← live paper trade ledger (Postgres or JSON)
+│   ├── portfolio.py            ← cash-aware backtest portfolio
+│   ├── rsm.py                  ← RS Momentum vs benchmark
+│   └── scanner.py              ← TradingView pre-screen (SET universe)
 │
 ├── output/
-│   ├── chart_interactive.py    ← single-stock chart + signal data
-│   ├── chart_combined.py       ← combined HTML (chart + backtest + portfolio)
-│   ├── report.py               ← terminal output with ANSI colours
-│   └── notifications.py        ← Discord webhook / Messaging sender
+│   ├── chart_interactive.py    ← per-stock chart data builder
+│   ├── chart_combined.py       ← combined HTML dashboard (chart + backtest + portfolio)
+│   ├── report.py               ← terminal output (ANSI colours)
+│   └── notifications.py        ← all Discord + LINE notification logic
 │
 ├── docs/
-│   └── index.html              ← auto-generated HTML dashboard 
+│   └── index.html              ← auto-generated HTML dashboard (served by Railway)
 │
-├── railway.json                ← Railway cloud configuration
-├── server.py                   ← 24/7 web-server & automated scheduler
-└── test_settrade.py            ← API Key verification script
+└── data/
+    ├── watchlist.json          ← pending breakout levels for next session
+    ├── alert_state.json        ← intraday anti-spam state (resets daily)
+    ├── paper_portfolio.json    ← paper trade state (fallback when no Postgres)
+    └── notification_outbox.jsonl ← log of every sent notification
 ```
 
 ---
 
-## 🚀 Setup & Credentials
+## CRITERIA SYSTEM
 
-Before running the application, you must configure your `.env` file at the root of the project.
+Signals are classified into one label (highest priority wins):
+
+| Label | Condition | Intraday alert | Paper trade |
+|---|---|---|---|
+| **Prime** | proj_rvol ≥ MIN_RVOL **and** RSM ≥ MIN_RSM **and** stretch ≤ 4 | ✓ Discord | ✓ Opens position |
+| **RVOL** | proj_rvol ≥ MIN_RVOL, RSM below threshold | ✓ Discord | — |
+| **RSM** | RSM ≥ MIN_RSM, proj_rvol below threshold | — | — |
+| **SMA50** | Above SMA50 only | — | — |
+| **STR** | stretch > 4 (overextended) | — | — EOD info only |
+
+> Intraday uses **projected RVol** (not current RVol) — projects full-day volume based on time elapsed in SET session (10:00–12:30 + 14:00–16:30 = 300 min).
+
+---
+
+## PAPER TRADE SYSTEM
+
+Positions open on **Prime** signals only. Size formula: `capital × risk_pct / (ATR × sl_mult)`
+
+Exit strategy (mirrors backtest — checked every intraday scan):
+
+| Exit | Trigger | Action |
+|---|---|---|
+| **TP1** | close ≥ entry + 2×ATR | Sell 30% at TP1 price |
+| **Breakeven** | after `be_days` (3) days | Move SL to entry price |
+| **TP2** | close ≥ entry + 4×ATR | Sell ~30% of remaining at TP2 price |
+| **EMA10 trail** | close < EMA10 | Exit remaining ~40% at close |
+| **SL** | close ≤ stop loss | Exit remaining at close |
+| **False breakout** | 16:15 review: close < pivot | Exit all at close |
+
+Storage: Railway Postgres when `DATABASE_URL` set, else `data/paper_portfolio.json`.
+
+---
+
+## LINE NOTIFICATION CARDS
+
+All paper trade events send a Flex Message bubble to LINE:
+
+| Card | Triggered by |
+|---|---|
+| **Open** | Prime signal entry — shows entry price, shares, value, RVol/RSM/STR |
+| **TP1** | Price hits TP1 — shows tranche P&L, shares remaining, next TP target |
+| **TP2** | Price hits TP2 — shows tranche P&L, shares remaining, trail/SL level |
+| **Close** | EMA10 trail / SL / BE / false breakout — colored green/red by profit |
+| **History** | EOD — table of last 10 closed trades, win rate, avg win/loss |
+| **Portfolio** | EOD — total equity, cash, realized P&L, open count |
+
+---
+
+## DISCORD NOTIFICATIONS
+
+| Message | Time (BKK) | Content |
+|---|---|---|
+| **Intraday** | 10:30–16:00 every 15 min | Yellow embed — Prime + RVOL breakouts only |
+| **Fakeout** | 16:15 | Red embed — stocks that failed below pivot |
+| **EOD** | 16:45 | Green embed — all criteria (Prime/RVOL/RSM/STR/SMA50) with 🟢🔴 RVOL/RSM/STR |
+
+RVOL/RSM icons: 🟢 ≥ threshold, 🔴 below. STR: 🟢 ≤ 4.0, 🔴 > 4.0 (overextended).
+
+---
+
+## COMMANDS
+
+```bash
+# EOD scan — print results + generate docs/index.html
+python main.py
+
+# EOD scan + send Discord alert + LINE portfolio/history summary
+python main.py --discord
+
+# Intraday scan — check watchlist against current prices (print only)
+python intraday.py
+
+# Intraday scan + send Discord + LINE paper trade updates
+python intraday.py --discord
+
+# Fakeout review — check alerted stocks for false breakouts
+python intraday.py --discord --review
+
+# Open interactive chart in browser
+python main.py --view
+
+# Open chart for one stock
+python main.py --view TOP
+
+# Send test notifications to verify Discord + LINE format
+py -3 test_notifications.py
+
+# Clear cached price data
+python main.py --clear-cache
+```
+
+Override config temporarily:
+```bash
+python main.py --period 2y --capital 200000 --rsm 60
+```
+
+---
+
+## RAILWAY DEPLOYMENT (24/7 Automation)
+
+1. Push repo to GitHub
+2. Railway → **New** → **Deploy from GitHub repo**
+3. Set **Variables** in Railway dashboard:
+   - `DISCORD_WEBHOOK`
+   - `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_TO` (or `LINE_MODE=broadcast`)
+   - `SETTRADE_APP_ID`, `SETTRADE_APP_SECRET`, `SETTRADE_BROKER_ID`, `SETTRADE_APP_CODE`
+   - `DATABASE_URL` (Postgres — for persistent paper trades)
+   - `APP_BASE_URL` (your Railway domain — for chart links in messages)
+4. **Settings → Networking → Generate Domain**
+
+**Automated schedule (server.py):**
+
+| Time (BKK) | UTC | Job |
+|---|---|---|
+| 10:30–16:00 every 15 min | 03:30–09:00 | `intraday.py --discord` |
+| 16:15 | 09:15 | `intraday.py --discord --review` |
+| 16:45 | 09:45 | `main.py --discord` (EOD) |
+
+> Schedule runs in UTC internally. Server also runs a full EOD scan on startup to ensure dashboard exists after any redeploy.
+
+---
+
+## SETUP (.env file)
 
 ```ini
-# Messaging Output
-DISCORD_WEBHOOK="https://discord.com/api/webhooks/your-url-here"
+# Discord
+DISCORD_WEBHOOK="https://discord.com/api/webhooks/your-url"
 
-# LINE Messaging API (optional)
-LINE_CHANNEL_ACCESS_TOKEN="your_line_channel_access_token"
-# Comma-separated LINE user/group/room IDs, or use LINE_USER_ID / LINE_GROUP_ID
-LINE_TO="your_line_target_id"
+# LINE Messaging API
+LINE_CHANNEL_ACCESS_TOKEN="your_token"
+LINE_TO="your_user_or_group_id"       # comma-separated for multiple
+# LINE_MODE="broadcast"               # send to all followers instead
 
-# Public app URL for links in alerts (recommended on Railway)
+# Railway public URL (for chart links in messages)
 APP_BASE_URL="https://your-service.up.railway.app"
 
-# Railway Postgres (optional but recommended for persistent paper trades)
+# Postgres (Railway — persistent paper trades)
 DATABASE_URL="postgresql://..."
 
-# Data Provider (SETTRADE OpenAPI)
+# SETTRADE OpenAPI (primary data source)
 SETTRADE_APP_ID="your_app_id"
 SETTRADE_APP_SECRET="your_app_secret"
 SETTRADE_BROKER_ID="your_broker_id"
 SETTRADE_APP_CODE="your_app_code"
 ```
-*(Optionally run `python test_settrade.py` to verify your API connection works!)*
 
----
-
-## 🛠 Commands
-
-**`python main.py`**
-Run End-of-Day scan. Prints breakout list to terminal and generates `docs/index.html`.
-
-**`python intraday.py`**
-Run live Intraday scan checking current prices against the generated watchlist.
-
-**`python main.py --discord`**
-Run scan and send the full ANSI-formatted Discord report. For intraday runs, the same flag also allows LINE paper-trade entry and exit updates when LINE is configured.
-
-**`py -3 test_notifications.py`**
-Send dummy messages through all notification functions now, using your current `.env` targets. This is the fastest way to preview tomorrow's LINE and Discord output before market open.
-
-**`python main.py --view`**
-Opens the interactive chart in the browser automatically.
-
-**`python main.py --clear-cache`**
-Forces deletion of locally cached `cache/` price data to trigger a fresh download.
-
-### Options
-You can combine flags to override `config.py` temporarily:
-* `--period 2y` (lookback period)
-* `--capital 200000` (starting capital)
-* `--rsm 60` (min RS Momentum)
-
----
-
-## ☁️ Railway Cloud Deployment (24/7 Automation)
-
-This project is built to be deployed automatically to Railway, completely eliminating the need for complex GitHub Actions or frozen GitHub Pages.
-
-1. Commit and push this entire repository to your GitHub.
-2. In Railway, click **New** -> **Deploy from GitHub repository** and select this repo.
-3. Once the environment builds, go to your new Railway Service's **Variables** tab and paste your `.env` secrets into the cloud:
-   * `DISCORD_WEBHOOK`
-   * `SETTRADE_APP_ID`, `SETTRADE_APP_SECRET`, `SETTRADE_BROKER_ID`, `SETTRADE_APP_CODE`
-4. Go to **Settings** -> **Networking / Domains** and click **Generate Domain**. (Your Discord messages will automatically detect this domain and securely link to your charts).
-
-**How it works:**
-Railway spins up `server.py` in the background endlessly. It hosts your `docs/` folder entirely locally on the generated web domain (no GitHub Pages required), while a background Python scheduler actively drives your automated trading lifecycle:
-
-* **Intraday Sniper (10:30–16:00 BKK):** Every 15 minutes, it runs `intraday.py` to catch live breakouts from the watchlist. Only **Prime** and **RVOL** signals trigger Discord alerts. A localized "Anti-Spam Memory" loop ensures you only ever get 1 notification per stock per day.
-* **The Safety Net (16:15 BKK):** Runs a dedicated `intraday.py --review` fakeout check. If a stock broke out earlier but has now plunged back below its pivot, it sends a red "False Breakout" warning so you can instantly cut the position before the market closes.
-* **The Analysis (16:45 BKK):** Runs the heavy `main.py` End-of-Day scan 15 minutes after market close. It re-evaluates the entire SET market mathematically, builds tomorrow's curated watchlist, fully regenerates your interactive HTML dashboard, and sends a daily wrap-up to Discord with all criteria (Prime / RVOL / RSM / STR / SMA50).
-
-Paper trades are tracked in Railway Postgres automatically when `DATABASE_URL` is available. If not, the app falls back to `data/paper_portfolio.json` for local use.
-
-## Notification Notes
-
-- **Discord** receives all market alerts: intraday breakouts (Prime + RVOL only), false breakout warnings, and EOD summary (all criteria).
-- **LINE** receives paper-trade updates only: BUY cards on Prime intraday entries, SELL cards on exits, and portfolio snapshot at EOD.
-- Paper trades only open for **Prime** signals (RVOL ✓ + RSM ✓ + stretch ≤ 4). RVOL signals generate Discord alerts but do not open paper positions.
-- **STR** (stretch > 4 = overextended) appears in EOD summary for awareness but never triggers intraday alerts or paper trades.
-- If `LINE_MODE="broadcast"`, LINE sends to every account that added the bot. In that mode, `LINE_TO` is ignored.
-- Every app-sent message is appended to `data/notification_outbox.jsonl` so you can inspect what the app sent.
+Run `py -3 test_settrade.py` to verify SETTRADE connection.
+Run `py -3 test_notifications.py` to verify all Discord + LINE cards.
