@@ -142,7 +142,7 @@ def fetch_today(ticker):
 def criteria_label(rsm, rvol, stretch=0):
     rvol_ok = rvol >= CFG.get('rvol_min', 1.5)
     rsm_ok  = rsm  >= CFG.get('rs_momentum_min', 70)
-    if (rvol_ok or rsm_ok) and stretch > 4: return 'STR'
+    if stretch > 4: return 'STR'
     if rvol_ok and rsm_ok: return 'Prime'
     if rvol_ok:            return 'RVOL'
     if rsm_ok:             return 'RSM'
