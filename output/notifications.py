@@ -439,8 +439,8 @@ def _build_line_trade_close(event: dict) -> dict:
 
     # Title from reason
     title_map = {
-        'TP1':            'TP1 hit — 50% exit',
-        'TP2':            'TP2 hit — full exit',
+        'TP1':            'TP1 hit — 30% exit',
+        'TP2':            'TP2 hit — partial exit',
         'EMA10':          'Trade closed — trail stop',
         'FALSE_BREAKOUT': 'False breakout — position closed',
         'SL':             'Stop loss hit',

@@ -19,7 +19,7 @@ import pandas as pd
 ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
-from core.paper_trade import close_positions, open_positions
+from core.paper_trade import close_positions, open_positions, check_positions, load_state
 from output.report import print_intraday
 from output.notifications import send_intraday_alert, send_paper_trade_update, send_review_alert
 
@@ -139,6 +139,32 @@ def fetch_today(ticker):
         return None
 
 
+def fetch_price_and_ema10(tickers: list) -> tuple[dict, dict]:
+    """Fetch current close + EMA10 for open position tickers (needs 30d history)."""
+    prices = {}
+    ema10s = {}
+    if not tickers:
+        return prices, ema10s
+    try:
+        raw = yf.download(tickers, period='30d', interval='1d',
+                          auto_adjust=True, progress=False,
+                          group_by='ticker' if len(tickers) > 1 else None)
+        for ticker in tickers:
+            try:
+                df = raw[ticker] if len(tickers) > 1 else raw
+                if df is None or len(df) < 2:
+                    continue
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = [c[0] for c in df.columns]
+                prices[ticker] = float(df['Close'].iloc[-1])
+                ema10s[ticker] = float(df['Close'].ewm(span=10, adjust=False).mean().iloc[-1])
+            except Exception:
+                continue
+    except Exception as e:
+        print(f'  Position price fetch error: {e}')
+    return prices, ema10s
+
+
 def criteria_label(rsm, rvol, stretch=0):
     rvol_ok = rvol >= CFG.get('rvol_min', 1.5)
     rsm_ok  = rsm  >= CFG.get('rs_momentum_min', 70)
@@ -235,6 +261,23 @@ def run():
             print(f'  {short:<8}  levels {lvl_str:<20}  close ฿{d["close"]:.2f}')
         else:
             print(f'  {short:<8}  levels {lvl_str:<20}  no data')
+
+    # ── Check open paper positions for TP/SL/EMA10 exit ─────────────────
+    open_pos_tickers = list({
+        p['ticker_full'] for p in load_state(CFG).get('positions', [])
+        if p.get('status') == 'OPEN'
+    })
+    extra_tickers = [t for t in open_pos_tickers if t not in data]
+    pos_prices, pos_ema10s = fetch_price_and_ema10(open_pos_tickers)
+    # merge watchlist prices into pos_prices (already fetched)
+    for t, d in data.items():
+        if t not in pos_prices:
+            pos_prices[t] = d['close']
+    position_exit_events = check_positions(pos_prices, pos_ema10s, CFG, now)
+    if position_exit_events:
+        print(f'  {len(position_exit_events)} position exit(s) triggered.')
+        if args.discord:
+            send_paper_trade_update(position_exit_events, now, title='PAPER TRADE EXIT')
 
     signals = []
     seen    = set()

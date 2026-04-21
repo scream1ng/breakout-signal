@@ -229,11 +229,15 @@ def open_positions(signals: list, now, cfg: dict) -> list:
             entry_level=round(float(sig.get('level', entry_price) or entry_price), 4),
             atr=round(atr, 4),
             shares=shares,
+            shares_remaining=shares,
             gross_cost=round(gross_cost, 2),
             net_cost=round(total_cost, 2),
             sl=round(entry_price - atr * sl_mult, 4) if atr > 0 else None,
             tp1=round(entry_price + atr * tp1_mult, 4) if atr > 0 else None,
             tp2=round(entry_price + atr * tp2_mult, 4) if atr > 0 else None,
+            tp1_hit=False,
+            tp2_hit=False,
+            realized_pnl=0.0,
             rsm=float(sig.get('rsm', 0) or 0),
             stretch=float(sig.get('stretch', 0) or 0),
             rvol=float(sig.get('rvol', sig.get('cur_rvol', 0)) or 0),
@@ -328,6 +332,125 @@ def close_positions(signals: list, now, cfg: dict, reason: str = 'FALSE_BREAKOUT
     if closed:
         save_state(state, now)
     return closed
+
+
+def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
+    """
+    Called each intraday scan. Checks open positions against current prices.
+    prices  : {ticker_full: current_close}
+    ema10s  : {ticker_full: ema10_value}
+    Returns list of SELL events (partial TP or full exit).
+    """
+    from datetime import date as _date
+    state      = load_state(cfg)
+    commission = float(cfg.get('commission', 0.0015))
+    be_days    = int(cfg.get('be_days', 3))
+    tp1_mult   = float(cfg.get('tp1_mult', cfg.get('tp1_atr_mult', 2)))
+    tp2_mult   = float(cfg.get('tp2_mult', cfg.get('tp2_atr_mult', 4)))
+
+    events   = []
+    keep     = []
+    updated  = False
+    today    = now.date() if hasattr(now, 'date') else _date.today()
+
+    for pos in state['positions']:
+        if pos.get('status') != 'OPEN':
+            keep.append(pos)
+            continue
+
+        ticker_full = pos['ticker_full']
+        close = prices.get(ticker_full)
+        if not close:
+            keep.append(pos)
+            continue
+
+        # backwards-compat: fill missing tracking fields
+        pos.setdefault('shares_remaining', pos['shares'])
+        pos.setdefault('tp1_hit',  False)
+        pos.setdefault('tp2_hit',  False)
+        pos.setdefault('realized_pnl', 0.0)
+
+        entry   = float(pos['entry_price'])
+        atr     = float(pos.get('atr', 0) or 0)
+        sl      = float(pos['sl']) if pos.get('sl') is not None else None
+        tp1     = float(pos['tp1']) if pos.get('tp1') is not None else None
+        tp2     = float(pos['tp2']) if pos.get('tp2') is not None else None
+        ema10   = ema10s.get(ticker_full)
+
+        # days held (date-based — safe across multiple intraday scans per day)
+        opened_date = _date.fromisoformat(pos['opened_at'][:10])
+        days_held   = (today - opened_date).days
+
+        # breakeven: move SL to entry after be_days
+        if sl is not None and days_held >= be_days and sl < entry:
+            pos['sl'] = round(entry, 4)
+            sl = entry
+            updated = True
+
+        def _sell(sh, price, reason):
+            nonlocal updated
+            net   = sh * price * (1.0 - commission)
+            cost  = sh * entry * (1.0 + commission)
+            pnl   = net - cost
+            pos['realized_pnl'] = round(float(pos['realized_pnl']) + pnl, 2)
+            pos['shares_remaining'] -= sh
+            state['cash']         += net
+            state['realized_pnl'] += pnl
+            ev = dict(
+                action='SELL',
+                ticker=pos['ticker'],
+                ticker_full=ticker_full,
+                at=_now_iso(now),
+                price=round(price, 4),
+                shares=sh,
+                cash_after=round(state['cash'], 2),
+                pnl=round(pnl, 2),
+                ret_pct=round((price - entry) / entry * 100, 2),
+                reason=reason,
+                kind=pos.get('kind', ''),
+                criteria=pos.get('criteria', ''),
+            )
+            _append_event(state, ev)
+            events.append(ev)
+            updated = True
+            return ev
+
+        # TP1 — sell 30% at tp1 price
+        if not pos['tp1_hit'] and tp1 and close >= tp1:
+            sh = max(1, int(pos['shares_remaining'] * 0.30))
+            _sell(sh, tp1, 'TP1')
+            pos['tp1_hit'] = True
+
+        # TP2 — sell 3/7 of remaining (≈30% of original) at tp2 price
+        if pos['tp1_hit'] and not pos['tp2_hit'] and tp2 and close >= tp2:
+            sh = max(1, int(pos['shares_remaining'] * (3 / 7)))
+            _sell(sh, tp2, 'TP2')
+            pos['tp2_hit'] = True
+
+        # Full exit: SL / breakeven / EMA10 trail
+        sl_hit   = sl is not None and close <= sl
+        ema_exit = ema10 is not None and close < ema10
+        if sl_hit or ema_exit:
+            sh = int(pos['shares_remaining'])
+            if sh >= 1:
+                at_be  = sl is not None and abs(sl - entry) < 0.0001
+                reason = 'EMA10' if (ema_exit and not sl_hit) else ('BE' if at_be else 'SL')
+                _sell(sh, close, reason)
+            pos.update(
+                status='CLOSED',
+                closed_at=_now_iso(now),
+                exit_price=round(close, 4),
+                pnl=round(float(pos['realized_pnl']), 2),
+                close_reason=pos.get('close_reason', reason if (sl_hit or ema_exit) else 'PARTIAL'),
+            )
+            state['closed_positions'].append(pos)
+        else:
+            keep.append(pos)
+
+    state['positions'] = keep
+    if updated:
+        save_state(state, now)
+    return events
 
 
 def get_summary(cfg: dict) -> dict:
