@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.storage.db import init_db
 from app.scheduler.runner import get_scheduler, register_jobs
-from app.api import system, portfolio, signals, trades
+from app.api import system, portfolio, signals, trades, scan
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +68,7 @@ app.include_router(system.router,    prefix='/api', tags=['System'])
 app.include_router(portfolio.router, prefix='/api', tags=['Portfolio'])
 app.include_router(signals.router,   prefix='/api', tags=['Signals'])
 app.include_router(trades.router,    prefix='/api', tags=['Trades'])
+app.include_router(scan.router,      prefix='/api', tags=['Scan'])
 
 # ── Static file mounts ────────────────────────────────────────────────────────
 app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')

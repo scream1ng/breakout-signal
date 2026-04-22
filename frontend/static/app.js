@@ -13,6 +13,10 @@ function app() {
     lastRuns:         {},
     portfolio:        null,
     signals:          { watchlist: [], alerted_today: [], failed_today: [], alert_date: null, watchlist_date: null },
+    backtest:         null,   // { date, overall_bt, rows }
+    watchlistDetail:  null,   // { date, items, groups }
+    btSort:           'pnl_pct',
+    btSortDir:        -1,
     jobRunning:       {},
     toast:            { msg: '', ok: true },
     _refreshTimer:    null,
@@ -27,6 +31,8 @@ function app() {
       this.loadSystem();
       if (this.tab === 'portfolio') this.loadPortfolio();
       if (this.tab === 'signals')   this.loadSignals();
+      if (this.tab === 'backtest')  this.loadBacktest();
+      if (this.tab === 'watchlist') this.loadWatchlistDetail();
     },
 
     // ── API calls ──────────────────────────────────────────────────────────
@@ -58,6 +64,22 @@ function app() {
       }
     },
 
+    async loadBacktest() {
+      try {
+        this.backtest = await fetch('/api/backtest').then(r => r.json());
+      } catch (e) {
+        console.error('loadBacktest failed', e);
+      }
+    },
+
+    async loadWatchlistDetail() {
+      try {
+        this.watchlistDetail = await fetch('/api/watchlist/detail').then(r => r.json());
+      } catch (e) {
+        console.error('loadWatchlistDetail failed', e);
+      }
+    },
+
     async runJob(jobName) {
       this.jobRunning = { ...this.jobRunning, [jobName]: true };
       try {
@@ -71,6 +93,13 @@ function app() {
       }
       setTimeout(() => this.loadSystem(), 3000);
     },
+    get btSortedRows() {
+      if (!this.backtest?.rows) return [];
+      const key = this.btSort;
+      const dir = this.btSortDir;
+      return [...this.backtest.rows].sort((a, b) => dir * ((a[key] ?? 0) - (b[key] ?? 0)));
+    },
+
     get jobSummary() {
       const jobs = [
         { id: 'eod_scan',      label: 'EOD Scan',       nextKey: 'eod_scan' },

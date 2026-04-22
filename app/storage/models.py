@@ -6,7 +6,7 @@ JobRun  — one row per scheduled job execution.
 """
 
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Date, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -46,4 +46,31 @@ class JobRun(Base):
             'trades_opened':  self.trades_opened,
             'trades_closed':  self.trades_closed,
             'error':          self.error,
+        }
+
+
+# ── ScanSnapshot — one row per EOD scan run ───────────────────────────────────
+class ScanSnapshot(Base):
+    """Persists full EOD scan output so the web dashboard can serve it via API."""
+    __tablename__ = 'scan_snapshots'
+    __table_args__ = (UniqueConstraint('scan_date', name='uq_scan_snapshots_date'),)
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    scan_date  = Column(String(10), nullable=False, index=True)   # YYYY-MM-DD
+    created_at = Column(DateTime,   nullable=False,
+                        default=lambda: datetime.now(timezone.utc))
+    n_stocks   = Column(Integer, nullable=True)
+    n_signals  = Column(Integer, nullable=True)
+    n_watching = Column(Integer, nullable=True)
+    # Full JSON payload — backtest_rows, watchlist, signals, sector, overall_bt
+    data_json  = Column(Text,    nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            'id':         self.id,
+            'scan_date':  self.scan_date,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'n_stocks':   self.n_stocks,
+            'n_signals':  self.n_signals,
+            'n_watching': self.n_watching,
         }
