@@ -51,7 +51,7 @@ def _header():
     _clear()
     try:
         sys.path.insert(0, SCRIPT_DIR)
-        from core.data import cache_stats
+        from app.core.data import cache_stats
         cs = cache_stats()
         cache_line = f'Cache: {cs["valid"]}/{cs["total"]} valid  BKK {cs["bkk_time"]}'
     except Exception:

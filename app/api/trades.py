@@ -27,7 +27,7 @@ def close_trade(body: CloseRequest):
     if TRADE_MODE != 'paper':
         raise HTTPException(status_code=503, detail='Live trading not yet enabled.')
 
-    import core.paper_trade as pt
+    import app.core.paper_trade as pt
 
     now   = datetime.now(BKK)
     state = pt.load_state(TRADE_CFG)

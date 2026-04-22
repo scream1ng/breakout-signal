@@ -17,7 +17,7 @@ class LiveTradeEngine(TradeEngine):
 
     def __init__(self):
         # Import lazily so the settrade-v2 SDK is only needed when TRADE_MODE=live
-        from core.settrade_client import get_market_data  # noqa: F401 — validate creds early
+        from app.core.settrade_client import get_market_data  # noqa: F401 — validate creds early
 
     def open_positions(self, signals: list, now: datetime, cfg: dict) -> list:
         raise NotImplementedError(

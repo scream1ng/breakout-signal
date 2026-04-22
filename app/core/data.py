@@ -68,7 +68,7 @@ def load_ticker(ticker: str, period: str = '2y', force: bool = False) -> pd.Data
 
     # Download fresh via Settrade, with a fallback to yfinance
     try:
-        from core.settrade_client import get_market_data
+        from app.core.settrade_client import get_market_data
         market = get_market_data()
         symbol = ticker.replace('.BK', '')
         if symbol == '^SET':

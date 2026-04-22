@@ -29,13 +29,13 @@ if sys.platform == 'win32':
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
-from core.data               import load_ticker, load_benchmark, cache_stats, clear_cache
-from core.rsm                import calc_rsm_series
-from core.scanner            import fetch_tv_stocks
-from core.entry              import detect_pivots
-from core.exit               import simulate
-from core.paper_trade        import get_summary as get_paper_trade_summary
-from core.portfolio          import simulate_portfolio
+from app.core.data               import load_ticker, load_benchmark, cache_stats, clear_cache
+from app.core.rsm                import calc_rsm_series
+from app.core.scanner            import fetch_tv_stocks
+from app.core.entry              import detect_pivots
+from app.core.exit               import simulate
+from app.core.paper_trade        import get_summary as get_paper_trade_summary
+from app.core.portfolio          import simulate_portfolio
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
 from output.notifications     import send_eod_alert, send_paper_trade_summary, send_line_history
@@ -379,7 +379,7 @@ def main():
     cs = cache_stats()
     
     try:
-        from core.settrade_client import get_market_data
+        from app.core.settrade_client import get_market_data
         get_market_data()  # test auth
         data_source = "SETTRADE OpenAPI"
     except Exception:

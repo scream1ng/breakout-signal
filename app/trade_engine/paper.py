@@ -9,7 +9,7 @@ provides the standard TradeEngine interface on top of it.
 from datetime import datetime
 
 from app.trade_engine.base import TradeEngine
-import core.paper_trade as _pt
+import app.core.paper_trade as _pt
 
 
 class PaperTradeEngine(TradeEngine):
