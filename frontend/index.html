@@ -48,11 +48,21 @@
       <button @click="tab='signals'; loadSignals()"
         :class="tab === 'signals' ? 'tab-active' : 'hover:text-gray-700'"
         class="pb-2 pt-1 transition">Signals</button>
+      <button @click="tab='chart'"
+        :class="tab === 'chart' ? 'tab-active' : 'hover:text-gray-700'"
+        class="pb-2 pt-1 transition">Chart</button>
     </div>
   </header>
 
+  <!-- ── Chart tab (full-bleed, outside main container) ─────────────────── -->
+  <div x-show="tab === 'chart'" style="height: calc(100vh - 88px)">
+    <iframe src="/docs/" class="w-full h-full border-0 block"
+      x-on:load="$el.style.opacity=1" style="opacity:0; transition: opacity .2s">
+    </iframe>
+  </div>
+
   <!-- ── Main ───────────────────────────────────────────────────────────── -->
-  <main class="max-w-5xl mx-auto px-4 py-6">
+  <main x-show="tab !== 'chart'" class="max-w-5xl mx-auto px-4 py-6">
 
     <!-- ── DASHBOARD TAB ────────────────────────────────────────────────── -->
     <div x-show="tab === 'dashboard'">
@@ -355,9 +365,8 @@
   </main>
 
   <!-- ── Footer ─────────────────────────────────────────────────────────── -->
-  <footer class="text-center text-xs text-gray-400 py-6">
-    Breakout Signal · Paper trade mode ·
-    <a href="/docs/" class="text-indigo-400 hover:underline">View charts →</a>
+  <footer x-show="tab !== 'chart'" class="text-center text-xs text-gray-400 py-6">
+    Breakout Signal · Paper trade mode
   </footer>
 
 </body>
