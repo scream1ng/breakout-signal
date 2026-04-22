@@ -47,7 +47,7 @@
         class="pb-2 pt-1 transition">Paper Trade</button>
       <button @click="tab='signals'; loadSignals()"
         :class="tab === 'signals' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition">Signals</button>
+        class="pb-2 pt-1 transition" style="display:none">Signals</button>
       <button @click="tab='backtest'; loadBacktest()"
         :class="tab === 'backtest' ? 'tab-active' : 'hover:text-gray-700'"
         class="pb-2 pt-1 transition">Backtest</button>
@@ -106,45 +106,48 @@
         </template>
       </div>
 
-      <!-- Recent job history table -->
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Recent runs
-      </h2>
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <table class="w-full text-xs">
-          <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-            <tr>
-              <th class="px-4 py-2 text-left">Job</th>
-              <th class="px-4 py-2 text-left">Started (BKK)</th>
-              <th class="px-4 py-2 text-center">Status</th>
-              <th class="px-4 py-2 text-right">Duration</th>
-              <th class="px-4 py-2 text-right">Signals</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <template x-if="recentRuns.length === 0">
-              <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">
-                No runs recorded yet
-              </td></tr>
-            </template>
-            <template x-for="run in recentRuns" :key="run.id">
-              <tr class="hover:bg-gray-50 transition">
-                <td class="px-4 py-2 font-medium" x-text="run.job_name"></td>
-                <td class="px-4 py-2 text-gray-500" x-text="fmtDatetime(run.started_at)"></td>
-                <td class="px-4 py-2 text-center">
-                  <span :class="statusBadge(run.status)"
-                    class="px-2 py-0.5 rounded-full text-xs font-medium"
-                    x-text="run.status"></span>
-                </td>
-                <td class="px-4 py-2 text-right text-gray-500"
-                  x-text="run.duration_s != null ? run.duration_s.toFixed(1) + 's' : '—'"></td>
-                <td class="px-4 py-2 text-right text-gray-500"
-                  x-text="run.signals_found != null ? run.signals_found : '—'"></td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
+      <!-- ── Intraday alerts ───────────────────────────────────────────── -->
+      <template x-if="signals.alerted_today && signals.alerted_today.length > 0">
+        <div class="mt-6">
+          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Intraday alerts
+            <span class="ml-1 text-gray-400 font-normal normal-case"
+              x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
+          </h2>
+          <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
+                <tr>
+                  <th class="px-4 py-2 text-left">Ticker</th>
+                  <th class="px-4 py-2 text-right">Level</th>
+                  <th class="px-4 py-2 text-right">Price</th>
+                  <th class="px-4 py-2 text-center">Type</th>
+                  <th class="px-4 py-2 text-center">Criteria</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <template x-for="(s, i) in signals.alerted_today" :key="i">
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 font-semibold text-green-600"
+                      x-text="(s.ticker||s).replace ? (s.ticker||s).replace('.BK','') : s"></td>
+                    <td class="px-4 py-2 text-right"
+                      x-text="s.level ? '฿'+fmt2(s.level) : '—'"></td>
+                    <td class="px-4 py-2 text-right"
+                      x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
+                    <td class="px-4 py-2 text-center text-gray-500"
+                      x-text="s.kind||'—'"></td>
+                    <td class="px-4 py-2 text-center">
+                      <span :class="critBadge(s.criteria)"
+                        class="px-1.5 py-0.5 rounded text-xs font-medium"
+                        x-text="s.criteria||'—'"></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
 
       <!-- ── EOD Breakout signals ──────────────────────────────────────── -->
       <template x-if="scanLatest && (scanLatest.signals || []).length > 0">
@@ -194,55 +197,53 @@
         </div>
       </template>
 
-      <!-- ── Intraday alerts ───────────────────────────────────────────── -->
-      <template x-if="signals.alerted_today && signals.alerted_today.length > 0">
-        <div class="mt-6">
-          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Intraday alerts
-            <span class="ml-1 text-gray-400 font-normal normal-case"
-              x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
-          </h2>
-          <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <table class="w-full text-xs">
-              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-                <tr>
-                  <th class="px-4 py-2 text-left">Ticker</th>
-                  <th class="px-4 py-2 text-right">Level</th>
-                  <th class="px-4 py-2 text-right">Price</th>
-                  <th class="px-4 py-2 text-center">Type</th>
-                  <th class="px-4 py-2 text-center">Criteria</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <template x-for="(s, i) in signals.alerted_today" :key="i">
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-2 font-semibold text-green-600"
-                      x-text="(s.ticker||s).replace ? (s.ticker||s).replace('.BK','') : s"></td>
-                    <td class="px-4 py-2 text-right"
-                      x-text="s.level ? '฿'+fmt2(s.level) : '—'"></td>
-                    <td class="px-4 py-2 text-right"
-                      x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
-                    <td class="px-4 py-2 text-center text-gray-500"
-                      x-text="s.kind||'—'"></td>
-                    <td class="px-4 py-2 text-center">
-                      <span :class="critBadge(s.criteria)"
-                        class="px-1.5 py-0.5 rounded text-xs font-medium"
-                        x-text="s.criteria||'—'"></span>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </template>
+      <!-- Recent job history table -->
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-6">
+        Recent runs
+      </h2>
+      <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-2 text-left">Job</th>
+              <th class="px-4 py-2 text-left">Started (BKK)</th>
+              <th class="px-4 py-2 text-center">Status</th>
+              <th class="px-4 py-2 text-right">Duration</th>
+              <th class="px-4 py-2 text-right">Signals</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <template x-if="recentRuns.length === 0">
+              <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">
+                No runs recorded yet
+              </td></tr>
+            </template>
+            <template x-for="run in recentRuns" :key="run.id">
+              <tr class="hover:bg-gray-50 transition">
+                <td class="px-4 py-2 font-medium" x-text="run.job_name"></td>
+                <td class="px-4 py-2 text-gray-500" x-text="fmtDatetime(run.started_at)"></td>
+                <td class="px-4 py-2 text-center">
+                  <span :class="statusBadge(run.status)"
+                    class="px-2 py-0.5 rounded-full text-xs font-medium"
+                    x-text="run.status"></span>
+                </td>
+                <td class="px-4 py-2 text-right text-gray-500"
+                  x-text="run.duration_s != null ? run.duration_s.toFixed(1) + 's' : '—'"></td>
+                <td class="px-4 py-2 text-right text-gray-500"
+                  x-text="run.signals_found != null ? run.signals_found : '—'"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
 
-    </div> ────────────────────────────────────────────────── -->
+    </div>
+    <!-- ── end DASHBOARD ──
     <div x-show="tab === 'portfolio'">
       <template x-if="portfolio">
 
         <!-- Equity summary -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
           <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
             <div class="text-xs text-gray-500 mb-1">Equity</div>
             <div class="text-2xl font-bold"
@@ -256,6 +257,14 @@
             <div class="text-xs text-gray-500 mb-1">Cash</div>
             <div class="text-2xl font-bold text-gray-700"
               x-text="'฿' + fmt0(portfolio.cash)"></div>
+            <div class="text-xs text-gray-400"
+              x-text="'of ฿' + fmt0(portfolio.capital)"></div>
+          </div>
+          <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div class="text-xs text-gray-500 mb-1">Realized P&L</div>
+            <div class="text-2xl font-bold"
+              :class="(portfolio.realized_pnl||0) >= 0 ? 'text-green-600' : 'text-red-500'"
+              x-text="((portfolio.realized_pnl||0) >= 0 ? '+' : '') + '฿' + fmt0(portfolio.realized_pnl||0)"></div>
           </div>
           <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
             <div class="text-xs text-gray-500 mb-1">Open positions</div>
@@ -276,7 +285,7 @@
         <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Open positions
         </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto mb-6">
           <table class="w-full text-xs">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
@@ -286,12 +295,17 @@
                 <th class="px-4 py-2 text-right">Value</th>
                 <th class="px-4 py-2 text-right">SL</th>
                 <th class="px-4 py-2 text-right">TP1</th>
+                <th class="px-4 py-2 text-right">TP2</th>
+                <th class="px-4 py-2 text-right">RSM</th>
+                <th class="px-4 py-2 text-right">RVol</th>
+                <th class="px-4 py-2 text-right">Stretch</th>
                 <th class="px-4 py-2 text-center">Crit</th>
+                <th class="px-4 py-2 text-right">Opened</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.open_positions.length === 0">
-                <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">
+                <tr><td colspan="12" class="px-4 py-6 text-center text-gray-400">
                   No open positions
                 </td></tr>
               </template>
@@ -300,18 +314,34 @@
                   <td class="px-4 py-2 font-medium"
                     x-text="(pos.ticker_full || pos.ticker || '').replace('.BK','')"></td>
                   <td class="px-4 py-2 text-right" x-text="'฿' + fmt2(pos.entry_price)"></td>
-                  <td class="px-4 py-2 text-right" x-text="pos.shares"></td>
+                  <td class="px-4 py-2 text-right" x-text="pos.shares_remaining ?? pos.shares"></td>
                   <td class="px-4 py-2 text-right"
-                    x-text="'฿' + fmt0(pos.entry_price * pos.shares)"></td>
-                  <td class="px-4 py-2 text-right text-red-500"
-                    x-text="pos.sl ? '฿' + fmt2(pos.sl) : '—'"></td>
+                    x-text="'฿' + fmt0(pos.entry_price * (pos.shares_remaining ?? pos.shares))"></td>
+                  <td class="px-4 py-2 text-right">
+                    <span class="text-red-500" x-text="pos.sl ? '฿' + fmt2(pos.sl) : '—'"></span>
+                    <span x-show="pos.sl && pos.entry_price" class="text-red-400 ml-1"
+                      x-text="'(' + fmt1((pos.sl - pos.entry_price) / pos.entry_price * 100) + '%)'"></span>
+                  </td>
                   <td class="px-4 py-2 text-right text-green-600"
                     x-text="pos.tp1 ? '฿' + fmt2(pos.tp1) : '—'"></td>
+                  <td class="px-4 py-2 text-right text-green-700"
+                    x-text="pos.tp2 ? '฿' + fmt2(pos.tp2) : '—'"></td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(pos.rsm||0) >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
+                    x-text="pos.rsm ? fmt0(pos.rsm) : '—'"></td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(pos.rvol||0) >= 1.5 ? 'text-green-600 font-semibold' : 'text-gray-500'"
+                    x-text="pos.rvol ? fmt1(pos.rvol) + '×' : '—'"></td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(pos.stretch||0) > 4 ? 'text-red-500' : 'text-gray-500'"
+                    x-text="pos.stretch ? fmt1(pos.stretch) + '×' : '—'"></td>
                   <td class="px-4 py-2 text-center">
                     <span :class="critBadge(pos.criteria)"
                       class="px-1.5 py-0.5 rounded text-xs font-medium"
                       x-text="pos.criteria || '—'"></span>
                   </td>
+                  <td class="px-4 py-2 text-right text-gray-400"
+                    x-text="fmtDate(pos.opened_at || pos.entered_at)"></td>
                 </tr>
               </template>
             </tbody>
@@ -322,13 +352,15 @@
         <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Recent closed trades
         </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
           <table class="w-full text-xs">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
                 <th class="px-4 py-2 text-left">Ticker</th>
+                <th class="px-4 py-2 text-center">Crit</th>
                 <th class="px-4 py-2 text-right">Entry</th>
                 <th class="px-4 py-2 text-right">Exit</th>
+                <th class="px-4 py-2 text-right">Ret%</th>
                 <th class="px-4 py-2 text-right">P&L</th>
                 <th class="px-4 py-2 text-center">Reason</th>
                 <th class="px-4 py-2 text-right">Closed</th>
@@ -336,7 +368,7 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.recent_closed.length === 0">
-                <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">
+                <tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">
                   No closed trades yet
                 </td></tr>
               </template>
@@ -344,9 +376,17 @@
                 <tr class="hover:bg-gray-50">
                   <td class="px-4 py-2 font-medium"
                     x-text="(pos.ticker_full || pos.ticker || '').replace('.BK','')"></td>
+                  <td class="px-4 py-2 text-center">
+                    <span :class="critBadge(pos.criteria)"
+                      class="px-1.5 py-0.5 rounded text-xs font-medium"
+                      x-text="pos.criteria || '—'"></span>
+                  </td>
                   <td class="px-4 py-2 text-right" x-text="'฿' + fmt2(pos.entry_price)"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="pos.exit_price ? '฿' + fmt2(pos.exit_price) : '—'"></td>
+                  <td class="px-4 py-2 text-right font-semibold"
+                    :class="(pos.ret_pct||pos.pnl_pct||0) >= 0 ? 'text-green-600' : 'text-red-500'"
+                    x-text="((pos.ret_pct||pos.pnl_pct||0) >= 0 ? '+' : '') + fmt2(pos.ret_pct||pos.pnl_pct||0) + '%'"></td>
                   <td class="px-4 py-2 text-right font-medium"
                     :class="(pos.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-500'"
                     x-text="((pos.pnl||0) >= 0 ? '+' : '') + '฿' + fmt0(Math.abs(pos.pnl||0))">
@@ -475,33 +515,47 @@
       </template>
       <template x-if="backtest">
         <div>
+          <!-- Criteria filter pills ----------------------------------------->
+          <div class="flex flex-wrap items-center gap-2 mb-4">
+            <span class="text-xs text-gray-400 font-medium">Criteria:</span>
+            <template x-for="crit in ['Prime','STR','RVOL','RSM','SMA50']" :key="crit">
+              <button @click="btCriteria = crit"
+                :class="btCriteria === crit
+                  ? {'Prime':'bg-purple-600 text-white','STR':'bg-red-500 text-white','RVOL':'bg-blue-500 text-white','RSM':'bg-green-500 text-white','SMA50':'bg-amber-500 text-white'}[crit]
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
+                class="px-3 py-1 rounded-full text-xs font-medium transition"
+                x-text="crit"></button>
+            </template>
+            <span class="ml-auto text-xs text-gray-400" x-text="backtest.date ? 'as of ' + backtest.date : ''"></span>
+          </div>
+
           <!-- Overall stats -------------------------------------------------->
           <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
             <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
               <div class="text-2xl font-bold text-gray-800"
-                x-text="backtest.overall_bt ? backtest.overall_bt.n_trades : '—'"></div>
+                x-text="btCriteriaStats ? btCriteriaStats.n_trades : '—'"></div>
               <div class="text-xs text-gray-400 mt-1">Total trades</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
               <div class="text-2xl font-bold"
-                :class="backtest.overall_bt && backtest.overall_bt.wr >= 55 ? 'text-green-600' : 'text-gray-800'"
-                x-text="backtest.overall_bt ? fmt1(backtest.overall_bt.wr) + '%' : '—'"></div>
+                :class="btCriteriaStats && btCriteriaStats.wr >= 55 ? 'text-green-600' : 'text-gray-800'"
+                x-text="btCriteriaStats ? fmt1(btCriteriaStats.wr) + '%' : '—'"></div>
               <div class="text-xs text-gray-400 mt-1">Win rate</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
               <div class="text-2xl font-bold"
-                :class="backtest.overall_bt && backtest.overall_bt.pnl_pct >= 0 ? 'text-green-600' : 'text-red-500'"
-                x-text="backtest.overall_bt ? (backtest.overall_bt.pnl_pct > 0 ? '+' : '') + fmt1(backtest.overall_bt.pnl_pct) + '%' : '—'"></div>
+                :class="btCriteriaStats && btCriteriaStats.pnl_pct >= 0 ? 'text-green-600' : 'text-red-500'"
+                x-text="btCriteriaStats ? (btCriteriaStats.pnl_pct > 0 ? '+' : '') + fmt1(btCriteriaStats.pnl_pct) + '%' : '—'"></div>
               <div class="text-xs text-gray-400 mt-1">Total PnL</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
               <div class="text-2xl font-bold text-green-600"
-                x-text="backtest.overall_bt ? '+' + fmt1(backtest.overall_bt.avg_win) + '%' : '—'"></div>
+                x-text="btCriteriaStats ? '+' + fmt1(btCriteriaStats.avg_win) + '%' : '—'"></div>
               <div class="text-xs text-gray-400 mt-1">Avg win</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
               <div class="text-2xl font-bold text-red-500"
-                x-text="backtest.overall_bt ? fmt1(backtest.overall_bt.avg_loss) + '%' : '—'"></div>
+                x-text="btCriteriaStats ? fmt1(btCriteriaStats.avg_loss) + '%' : '—'"></div>
               <div class="text-xs text-gray-400 mt-1">Avg loss</div>
             </div>
           </div>
@@ -515,7 +569,6 @@
                 class="px-2 py-1 rounded"
                 x-text="col.l + (btSort === col.k ? (btSortDir < 0 ? ' ▼' : ' ▲') : '')"></button>
             </template>
-            <span class="ml-auto text-gray-400" x-text="backtest.date ? 'as of ' + backtest.date : ''"></span>
           </div>
 
           <!-- Table --------------------------------------------------------->
@@ -527,6 +580,8 @@
                   <th class="px-4 py-2 text-left">Sector</th>
                   <th class="px-4 py-2 text-right">Trades</th>
                   <th class="px-4 py-2 text-right">WR%</th>
+                  <th class="px-4 py-2 text-right">Avg Win</th>
+                  <th class="px-4 py-2 text-right">Avg Loss</th>
                   <th class="px-4 py-2 text-right">PnL%</th>
                   <th class="px-4 py-2 text-right">RSM</th>
                   <th class="px-4 py-2 text-center">Signal</th>
@@ -534,21 +589,56 @@
               </thead>
               <tbody class="divide-y divide-gray-100">
                 <template x-if="btSortedRows.length === 0">
-                  <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">
+                  <tr><td colspan="9" class="px-4 py-6 text-center text-gray-400">
                     No backtest data — run EOD scan first
                   </td></tr>
                 </template>
                 <template x-for="(r, i) in btSortedRows" :key="i">
                   <tr class="hover:bg-gray-50">
                     <td class="px-4 py-2 font-medium" x-text="r.ticker"></td>
-                    <td class="px-4 py-2 text-gray-500 truncate max-w-[120px]" x-text="r.sector || '—'"></td>
-                    <td class="px-4 py-2 text-right" x-text="r.trades"></td>
-                    <td class="px-4 py-2 text-right"
-                      :class="r.wr >= 55 ? 'text-green-600' : 'text-gray-600'"
-                      x-text="r.trades ? fmt1(r.wr) + '%' : '—'"></td>
-                    <td class="px-4 py-2 text-right font-medium"
-                      :class="r.pnl_pct >= 0 ? 'text-green-600' : 'text-red-500'"
-                      x-text="(r.pnl_pct > 0 ? '+' : '') + fmt1(r.pnl_pct) + '%'"></td>
+                    <td class="px-4 py-2 text-gray-500 truncate max-w-[100px]" x-text="r.sector || '—'"></td>
+                    <template x-if="btCriteria === 'Prime'">
+                      <td class="px-4 py-2 text-right" x-text="r.trades"></td>
+                    </template>
+                    <template x-if="btCriteria !== 'Prime'">
+                      <td class="px-4 py-2 text-right" x-text="r.by_type?.[btCriteria]?.n ?? '—'"></td>
+                    </template>
+                    <template x-if="btCriteria === 'Prime'">
+                      <td class="px-4 py-2 text-right"
+                        :class="r.wr >= 55 ? 'text-green-600' : 'text-gray-600'"
+                        x-text="r.trades ? fmt1(r.wr) + '%' : '—'"></td>
+                    </template>
+                    <template x-if="btCriteria !== 'Prime'">
+                      <td class="px-4 py-2 text-right"
+                        :class="(r.by_type?.[btCriteria]?.wr ?? 0) >= 55 ? 'text-green-600' : 'text-gray-600'"
+                        x-text="r.by_type?.[btCriteria] ? fmt1(r.by_type[btCriteria].wr) + '%' : '—'"></td>
+                    </template>
+                    <template x-if="btCriteria === 'Prime'">
+                      <td class="px-4 py-2 text-right text-green-600"
+                        x-text="r.by_type?.Prime?.avg_win != null ? '+' + fmt2(r.by_type.Prime.avg_win) + '%' : '—'"></td>
+                    </template>
+                    <template x-if="btCriteria !== 'Prime'">
+                      <td class="px-4 py-2 text-right text-green-600"
+                        x-text="r.by_type?.[btCriteria]?.avg_win != null ? '+' + fmt2(r.by_type[btCriteria].avg_win) + '%' : '—'"></td>
+                    </template>
+                    <template x-if="btCriteria === 'Prime'">
+                      <td class="px-4 py-2 text-right text-red-500"
+                        x-text="r.by_type?.Prime?.avg_loss != null ? fmt2(r.by_type.Prime.avg_loss) + '%' : '—'"></td>
+                    </template>
+                    <template x-if="btCriteria !== 'Prime'">
+                      <td class="px-4 py-2 text-right text-red-500"
+                        x-text="r.by_type?.[btCriteria]?.avg_loss != null ? fmt2(r.by_type[btCriteria].avg_loss) + '%' : '—'"></td>
+                    </template>
+                    <template x-if="btCriteria === 'Prime'">
+                      <td class="px-4 py-2 text-right font-medium"
+                        :class="r.pnl_pct >= 0 ? 'text-green-600' : 'text-red-500'"
+                        x-text="(r.pnl_pct > 0 ? '+' : '') + fmt1(r.pnl_pct) + '%'"></td>
+                    </template>
+                    <template x-if="btCriteria !== 'Prime'">
+                      <td class="px-4 py-2 text-right font-medium"
+                        :class="(r.by_type?.[btCriteria]?.pnl_capital ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'"
+                        x-text="r.by_type?.[btCriteria] ? ((r.by_type[btCriteria].pnl_capital > 0 ? '+' : '') + fmt1(r.by_type[btCriteria].pnl_capital) + '%') : '—'"></td>
+                    </template>
                     <td class="px-4 py-2 text-right"
                       :class="r.rsm >= 80 ? 'text-indigo-600' : 'text-gray-500'"
                       x-text="fmt0(r.rsm)"></td>
@@ -582,15 +672,15 @@
 
           <!-- TradingView copy string ---------------------------------------->
           <template x-if="watchlistDetail.copy_str">
-            <div class="mb-5 bg-gray-900 rounded-lg p-3">
+            <div class="mb-5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
               <div class="flex items-center justify-between mb-1.5">
-                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">TradingView Watchlist</span>
+                <span class="text-xs font-semibold text-indigo-600 uppercase tracking-wide">TradingView Watchlist</span>
                 <button @click="navigator.clipboard.writeText(watchlistDetail.copy_str).then(() => { $el.textContent = 'Copied!'; setTimeout(() => $el.textContent = 'Copy all', 1500); })"
                   class="text-xs px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white transition font-medium">
                   Copy all
                 </button>
               </div>
-              <div class="text-xs text-gray-300 font-mono break-all leading-relaxed select-all"
+              <div class="text-xs text-indigo-800 font-mono break-all leading-relaxed select-all"
                 x-text="watchlistDetail.copy_str"></div>
             </div>
           </template>

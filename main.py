@@ -46,13 +46,29 @@ def save_scan_snapshot(results: list, today_signals: list,
     """Write data/scan_results.json and upsert a ScanSnapshot DB row."""
     from datetime import timezone
 
-    # ── Build backtest rows (Prime trades only) ───────────────────────────
+    # ── Build backtest rows (Prime trades only + by_type breakdown) ──────
+    FILTER_TYPES = ['Prime', 'STR', 'RVOL', 'RSM', 'SMA50']
     bt_rows = []
     all_prime = []
     for r in results:
-        prime = [t for t in r.get('trades', []) if t.get('filter_type') == 'Prime']
+        all_r_trades = r.get('trades', [])
+        prime = [t for t in all_r_trades if t.get('filter_type') == 'Prime']
         all_prime.extend(prime)
         wins = [t for t in prime if t.get('win')]
+        # per-criteria breakdown (same as chart_combined.py)
+        by_type = {}
+        for ft in FILTER_TYPES:
+            ts = [t for t in all_r_trades if t.get('filter_type') == ft]
+            if ts:
+                tw = [t for t in ts if t.get('win')]
+                tl = [t for t in ts if not t.get('win')]
+                by_type[ft] = dict(
+                    n=len(ts),
+                    wr=round(len(tw)/len(ts)*100, 1) if ts else 0,
+                    avg_win=round(sum(t.get('ret_pct',0) for t in tw)/len(tw), 2) if tw else None,
+                    avg_loss=round(sum(t.get('ret_pct',0) for t in tl)/len(tl), 2) if tl else None,
+                    pnl_capital=round(sum(t.get('pnl_pct',0) for t in ts), 2),
+                )
         bt_rows.append(dict(
             ticker     = r['ticker'].replace('.BK', '').replace('.AX', ''),
             sector     = r.get('sector', ''),
@@ -62,6 +78,7 @@ def save_scan_snapshot(results: list, today_signals: list,
             rsm        = round(r.get('rs_momentum', 0), 1),
             has_signal = bool(r.get('today_signal')),
             has_pending= bool(r.get('pending')),
+            by_type    = by_type,
         ))
     bt_rows.sort(key=lambda x: x['pnl_pct'], reverse=True)
 

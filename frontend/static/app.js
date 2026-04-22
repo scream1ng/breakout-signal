@@ -18,6 +18,7 @@ function app() {
     watchlistDetail:  null,   // { date, items, groups }
     btSort:           'pnl_pct',
     btSortDir:        -1,
+    btCriteria:       'Prime',
     jobRunning:       {},
     toast:            { msg: '', ok: true },
     _refreshTimer:    null,
@@ -105,11 +106,39 @@ function app() {
       }
       setTimeout(() => this.loadSystem(), 3000);
     },
+    get btCriteriaStats() {
+      if (!this.backtest?.rows?.length) return this.backtest?.overall_bt || null;
+      const c = this.btCriteria;
+      if (c === 'Prime') return this.backtest.overall_bt;
+      const typed = this.backtest.rows.map(r => r.by_type?.[c]).filter(Boolean);
+      if (!typed.length) return null;
+      const nTrades = typed.reduce((s, x) => s + (x.n || 0), 0);
+      const nWins   = typed.reduce((s, x) => s + Math.round((x.n || 0) * (x.wr || 0) / 100), 0);
+      const pnl     = typed.reduce((s, x) => s + (x.pnl_capital || 0), 0);
+      const wins    = typed.filter(x => x.avg_win  != null).map(x => x.avg_win);
+      const losses  = typed.filter(x => x.avg_loss != null).map(x => x.avg_loss);
+      return {
+        n_trades: nTrades,
+        wr:       nTrades > 0 ? Math.round(nWins / nTrades * 1000) / 10 : 0,
+        pnl_pct:  Math.round(pnl * 10) / 10,
+        avg_win:  wins.length   ? Math.round(wins.reduce((s,x)=>s+x,0)   / wins.length   * 100) / 100 : 0,
+        avg_loss: losses.length ? Math.round(losses.reduce((s,x)=>s+x,0) / losses.length * 100) / 100 : 0,
+      };
+    },
     get btSortedRows() {
       if (!this.backtest?.rows) return [];
+      const c   = this.btCriteria;
       const key = this.btSort;
       const dir = this.btSortDir;
-      return [...this.backtest.rows].sort((a, b) => dir * ((a[key] ?? 0) - (b[key] ?? 0)));
+      return [...this.backtest.rows].sort((a, b) => {
+        let av = a[key] ?? 0, bv = b[key] ?? 0;
+        if (c !== 'Prime') {
+          const keyMap = { pnl_pct: 'pnl_capital', wr: 'wr', trades: 'n', rsm: null };
+          const ck = keyMap[key];
+          if (ck) { av = a.by_type?.[c]?.[ck] ?? -9999; bv = b.by_type?.[c]?.[ck] ?? -9999; }
+        }
+        return dir * (av - bv);
+      });
     },
 
     get jobSummary() {
