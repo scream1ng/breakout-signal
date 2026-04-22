@@ -1,0 +1,86 @@
+"""
+main_app.py — FastAPI entry point (replaces server.py)
+=======================================================
+Run locally:   uvicorn main_app:app --reload --port 8080
+Deploy:        Procfile → web: uvicorn main_app:app --host 0.0.0.0 --port $PORT
+
+Serves:
+  /             → frontend/index.html  (web dashboard SPA)
+  /static/      → frontend/static/
+  /docs/        → docs/  (generated charts, same as before)
+  /api/system   → scheduler status + job history
+  /api/portfolio → paper-trade portfolio
+  /api/signals  → watchlist + today's intraday breaks
+  /api/trades/close → manual close (paper only)
+"""
+
+import logging
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from app.storage.db import init_db
+from app.scheduler.runner import get_scheduler, register_jobs
+from app.api import system, portfolio, signals, trades
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s  %(levelname)-8s  %(name)s — %(message)s',
+)
+logger = logging.getLogger(__name__)
+
+ROOT         = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(ROOT, 'frontend')
+DOCS_DIR     = os.path.join(ROOT, 'docs')
+STATIC_DIR   = os.path.join(FRONTEND_DIR, 'static')
+
+# Ensure required directories exist
+os.makedirs(DOCS_DIR,   exist_ok=True)
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── Startup ──────────────────────────────────────────────────────────────
+    logger.info('Initialising database …')
+    init_db()
+
+    logger.info('Starting scheduler …')
+    scheduler = get_scheduler()
+    register_jobs()
+    scheduler.start()
+    logger.info('Scheduler started — %d jobs registered', len(scheduler.get_jobs()))
+
+    yield   # ← app is running
+
+    # ── Shutdown ─────────────────────────────────────────────────────────────
+    logger.info('Shutting down scheduler …')
+    scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title='Breakout Signal', lifespan=lifespan)
+
+# ── API routes ────────────────────────────────────────────────────────────────
+app.include_router(system.router,    prefix='/api', tags=['System'])
+app.include_router(portfolio.router, prefix='/api', tags=['Portfolio'])
+app.include_router(signals.router,   prefix='/api', tags=['Signals'])
+app.include_router(trades.router,    prefix='/api', tags=['Trades'])
+
+# ── Static file mounts ────────────────────────────────────────────────────────
+app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')
+app.mount('/docs',   StaticFiles(directory=DOCS_DIR, html=True), name='docs')
+
+
+# ── SPA catch-all ─────────────────────────────────────────────────────────────
+@app.get('/', include_in_schema=False)
+@app.get('/{full_path:path}', include_in_schema=False)
+def spa(full_path: str = ''):
+    # Let /docs and /api and /static pass through to their mounts first.
+    # This catch-all only fires for unknown paths → serve the SPA shell.
+    index = os.path.join(FRONTEND_DIR, 'index.html')
+    if os.path.exists(index):
+        return FileResponse(index)
+    return {'detail': 'Frontend not found — run from project root'}

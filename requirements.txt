@@ -8,3 +8,11 @@ pytz>=2023.3
 schedule>=1.2.0
 settrade-v2
 psycopg2-binary>=2.9.9
+
+# ── New (restructure phase 1-4) ───────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+apscheduler>=3.10.4
+sqlalchemy>=2.0.0
+python-dotenv>=1.0.0
+pydantic>=2.0.0
