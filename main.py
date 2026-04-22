@@ -80,7 +80,7 @@ CFG = dict(
 )
 
 PERIOD      = args.period
-WEB_DIR     = os.path.join(SCRIPT_DIR, 'docs')
+WEB_DIR     = os.path.join(SCRIPT_DIR, 'frontend')
 ALERT_STATE_PATH = os.path.join(SCRIPT_DIR, 'data', 'alert_state.json')
 DATE_STR    = datetime.today().strftime('%Y_%m_%d')
 os.makedirs(WEB_DIR, exist_ok=True)
@@ -410,7 +410,7 @@ def main():
                                           filename=f'{ticker.replace(".","_")}.html')
             webbrowser.open(f'file://{os.path.abspath(path)}')
         else:
-            index_path = os.path.join(WEB_DIR, 'index.html')
+            index_path = os.path.join(WEB_DIR, 'chart.html')
             if os.path.exists(index_path):
                 mtime = datetime.fromtimestamp(os.path.getmtime(index_path))
                 if mtime.date() == datetime.today().date():
@@ -423,7 +423,7 @@ def main():
             stocks_data    = [r['chart_data'] for r in regime_results if r.get('chart_data')]
             portfolio_data = simulate_portfolio(regime_results, CFG)
             path = generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                                          filename='index.html', portfolio=portfolio_data)
+                                          filename='chart.html', portfolio=portfolio_data)
             webbrowser.open(f'file://{os.path.abspath(path)}')
         return
 
@@ -474,7 +474,7 @@ def main():
     if stocks_data:
         portfolio_data = simulate_portfolio(regime_results, CFG)
         generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                               filename='index.html', portfolio=portfolio_data)
+                               filename='chart.html', portfolio=portfolio_data)
         print(f'  Chart updated → python main.py --view\n')
 
     if args.discord:

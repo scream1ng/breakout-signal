@@ -34,3 +34,4 @@ desktop.ini
 # ── Environment / secrets ─────────────────────────────────────────────────────
 .env
 *.env
+frontend/chart.html

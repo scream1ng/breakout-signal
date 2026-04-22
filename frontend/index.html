@@ -56,13 +56,19 @@
 
   <!-- ── Chart tab (full-bleed, outside main container) ─────────────────── -->
   <div x-show="tab === 'chart'" style="height: calc(100vh - 88px)">
-    <iframe src="/docs/" class="w-full h-full border-0 block"
+    <iframe src="/chart" class="w-full h-full border-0 block"
       x-on:load="$el.style.opacity=1" style="opacity:0; transition: opacity .2s">
     </iframe>
   </div>
 
   <!-- ── Main ───────────────────────────────────────────────────────────── -->
   <main x-show="tab !== 'chart'" class="max-w-5xl mx-auto px-4 py-6">
+
+    <!-- Toast ──────────────────────────────────────────────────────────── -->
+    <div x-show="toast.msg"
+      :class="toast.ok ? 'bg-green-50 border-green-300 text-green-700' : 'bg-red-50 border-red-300 text-red-700'"
+      class="fixed top-16 right-4 z-50 px-4 py-2 rounded border text-xs shadow transition"
+      x-text="toast.msg"></div>
 
     <!-- ── DASHBOARD TAB ────────────────────────────────────────────────── -->
     <div x-show="tab === 'dashboard'">
@@ -86,6 +92,10 @@
             <div x-show="job.error"
               class="mt-2 text-xs text-red-600 bg-red-50 rounded p-1 truncate"
               x-text="job.error"></div>
+            <button @click="runJob(job.name)"
+              :disabled="job.running"
+              class="mt-3 w-full text-xs px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              x-text="job.running ? 'Running…' : 'Run now'"></button>
           </div>
         </template>
       </div>

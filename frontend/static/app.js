@@ -13,6 +13,8 @@ function app() {
     lastRuns:         {},
     portfolio:        null,
     signals:          { watchlist: [], alerted_today: [], failed_today: [], alert_date: null, watchlist_date: null },
+    jobRunning:       {},
+    toast:            { msg: '', ok: true },
     _refreshTimer:    null,
 
     // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -56,7 +58,19 @@ function app() {
       }
     },
 
-    // ── Computed: job summary cards ────────────────────────────────────────
+    async runJob(jobName) {
+      this.jobRunning = { ...this.jobRunning, [jobName]: true };
+      try {
+        const data = await fetch(`/api/jobs/run/${jobName}`, { method: 'POST' }).then(r => r.json());
+        this.toast = { msg: `${data.job} triggered`, ok: true };
+      } catch (e) {
+        this.toast = { msg: `Failed to trigger ${jobName}`, ok: false };
+      } finally {
+        this.jobRunning = { ...this.jobRunning, [jobName]: false };
+        setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
+      }
+      setTimeout(() => this.loadSystem(), 3000);
+    },
     get jobSummary() {
       const jobs = [
         { id: 'eod_scan',      label: 'EOD Scan',       nextKey: 'eod_scan' },
@@ -76,6 +90,7 @@ function app() {
           duration:    last.duration_s != null ? last.duration_s.toFixed(1) + 's' : '—',
           nextRun:     this.nextRuns[j.nextKey] ? this.fmtDatetime(this.nextRuns[j.nextKey]) : '—',
           error:       last.error ?? null,
+          running:     !!this.jobRunning[j.id],
         };
       });
     },

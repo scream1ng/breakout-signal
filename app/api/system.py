@@ -5,7 +5,7 @@ Returns scheduler status, recent job run history, and API health.
 Powers the "Dashboard" page on the web frontend.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.storage.db import get_db
@@ -52,3 +52,33 @@ def get_system_status(
         'last_runs':         last_by_job,
         'recent_history':    [r.to_dict() for r in runs],
     }
+
+
+# ── Manually trigger a job ────────────────────────────────────────────────────
+_JOB_MAP: dict | None = None
+
+
+def _get_job_map() -> dict:
+    global _JOB_MAP
+    if _JOB_MAP is None:
+        from app.scheduler.jobs import run_eod_scan, run_intraday_scan, run_review_scan
+        _JOB_MAP = {
+            'eod_scan':      run_eod_scan,
+            'intraday_scan': run_intraday_scan,
+            'review_scan':   run_review_scan,
+        }
+    return _JOB_MAP
+
+
+@router.post('/jobs/run/{job_name}')
+def trigger_job(job_name: str, background_tasks: BackgroundTasks):
+    """Trigger a job immediately in the background. Returns straight away."""
+    job_map = _get_job_map()
+    if job_name not in job_map:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown job '{job_name}'. Valid: {list(job_map)}",
+        )
+    from app.scheduler.runner import _tracked
+    background_tasks.add_task(_tracked, job_name, job_map[job_name])
+    return {'status': 'triggered', 'job': job_name}
