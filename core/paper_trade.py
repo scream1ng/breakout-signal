@@ -198,19 +198,23 @@ def open_positions(signals: list, now, cfg: dict) -> list:
     for sig in signals:
         ticker_full = sig.get('ticker_full') or sig.get('ticker')
         if not ticker_full or ticker_full in open_tickers:
+            print(f'  [paper] skip {ticker_full} — position already open')
             continue
         if sig.get('criteria') != 'Prime':   # paper trade: Prime only
+            print(f'  [paper] skip {ticker_full} — criteria {sig.get("criteria")} not Prime')
             continue
 
         entry_price = float(sig.get('close', 0) or 0)
         atr = float(sig.get('atr', 0) or 0)
         shares = _position_shares(entry_price, atr, state['cash'], cfg)
         if shares < 1:
+            print(f'  [paper] skip {ticker_full} — shares=0 (cash ฿{state["cash"]:.0f}, price ฿{entry_price:.2f}, atr={atr})')
             continue
 
         gross_cost = shares * entry_price
         total_cost = gross_cost * (1.0 + commission)
         if total_cost > state['cash']:
+            print(f'  [paper] skip {ticker_full} — cost ฿{total_cost:.0f} > cash ฿{state["cash"]:.0f}')
             continue
 
         state['cash'] -= total_cost

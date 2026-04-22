@@ -154,6 +154,10 @@ def _send_line(header: str, messages: list) -> bool:
     """Send list of LINE message dicts (text/flex) to all configured targets."""
     _, line_token, line_targets, line_mode = _notification_targets()
     if not line_token:
+        print('  LINE: LINE_CHANNEL_ACCESS_TOKEN not configured — skipping.')
+        return False
+    if line_mode != 'broadcast' and not line_targets:
+        print('  LINE: no targets configured (set LINE_TO / LINE_USER_ID / LINE_GROUP_ID) — skipping.')
         return False
     ok = True
     if line_mode == 'broadcast':
