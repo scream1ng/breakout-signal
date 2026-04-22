@@ -595,7 +595,19 @@ function renderChart(D) {{
   markers.sort((a,b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
   _candle.setMarkers(markers);
 
-  _chart.timeScale().fitContent();
+  // Set visible range to last 1 year (≈252 trading days)
+  (function() {{
+    const candles = D.candles;
+    const lastD   = candles[candles.length - 1].d;
+    const fromDt  = new Date(lastD);
+    fromDt.setFullYear(fromDt.getFullYear() - 1);
+    const fromD   = fromDt.toISOString().slice(0, 10);
+    try {{
+      _chart.timeScale().setVisibleRange({{ from: fromD, to: lastD }});
+    }} catch(e) {{
+      _chart.timeScale().fitContent();
+    }}
+  }})();
 
   // Resize observer
   const ro = new ResizeObserver(() => {{

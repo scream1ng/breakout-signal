@@ -13,6 +13,7 @@ function app() {
     lastRuns:         {},
     portfolio:        null,
     signals:          { watchlist: [], alerted_today: [], failed_today: [], alert_date: null, watchlist_date: null },
+    scanLatest:       null,   // { date, n_signals, n_watching, signals: [] }
     backtest:         null,   // { date, overall_bt, rows }
     watchlistDetail:  null,   // { date, items, groups }
     btSort:           'pnl_pct',
@@ -24,11 +25,14 @@ function app() {
     // ── Lifecycle ──────────────────────────────────────────────────────────
     init() {
       this.loadSystem();
+      this.loadScanLatest();
+      this.loadSignals();
       this._refreshTimer = setInterval(() => this.refreshAll(), 60_000);
     },
 
     refreshAll() {
       this.loadSystem();
+      this.loadScanLatest();
       if (this.tab === 'portfolio') this.loadPortfolio();
       if (this.tab === 'signals')   this.loadSignals();
       if (this.tab === 'backtest')  this.loadBacktest();
@@ -61,6 +65,14 @@ function app() {
         this.signals = await fetch('/api/signals').then(r => r.json());
       } catch (e) {
         console.error('loadSignals failed', e);
+      }
+    },
+
+    async loadScanLatest() {
+      try {
+        this.scanLatest = await fetch('/api/scan/latest').then(r => r.json());
+      } catch (e) {
+        console.error('loadScanLatest failed', e);
       }
     },
 

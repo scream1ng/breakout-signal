@@ -35,8 +35,9 @@ def _read_scan() -> dict | None:
 def get_scan_latest():
     data = _read_scan()
     if not data:
-        return {'date': None, 'n_stocks': 0, 'n_signals': 0, 'n_watching': 0, 'overall_bt': None}
-    keys = ('date', 'created_at', 'n_stocks', 'n_signals', 'n_watching', 'overall_bt')
+        return {'date': None, 'n_stocks': 0, 'n_signals': 0, 'n_watching': 0,
+                'overall_bt': None, 'signals': []}
+    keys = ('date', 'created_at', 'n_stocks', 'n_signals', 'n_watching', 'overall_bt', 'signals')
     return {k: data[k] for k in keys if k in data}
 
 
@@ -58,10 +59,26 @@ def get_backtest():
 def get_watchlist_detail():
     data = _read_scan()
     if not data:
-        return {'date': None, 'items': [], 'groups': {}}
+        return {'date': None, 'items': [], 'groups': {}, 'copy_str': ''}
     items = data.get('watchlist', [])
     groups: dict[str, list] = {}
     for item in items:
         g = item.get('ma_group', 'Other')
         groups.setdefault(g, []).append(item)
-    return {'date': data.get('date'), 'items': items, 'groups': groups}
+    # Build TradingView copy string: ###> MA10,SET:A,SET:B,###> MA20,...
+    parts: list[str] = []
+    for label in ('> MA10', '> MA20', '> MA50', 'Other'):
+        grp = groups.get(label, [])
+        if grp:
+            parts.append('###' + label)
+            for it in grp:
+                tf = it.get('ticker_full', it.get('ticker', ''))
+                # Convert X.BK → SET:X
+                if tf.endswith('.BK'):
+                    parts.append('SET:' + tf[:-3])
+                elif tf.endswith('.AX'):
+                    parts.append('ASX:' + tf[:-3])
+                else:
+                    parts.append(tf)
+    copy_str = ','.join(parts)
+    return {'date': data.get('date'), 'items': items, 'groups': groups, 'copy_str': copy_str}

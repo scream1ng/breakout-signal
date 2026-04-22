@@ -44,7 +44,7 @@
         class="pb-2 pt-1 transition">Dashboard</button>
       <button @click="tab='portfolio'; loadPortfolio()"
         :class="tab === 'portfolio' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition">Portfolio</button>
+        class="pb-2 pt-1 transition">Paper Trade</button>
       <button @click="tab='signals'; loadSignals()"
         :class="tab === 'signals' ? 'tab-active' : 'hover:text-gray-700'"
         class="pb-2 pt-1 transition">Signals</button>
@@ -145,9 +145,99 @@
           </tbody>
         </table>
       </div>
-    </div>
 
-    <!-- ── PORTFOLIO TAB ────────────────────────────────────────────────── -->
+      <!-- ── EOD Breakout signals ──────────────────────────────────────── -->
+      <template x-if="scanLatest && (scanLatest.signals || []).length > 0">
+        <div class="mt-6">
+          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            EOD Breakout signals
+            <span class="ml-1 text-gray-400 font-normal normal-case"
+              x-text="scanLatest.date ? '(' + scanLatest.date + ')' : ''"></span>
+          </h2>
+          <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
+                <tr>
+                  <th class="px-4 py-2 text-left">Ticker</th>
+                  <th class="px-4 py-2 text-left">Sector</th>
+                  <th class="px-4 py-2 text-right">Entry</th>
+                  <th class="px-4 py-2 text-right">SL</th>
+                  <th class="px-4 py-2 text-right">TP1</th>
+                  <th class="px-4 py-2 text-right">RSM</th>
+                  <th class="px-4 py-2 text-right">RVol</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <template x-for="(s, i) in (scanLatest.signals || [])" :key="i">
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 font-semibold text-pink-600"
+                      x-text="(s.ticker||'').replace('.BK','')"></td>
+                    <td class="px-4 py-2 text-gray-500 truncate max-w-[100px]"
+                      x-text="s.sector||'—'"></td>
+                    <td class="px-4 py-2 text-right font-medium text-indigo-600"
+                      x-text="s.bp ? '฿'+fmt2(s.bp) : '—'"></td>
+                    <td class="px-4 py-2 text-right text-red-500"
+                      x-text="s.sl ? '฿'+fmt2(s.sl) : '—'"></td>
+                    <td class="px-4 py-2 text-right text-green-600"
+                      x-text="s.tp1 ? '฿'+fmt2(s.tp1) : '—'"></td>
+                    <td class="px-4 py-2 text-right"
+                      :class="s.rsm >= 80 ? 'text-amber-600 font-semibold' : 'text-gray-500'"
+                      x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
+                    <td class="px-4 py-2 text-right"
+                      :class="s.rvol >= 2 ? 'text-green-600 font-semibold' : 'text-gray-500'"
+                      x-text="s.rvol ? fmt1(s.rvol)+'×' : '—'"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+
+      <!-- ── Intraday alerts ───────────────────────────────────────────── -->
+      <template x-if="signals.alerted_today && signals.alerted_today.length > 0">
+        <div class="mt-6">
+          <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Intraday alerts
+            <span class="ml-1 text-gray-400 font-normal normal-case"
+              x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
+          </h2>
+          <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
+                <tr>
+                  <th class="px-4 py-2 text-left">Ticker</th>
+                  <th class="px-4 py-2 text-right">Level</th>
+                  <th class="px-4 py-2 text-right">Price</th>
+                  <th class="px-4 py-2 text-center">Type</th>
+                  <th class="px-4 py-2 text-center">Criteria</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <template x-for="(s, i) in signals.alerted_today" :key="i">
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-2 font-semibold text-green-600"
+                      x-text="(s.ticker||s).replace ? (s.ticker||s).replace('.BK','') : s"></td>
+                    <td class="px-4 py-2 text-right"
+                      x-text="s.level ? '฿'+fmt2(s.level) : '—'"></td>
+                    <td class="px-4 py-2 text-right"
+                      x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
+                    <td class="px-4 py-2 text-center text-gray-500"
+                      x-text="s.kind||'—'"></td>
+                    <td class="px-4 py-2 text-center">
+                      <span :class="critBadge(s.criteria)"
+                        class="px-1.5 py-0.5 rounded text-xs font-medium"
+                        x-text="s.criteria||'—'"></span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+
+    </div> ────────────────────────────────────────────────── -->
     <div x-show="tab === 'portfolio'">
       <template x-if="portfolio">
 
@@ -489,6 +579,21 @@
             </h2>
             <span class="text-xs text-gray-400" x-text="watchlistDetail.date ? 'as of ' + watchlistDetail.date : ''"></span>
           </div>
+
+          <!-- TradingView copy string ---------------------------------------->
+          <template x-if="watchlistDetail.copy_str">
+            <div class="mb-5 bg-gray-900 rounded-lg p-3">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wide">TradingView Watchlist</span>
+                <button @click="navigator.clipboard.writeText(watchlistDetail.copy_str).then(() => { $el.textContent = 'Copied!'; setTimeout(() => $el.textContent = 'Copy all', 1500); })"
+                  class="text-xs px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white transition font-medium">
+                  Copy all
+                </button>
+              </div>
+              <div class="text-xs text-gray-300 font-mono break-all leading-relaxed select-all"
+                x-text="watchlistDetail.copy_str"></div>
+            </div>
+          </template>
 
           <template x-if="watchlistDetail.items.length === 0">
             <div class="text-center py-12 text-gray-400">Watchlist is empty — run EOD scan first</div>
