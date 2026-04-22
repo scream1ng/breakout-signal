@@ -2,9 +2,9 @@
 notifications.py — Discord embeds + LINE Flex Messages for SET Breakout Scanner
 
 Discord alerts (send to Discord only):
-  send_intraday_alert()  → yellow embed · TICKER/PRICE/CHG/TYPE/CRITERIA table
+  send_intraday_alert()  → yellow embed · TICKER/LEVEL/PRICE/TYPE/CRITERIA table
   send_review_alert()    → red embed    · fakeout cards per stock
-  send_eod_alert()       → green embed  · TICKER/PRICE/CHG/TYPE/CRITERIA/RVOL/RSM/STR
+  send_eod_alert()       → green embed  · TICKER/LEVEL/PRICE/TYPE/CRITERIA/RVOL/RSM/STR
                            RVOL/RSM: 🟢 ≥ threshold  🔴 below
                            STR:      🟢 ≤ 4.0         🔴 > 4.0
 
@@ -250,18 +250,18 @@ def _build_intraday_embed(signals: list, time_str: str, cfg: dict) -> dict:
 
 
 def _build_fakeout_embed(signals: list, time_str: str) -> dict:
-    """Red embed — one block per stock showing pivot / close / gap."""
+    """Red embed — one block per stock showing level / close / gap."""
     blocks = []
     for s in signals:
         ticker  = s.get('ticker', '').replace('.BK', '')
         kind    = _kind_label(s.get('kind'), s.get('tl_angle'))
-        pivot   = _fmt(s.get('level'), 2)
+        level   = _fmt(s.get('level'), 2)
         close   = _fmt(s.get('close'), 2)
         gap     = _fmt(float(s.get('close', 0)) - float(s.get('level', 0)), 2)
         chg_pct = (float(s.get('close', 0)) - float(s.get('level', 0))) / float(s.get('level', 1)) * 100
         blocks.append(
             f'**{ticker}** · {kind} fakeout\n'
-            f'Pivot `{pivot}` | Close `{close}` ({chg_pct:+.1f}%) | Gap `{gap}`'
+            f'Level `{level}` | Close `{close}` ({chg_pct:+.1f}%) | Gap `{gap}`'
         )
 
     desc = '\n\n'.join(blocks) + '\n\n⚡ Exit or tighten stop — market closes 16:30'
@@ -276,7 +276,7 @@ def _build_fakeout_embed(signals: list, time_str: str) -> dict:
 
 
 def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
-    """Green embed with TICKER|PRICE|CHG|TYPE|CRITERIA|RVOL|RSM|STR table."""
+    """Green embed with TICKER|LEVEL|PRICE|TYPE|CRITERIA|RVOL|RSM|STR table."""
     rvol_min = cfg.get('rvol_min', 1.5)
     rsm_min  = cfg.get('rs_momentum_min', cfg.get('rsm_min', 70))
 
@@ -286,10 +286,10 @@ def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
     lines = []
     for s in sorted_sigs:
         ticker   = s.get('ticker', '').replace('.BK', '')
-        price    = _fmt(s.get('close'), 2)
         bp       = float(s.get('bp', s.get('close', 0)) or 0)
         close    = float(s.get('close', 0) or 0)
-        chg_pct  = (close - bp) / bp * 100 if bp > 0 else 0
+        level_s  = _fmt(bp, 2)
+        price    = _fmt(close, 2)
         kind     = _kind_label(s.get('kind'), s.get('tl_angle'))
         crit     = _criteria_label(s)
         rvol     = float(s.get('rvol', 0) or 0)
@@ -301,12 +301,12 @@ def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
         is_ = _icon_str(stretch)
 
         lines.append(
-            f'`{ticker:<7}` `{price:>7}` `{chg_pct:>+5.1f}%` '
+            f'`{ticker:<7}` `{level_s:>7}` `{price:>7}` '
             f'`{kind:<10}` **{crit:<5}** '
             f'{iv}`{rvol:.1f}×` {ir}`{rsm:.0f}` {is_}`{stretch:.1f}x`'
         )
 
-    header = '`TICKER ` `  PRICE` `  CHG ` `TYPE      ` CRIT  RVOL     RSM   STR'
+    header = '`TICKER ` `  LEVEL` `  PRICE` `TYPE      ` CRIT  RVOL     RSM   STR'
     desc   = header + '\n' + '─' * 60 + '\n' + '\n'.join(lines)
 
     return {
