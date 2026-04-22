@@ -232,13 +232,12 @@ def _build_intraday_embed(signals: list, time_str: str, cfg: dict) -> dict:
         close_v  = float(s.get('close', 0) or 0)
         level_v  = float(s.get('level', close_v) or close_v)
         price    = _fmt(close_v, 2)
-        chg_pct  = (close_v - level_v) / level_v * 100 if level_v > 0 else 0
-        chg      = f'{chg_pct:+.1f}'
+        level_s  = _fmt(level_v, 2)
         kind     = _kind_label(s.get('kind'), s.get('tl_angle'))
         crit     = _criteria_label_intraday(s)
-        lines.append(f'`{ticker:<8}` `{price:>7}` `{chg:>6}%` `{kind:<10}` **{crit}**')
+        lines.append(f'`{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<10}` **{crit}**')
 
-    header_line = '`TICKER  ` `  PRICE` `   CHG` `TYPE      ` CRITERIA'
+    header_line = '`TICKER  ` `  LEVEL` `  PRICE` `TYPE      ` CRITERIA'
     desc = header_line + '\n' + '─' * 52 + '\n' + '\n'.join(lines)
 
     return {
