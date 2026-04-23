@@ -319,6 +319,7 @@ def run():
                 if key_id not in failed_keys:
                     alert_state.setdefault('failed', []).append(dict(
                         ticker=ticker,
+                        sector=w.get('sector', ''),
                         level=float(level),
                         kind='Hz' if w.get('kind') == 'hz' else 'TL',
                         tl_angle=w.get('tl_angle'),
@@ -351,6 +352,7 @@ def run():
 
         alert_state['alerted'].append(dict(
             ticker=ticker,
+            sector=w.get('sector', ''),
             level=float(level),
             kind='Hz' if w.get('kind') == 'hz' else 'TL',
             tl_angle=w.get('tl_angle'),

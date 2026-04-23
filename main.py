@@ -369,6 +369,16 @@ def process_ticker(stock: dict, bench: pd.Series):
         _atr_pct   = (atr / bp * 100) if bp > 0 else 0
         _price_dist= ((bp - sma50_now) / sma50_now * 100) if sma50_now > 0 else 0
         _stretch   = round(_price_dist / _atr_pct, 2) if _atr_pct > 0 else 0
+        if _stretch > 4:
+            _criteria = 'STR'
+        elif today_sig['rvol_ok'] and today_sig['rsm_ok']:
+            _criteria = 'Prime'
+        elif today_sig['rvol_ok']:
+            _criteria = 'RVOL'
+        elif today_sig['rsm_ok']:
+            _criteria = 'RSM'
+        else:
+            _criteria = 'SMA50'
         today_info = dict(
             ticker=ticker, desc=stock['desc'], sector=stock['sector'],
             date=today_sig['date'], kind=today_sig['kind'],
@@ -378,6 +388,7 @@ def process_ticker(stock: dict, bench: pd.Series):
             tp2=round(bp + atr * CFG['tp2_mult'], 2),
             atr=atr, rsm=today_sig['rsm'], rvol=today_sig['rvol'],
             rsm_ok=today_sig['rsm_ok'], rvol_ok=today_sig['rvol_ok'],
+            criteria=_criteria, filter_type=_criteria,
             stretch=_stretch, tl_angle=today_sig.get('tl_angle'),
         )
 

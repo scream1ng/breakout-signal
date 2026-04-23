@@ -116,19 +116,19 @@
           <span class="ml-1 text-gray-400 font-normal normal-case"
             x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
         </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-          <table class="w-full text-xs">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
+          <table class="w-full text-xs table-fixed">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
-                <th class="px-4 py-2 text-left">Ticker</th>
-                <th class="px-4 py-2 text-left">Sector</th>
-                <th class="px-4 py-2 text-right">Level</th>
-                <th class="px-4 py-2 text-right">Price</th>
-                <th class="px-4 py-2 text-left">Type</th>
+                <th class="px-4 py-2 text-left w-24">Ticker</th>
+                <th class="px-4 py-2 text-left w-40">Sector</th>
+                <th class="px-4 py-2 text-right w-24">Level</th>
+                <th class="px-4 py-2 text-right w-24">Price</th>
+                <th class="px-4 py-2 text-left w-24">Type</th>
                 <th class="px-4 py-2 text-center">Criteria</th>
-                <th class="px-4 py-2 text-right">RVol</th>
-                <th class="px-4 py-2 text-right">RSM</th>
-                <th class="px-4 py-2 text-right">STR</th>
+                <th class="px-4 py-2 text-right w-24">Proj RVol</th>
+                <th class="px-4 py-2 text-right w-20">RSM</th>
+                <th class="px-4 py-2 text-right w-20">STR</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -137,18 +137,19 @@
               </template>
               <template x-for="(s, i) in dashboardIntradayRows" :key="i">
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2 font-semibold text-green-600"
+                  <td class="px-4 py-2 font-semibold"
+                    :class="critTextClass(s.criteria)"
                     x-text="(s.ticker||s).replace ? (s.ticker||s).replace('.BK','') : s"></td>
-                  <td class="px-4 py-2 text-gray-500" x-text="s.sector || '—'"></td>
+                  <td class="px-4 py-2 text-gray-500 truncate" x-text="s.sector || '—'"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="s.level ? '฿'+fmt2(s.level) : '—'"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
-                  <td class="px-4 py-2 text-gray-500"
+                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap"
                     x-text="kindLabel(s)"></td>
                   <td class="px-4 py-2 text-center">
                     <span class="text-xs font-medium"
-                      :class="s.criteria === 'Prime' ? 'text-indigo-600' : s.criteria === 'RVOL' ? 'text-green-600' : s.criteria === 'RSM' ? 'text-orange-600' : s.criteria === 'STR' ? 'text-red-600' : 'text-gray-500'"
+                      :class="critTextClass(s.criteria)"
                       x-text="s.criteria||'—'"></span>
                   </td>
                   <td class="px-4 py-2 text-right"
@@ -174,19 +175,19 @@
           <span class="ml-1 text-gray-400 font-normal normal-case"
             x-text="scanLatest && scanLatest.date ? '(' + scanLatest.date + ')' : ''"></span>
         </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-          <table class="w-full text-xs">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
+          <table class="w-full text-xs table-fixed">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
-                <th class="px-4 py-2 text-left">Ticker</th>
-                <th class="px-4 py-2 text-left">Sector</th>
-                <th class="px-4 py-2 text-right">Level</th>
-                <th class="px-4 py-2 text-right">Price</th>
-                <th class="px-4 py-2 text-left">Type</th>
-                <th class="px-4 py-2 text-center">Crit</th>
-                <th class="px-4 py-2 text-right">RVol</th>
-                <th class="px-4 py-2 text-right">RSM</th>
-                <th class="px-4 py-2 text-right">STR</th>
+                <th class="px-4 py-2 text-left w-24">Ticker</th>
+                <th class="px-4 py-2 text-left w-40">Sector</th>
+                <th class="px-4 py-2 text-right w-24">Level</th>
+                <th class="px-4 py-2 text-right w-24">Price</th>
+                <th class="px-4 py-2 text-left w-24">Type</th>
+                <th class="px-4 py-2 text-center">Criteria</th>
+                <th class="px-4 py-2 text-right w-24">RVol</th>
+                <th class="px-4 py-2 text-right w-20">RSM</th>
+                <th class="px-4 py-2 text-right w-20">STR</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -195,18 +196,19 @@
               </template>
               <template x-for="(s, i) in dashboardEodRows" :key="i">
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2 font-semibold text-pink-600"
+                  <td class="px-4 py-2 font-semibold"
+                    :class="critTextClass(s.filter_type || s.criteria)"
                     x-text="(s.ticker||'').replace('.BK','')"></td>
-                  <td class="px-4 py-2 text-gray-500 truncate max-w-[100px]"
+                  <td class="px-4 py-2 text-gray-500 truncate"
                     x-text="s.sector||'—'"></td>
                   <td class="px-4 py-2 text-right font-medium text-indigo-600"
                     x-text="(s.bp || s.level) ? '฿'+fmt2(s.bp || s.level) : '—'"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
-                  <td class="px-4 py-2 text-gray-500" x-text="kindLabel(s)"></td>
+                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap" x-text="kindLabel(s)"></td>
                   <td class="px-4 py-2 text-center">
                     <span class="text-xs font-medium"
-                      :class="(s.filter_type || s.criteria) === 'Prime' ? 'text-indigo-600' : (s.filter_type || s.criteria) === 'RVOL' ? 'text-green-600' : (s.filter_type || s.criteria) === 'RSM' ? 'text-orange-600' : (s.filter_type || s.criteria) === 'STR' ? 'text-red-600' : 'text-gray-500'"
+                      :class="critTextClass(s.filter_type || s.criteria)"
                       x-text="s.filter_type || s.criteria || '—'"></span>
                   </td>
                   <td class="px-4 py-2 text-right"
@@ -232,15 +234,15 @@
           <span class="ml-1 text-gray-400 font-normal normal-case"
             x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
         </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-          <table class="w-full text-xs">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
+          <table class="w-full text-xs table-fixed">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
-                <th class="px-4 py-2 text-left">Ticker</th>
-                <th class="px-4 py-2 text-right">Level</th>
-                <th class="px-4 py-2 text-right">Close</th>
-                <th class="px-4 py-2 text-left">Pattern</th>
-                <th class="px-4 py-2 text-left">Detected at</th>
+                <th class="px-4 py-2 text-left w-24">Ticker</th>
+                <th class="px-4 py-2 text-right w-24">Level</th>
+                <th class="px-4 py-2 text-right w-24">Close</th>
+                <th class="px-4 py-2 text-left w-32">Pattern</th>
+                <th class="px-4 py-2 text-left w-40">Detected at</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -253,7 +255,7 @@
                     x-text="(f.ticker||'').replace('.BK','')"></td>
                   <td class="px-4 py-2 text-right" x-text="f.level ? '฿'+fmt2(f.level) : '—'"></td>
                   <td class="px-4 py-2 text-right" x-text="f.close ? '฿'+fmt2(f.close) : '—'"></td>
-                  <td class="px-4 py-2 text-gray-500" x-text="kindLabel(f)"></td>
+                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap" x-text="kindLabel(f)"></td>
                   <td class="px-4 py-2 text-gray-500" x-text="f.failed_at ? fmtDatetime(f.failed_at) : '—'"></td>
                 </tr>
               </template>

@@ -361,6 +361,15 @@ function app() {
       }
       return 'Hz';
     },
+    critTextClass(crit) {
+      return {
+        Prime: 'text-indigo-600',
+        RVOL: 'text-green-600',
+        RSM: 'text-orange-600',
+        STR: 'text-red-600',
+        SMA50: 'text-gray-500',
+      }[crit] ?? 'text-gray-500';
+    },
 
     statusBadge(status) {
       return {
