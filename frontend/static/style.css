@@ -1,0 +1,30 @@
+/* frontend/static/style.css
+ * Custom overrides on top of Tailwind CDN.
+ * Keep this minimal — prefer Tailwind utility classes in HTML.
+ */
+
+/* Smooth tab underline transition */
+button[class*="pb-2"] {
+  transition: color 0.15s, border-color 0.15s;
+}
+
+/* Status dot pulse animation for "running" state */
+.dot-yellow {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+
+/* Table row hover consistency */
+tbody tr {
+  transition: background-color 0.1s;
+}
+
+/* Scrollable table wrapper on small screens */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

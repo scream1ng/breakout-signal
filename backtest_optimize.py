@@ -27,11 +27,11 @@ warnings.filterwarnings('ignore')
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
-from core.data    import load_ticker, load_benchmark
-from core.rsm     import calc_rsm_series
-from core.entry   import detect_pivots
-from core.exit    import simulate
-from core.scanner import fetch_tv_stocks
+from app.core.data    import load_ticker, load_benchmark
+from app.core.rsm     import calc_rsm_series
+from app.core.entry   import detect_pivots
+from app.core.exit    import simulate
+from app.core.scanner import fetch_tv_stocks
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 ap = argparse.ArgumentParser()

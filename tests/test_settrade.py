@@ -15,7 +15,8 @@ import os
 from settrade_v2 import Investor
 
 def load_dotenv():
-    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_path = os.path.join(root, '.env')
     if not os.path.exists(env_path):
         return
     with open(env_path) as f:

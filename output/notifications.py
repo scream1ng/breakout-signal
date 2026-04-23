@@ -235,17 +235,29 @@ def _build_intraday_embed(signals: list, time_str: str, cfg: dict) -> dict:
         level_s  = _fmt(level_v, 2)
         kind     = _kind_label(s.get('kind'), s.get('tl_angle'))
         crit     = _criteria_label_intraday(s)
-        lines.append(f'`{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<10}` **{crit}**')
+        rvol     = float(s.get('proj_rvol', s.get('cur_rvol', s.get('rvol', 0))) or 0)
+        rsm      = float(s.get('rsm', 0) or 0)
+        stretch  = float(s.get('stretch', 0) or 0)
 
-    header_line = '`TICKER  ` `  LEVEL` `  PRICE` `TYPE      ` CRITERIA'
-    desc = header_line + '\n' + '─' * 52 + '\n' + '\n'.join(lines)
+        iv = _icon_rvol(rvol, rvol_min)
+        ir = _icon_rsm(rsm, rsm_min)
+        is_ = _icon_str(stretch)
+
+        lines.append(
+            f'`{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<10}` `{crit:<8}` '
+            f'{iv}`{rvol:.1f}x` {ir}`{rsm:.0f}` {is_}`{stretch:.1f}x`'
+        )
+
+    chart_url = get_chart_url()
+    header_line = '`TICKER  ` `  LEVEL` `  PRICE` `TYPE      ` `CRIT    ` `RVOL ` `RSM` `STR `'
+    desc = header_line + '\n' + '\u2500' * 60 + '\n' + '\n'.join(lines) + f'\n\n\U0001f517 [View dashboard]({chart_url})'
 
     return {
         'color':  DISCORD_COLOR_INTRADAY,
         'author': {'name': f'▲ Live breakout signals · {len(signals)} stocks · {time_str} BKK'},
         'title':  'Intraday scan — active breakouts',
         'description': desc,
-        'footer': {'text': f'Intraday sniper · next scan in 15 min · {get_chart_url()}'},
+        'footer': {'text': f'Intraday sniper · next scan in 15 min'},
     }
 
 
@@ -301,20 +313,21 @@ def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
         is_ = _icon_str(stretch)
 
         lines.append(
-            f'`{ticker:<7}` `{level_s:>7}` `{price:>7}` '
-            f'`{kind:<10}` **{crit:<5}** '
-            f'{iv}`{rvol:.1f}×` {ir}`{rsm:.0f}` {is_}`{stretch:.1f}x`'
+            f'`{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<11}` `{crit:<6}` '
+            f'{iv}`{rvol:.1f}x` {ir}`{rsm:.0f}` {is_}`{stretch:.1f}x`'
         )
 
-    header = '`TICKER ` `  LEVEL` `  PRICE` `TYPE      ` CRIT  RVOL     RSM   STR'
-    desc   = header + '\n' + '─' * 60 + '\n' + '\n'.join(lines)
+    header    = '`TICKER  ` `  LEVEL` `  PRICE` `TYPE       ` `CRIT  ` `RVOL ` `RSM` `STR `'
+    sep       = '\u2500' * 60
+    chart_url = get_chart_url()
+    desc      = header + '\n' + sep + '\n' + '\n'.join(lines) + f'\n\n\U0001f517 [View chart]({chart_url})'
 
     return {
         'color':  DISCORD_COLOR_EOD,
         'author': {'name': f'◑ End-of-day watchlist · {len(signals)} active · {date_str}'},
         'title':  'Carry into tomorrow — open positions',
         'description': desc,
-        'footer': {'text': f'EOD scanner · 18:05 BKK · {get_chart_url()}'},
+        'footer': {'text': f'EOD scanner · 18:05 BKK · RVOL≥{rvol_min:.1f}x  RSM≥{rsm_min:.0f}  STR≤{MAX_STR:.1f}x'},
     }
 
 
@@ -448,7 +461,7 @@ def _build_line_trade_close(event: dict) -> dict:
 
     title_map = {
         'TP1':            'TP1 hit — 30% exit',
-        'TP2':            'TP2 hit — partial exit',
+        'TP2':            'TP2 hit — 30% exit',
         'EMA10':          'Trade closed — trail stop',
         'FALSE_BREAKOUT': 'False breakout — closed',
         'SL':             'Stop loss hit',

@@ -29,15 +29,152 @@ if sys.platform == 'win32':
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
-from core.data               import load_ticker, load_benchmark, cache_stats, clear_cache
-from core.rsm                import calc_rsm_series
-from core.scanner            import fetch_tv_stocks
-from core.entry              import detect_pivots
-from core.exit               import simulate
-from core.paper_trade        import get_summary as get_paper_trade_summary
-from core.portfolio          import simulate_portfolio
+from app.core.data               import load_ticker, load_benchmark, cache_stats, clear_cache
+from app.core.rsm                import calc_rsm_series
+from app.core.scanner            import fetch_tv_stocks
+from app.core.entry              import detect_pivots
+from app.core.exit               import simulate
+from app.core.paper_trade        import get_summary as get_paper_trade_summary
+from app.core.portfolio          import simulate_portfolio
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
+
+
+# ── Persist EOD scan results so the web API can serve them ───────────────────
+def save_scan_snapshot(results: list, today_signals: list,
+                       pending_list: list, date_str: str) -> None:
+    """Write data/scan_results.json and upsert a ScanSnapshot DB row."""
+    from datetime import timezone
+
+    # ── Build backtest rows (Prime trades only + by_type breakdown) ──────
+    FILTER_TYPES = ['Prime', 'STR', 'RVOL', 'RSM', 'SMA50']
+    bt_rows = []
+    all_prime = []
+    for r in results:
+        all_r_trades = r.get('trades', [])
+        prime = [t for t in all_r_trades if t.get('filter_type') == 'Prime']
+        all_prime.extend(prime)
+        wins = [t for t in prime if t.get('win')]
+        # per-criteria breakdown (same as chart_combined.py)
+        by_type = {}
+        for ft in FILTER_TYPES:
+            ts = [t for t in all_r_trades if t.get('filter_type') == ft]
+            if ts:
+                tw = [t for t in ts if t.get('win')]
+                tl = [t for t in ts if not t.get('win')]
+                by_type[ft] = dict(
+                    n=len(ts),
+                    wr=round(len(tw)/len(ts)*100, 1) if ts else 0,
+                    avg_win=round(sum(t.get('ret_pct',0) for t in tw)/len(tw), 2) if tw else None,
+                    avg_loss=round(sum(t.get('ret_pct',0) for t in tl)/len(tl), 2) if tl else None,
+                    pnl_capital=round(sum(t.get('pnl_pct',0) for t in ts), 2),
+                )
+        bt_rows.append(dict(
+            ticker     = r['ticker'].replace('.BK', '').replace('.AX', ''),
+            sector     = r.get('sector', ''),
+            trades     = len(prime),
+            wr         = round(len(wins) / len(prime) * 100, 1) if prime else 0,
+            pnl_pct    = round(r.get('total_pnl_pct', 0), 2),
+            rsm        = round(r.get('rs_momentum', 0), 1),
+            has_signal = bool(r.get('today_signal')),
+            has_pending= bool(r.get('pending')),
+            by_type    = by_type,
+        ))
+    bt_rows.sort(key=lambda x: x['pnl_pct'], reverse=True)
+
+    all_wins  = [t for t in all_prime if t.get('win')]
+    all_losses= [t for t in all_prime if not t.get('win')]
+    overall_bt = dict(
+        n_trades = len(all_prime),
+        wr       = round(len(all_wins) / len(all_prime) * 100, 1) if all_prime else 0,
+        pnl_pct  = round(sum(r.get('total_pnl_pct', 0) for r in results), 2),
+        avg_win  = round(sum(t.get('ret_pct', 0) for t in all_wins)   / len(all_wins),   2) if all_wins  else 0,
+        avg_loss = round(sum(t.get('ret_pct', 0) for t in all_losses) / len(all_losses), 2) if all_losses else 0,
+        n_stocks = len(results),
+    )
+
+    # ── Build detailed watchlist rows ─────────────────────────────────────
+    wl_rows = []
+    for r in results:
+        p = r.get('pending')
+        if not p:
+            continue
+        close = p.get('close', 0)
+        ma_group = (
+            '> MA10' if r.get('above_ema10')
+            else '> MA20' if r.get('above_ema20')
+            else '> MA50'
+        )
+        wl_rows.append(dict(
+            ticker     = p['ticker'].replace('.BK', '').replace('.AX', ''),
+            ticker_full= p['ticker'],
+            desc       = p.get('desc', ''),
+            sector     = p.get('sector', ''),
+            close      = close,
+            rsm        = p.get('rsm', 0),
+            rvol       = p.get('rvol', 0),
+            atr        = p.get('atr', 0),
+            stretch    = round(
+                ((min(lv['level'] for lv in p['levels']) - p.get('sma50', close)) / p.get('sma50', close) * 100)
+                / (p.get('atr', 0) / min(lv['level'] for lv in p['levels']) * 100)
+                if p.get('atr', 0) and p.get('sma50', 0) and p.get('levels')
+                else 0, 2),
+            avg_volume = p.get('avg_volume', 0),
+            sma50      = p.get('sma50', 0),
+            levels     = p.get('levels', []),
+            above_ema10= r.get('above_ema10', False),
+            above_ema20= r.get('above_ema20', False),
+            ma_group   = ma_group,
+            date_added = date_str.replace('_', '-'),
+        ))
+
+    payload = dict(
+        date        = date_str.replace('_', '-'),
+        created_at  = datetime.now(timezone.utc).isoformat(),
+        n_stocks    = len(results),
+        n_signals   = len(today_signals),
+        n_watching  = len(pending_list),
+        overall_bt  = overall_bt,
+        backtest_rows = bt_rows,
+        watchlist   = wl_rows,
+        signals     = today_signals,
+    )
+
+    # ── Write JSON file (always available, no DB needed) ─────────────────
+    data_dir  = os.path.join(SCRIPT_DIR, 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    json_path = os.path.join(data_dir, 'scan_results.json')
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False)
+    print(f'  Scan snapshot saved → {json_path}')
+
+    # ── Upsert DB row (Railway Postgres or local SQLite) ──────────────────
+    try:
+        from app.storage.db     import SessionLocal, init_db
+        from app.storage.models import ScanSnapshot
+        init_db()   # creates tables if they don't exist yet
+        db = SessionLocal()
+        try:
+            existing = db.query(ScanSnapshot).filter_by(scan_date=payload['date']).first()
+            if existing:
+                existing.created_at = datetime.now(timezone.utc)
+                existing.n_stocks   = len(results)
+                existing.n_signals  = len(today_signals)
+                existing.n_watching = len(pending_list)
+                existing.data_json  = json.dumps(payload, ensure_ascii=False)
+            else:
+                db.add(ScanSnapshot(
+                    scan_date  = payload['date'],
+                    n_stocks   = len(results),
+                    n_signals  = len(today_signals),
+                    n_watching = len(pending_list),
+                    data_json  = json.dumps(payload, ensure_ascii=False),
+                ))
+            db.commit()
+        finally:
+            db.close()
+    except Exception as _e:
+        print(f'  [warn] DB snapshot skipped: {_e}')
 from output.notifications     import send_eod_alert, send_paper_trade_summary, send_line_history
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -80,7 +217,7 @@ CFG = dict(
 )
 
 PERIOD      = args.period
-WEB_DIR     = os.path.join(SCRIPT_DIR, 'docs')
+WEB_DIR     = os.path.join(SCRIPT_DIR, 'frontend')
 ALERT_STATE_PATH = os.path.join(SCRIPT_DIR, 'data', 'alert_state.json')
 DATE_STR    = datetime.today().strftime('%Y_%m_%d')
 os.makedirs(WEB_DIR, exist_ok=True)
@@ -379,7 +516,7 @@ def main():
     cs = cache_stats()
     
     try:
-        from core.settrade_client import get_market_data
+        from app.core.settrade_client import get_market_data
         get_market_data()  # test auth
         data_source = "SETTRADE OpenAPI"
     except Exception:
@@ -410,7 +547,7 @@ def main():
                                           filename=f'{ticker.replace(".","_")}.html')
             webbrowser.open(f'file://{os.path.abspath(path)}')
         else:
-            index_path = os.path.join(WEB_DIR, 'index.html')
+            index_path = os.path.join(WEB_DIR, 'chart.html')
             if os.path.exists(index_path):
                 mtime = datetime.fromtimestamp(os.path.getmtime(index_path))
                 if mtime.date() == datetime.today().date():
@@ -423,7 +560,7 @@ def main():
             stocks_data    = [r['chart_data'] for r in regime_results if r.get('chart_data')]
             portfolio_data = simulate_portfolio(regime_results, CFG)
             path = generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                                          filename='index.html', portfolio=portfolio_data)
+                                          filename='chart.html', portfolio=portfolio_data)
             webbrowser.open(f'file://{os.path.abspath(path)}')
         return
 
@@ -433,6 +570,9 @@ def main():
     pending_list  = [r['pending']       for r in results if r.get('pending')]
 
     print_scan_results(today_signals, pending_list, results, DATE_STR)
+
+    # ── Persist scan snapshot (API + DB) ──────────────────────────────────
+    save_scan_snapshot(results, today_signals, pending_list, DATE_STR)
 
     # ── Save watchlist.json for intraday scanner ──────────────────────────
     watchlist = []
@@ -474,7 +614,7 @@ def main():
     if stocks_data:
         portfolio_data = simulate_portfolio(regime_results, CFG)
         generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                               filename='index.html', portfolio=portfolio_data)
+                               filename='chart.html', portfolio=portfolio_data)
         print(f'  Chart updated → python main.py --view\n')
 
     if args.discord:

@@ -19,7 +19,7 @@ import pandas as pd
 ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
-from core.paper_trade import close_positions, open_positions, check_positions, load_state
+from app.core.paper_trade import close_positions, open_positions, check_positions, load_state
 from output.report import print_intraday
 from output.notifications import send_intraday_alert, send_paper_trade_update, send_review_alert
 
@@ -196,7 +196,7 @@ def run():
         return
 
     try:
-        from core.settrade_client import get_market_data
+        from app.core.settrade_client import get_market_data
         get_market_data()
         data_source = "SETTRADE OpenAPI"
     except Exception:
@@ -211,7 +211,7 @@ def run():
     use_yfinance = False
     
     try:
-        from core.settrade_client import get_market_data
+        from app.core.settrade_client import get_market_data
         market = get_market_data()
         for ticker in tickers:
             symbol = ticker.replace('.BK', '')
