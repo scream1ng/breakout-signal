@@ -5,12 +5,30 @@ Returns scheduler status, recent job run history, and API health.
 Powers the "Dashboard" page on the web frontend.
 """
 
+from datetime import datetime, timezone, timedelta
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.storage.db import get_db
 from app.storage.models import JobRun
 from app.scheduler.runner import get_scheduler
+
+_STALE_THRESHOLD = timedelta(minutes=15)
+
+
+def _mark_stale(row: dict) -> dict:
+    """Return row dict with status='stale' if stuck in 'running' > 15 min."""
+    if row.get('status') == 'running' and row.get('started_at'):
+        try:
+            started = datetime.fromisoformat(row['started_at'])
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) - started > _STALE_THRESHOLD:
+                row = dict(row, status='stale')
+        except Exception:
+            pass
+    return row
 
 router = APIRouter()
 
@@ -44,13 +62,13 @@ def get_system_status(
     last_by_job: dict[str, dict] = {}
     for run in runs:
         if run.job_name not in last_by_job:
-            last_by_job[run.job_name] = run.to_dict()
+            last_by_job[run.job_name] = _mark_stale(run.to_dict())
 
     return {
         'scheduler_running': scheduler.running,
         'next_runs':         next_runs,
         'last_runs':         last_by_job,
-        'recent_history':    [r.to_dict() for r in runs],
+        'recent_history':    [_mark_stale(r.to_dict()) for r in runs],
     }
 
 

@@ -19,6 +19,8 @@ function app() {
     btSort:           'pnl_pct',
     btSortDir:        -1,
     btCriteria:       'Prime',
+    wlSort:           'pct_to_level',
+    wlSortDir:        1,
     jobRunning:       {},
     toast:            { msg: '', ok: true },
     _refreshTimer:    null,
@@ -139,6 +141,9 @@ function app() {
       const key = this.btSort;
       const dir = this.btSortDir;
       return [...this.backtest.rows].sort((a, b) => {
+        if (key === 'ticker') {
+          return dir * (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0);
+        }
         let av = a[key] ?? 0, bv = b[key] ?? 0;
         if (c !== 'Prime') {
           const keyMap = { pnl_pct: 'pnl_capital', wr: 'wr', trades: 'n', rsm: null };
@@ -179,6 +184,31 @@ function app() {
       });
     },
 
+    wlSortedGroup(grpKey) {
+      const items = (this.watchlistDetail?.groups?.[grpKey] || []);
+      const key = this.wlSort;
+      const dir = this.wlSortDir;
+      return [...items].sort((a, b) => {
+        let av, bv;
+        if (key === 'pct_to_level') {
+          const aL = a.levels?.[0]?.level; const aC = a.close;
+          const bL = b.levels?.[0]?.level; const bC = b.close;
+          av = (aL && aC) ? (aL - aC) / aC * 100 :  9999;
+          bv = (bL && bC) ? (bL - bC) / bC * 100 :  9999;
+        } else if (key === 'rsm') {
+          av = a.rsm ?? -1; bv = b.rsm ?? -1;
+        } else if (key === 'close') {
+          av = a.close ?? 0; bv = b.close ?? 0;
+        } else if (key === 'level') {
+          av = a.levels?.[0]?.level ?? 0; bv = b.levels?.[0]?.level ?? 0;
+        } else {
+          av = a.ticker; bv = b.ticker;
+          return dir * (av < bv ? -1 : av > bv ? 1 : 0);
+        }
+        return dir * (av - bv);
+      });
+    },
+
     // ── Formatting helpers ─────────────────────────────────────────────────
     fmtDatetime(iso) {
       if (!iso) return '—';
@@ -207,6 +237,7 @@ function app() {
       return {
         completed: 'bg-green-100 text-green-700',
         failed:    'bg-red-100 text-red-600',
+        stale:     'bg-orange-100 text-orange-600',
         running:   'bg-yellow-100 text-yellow-700',
       }[status] ?? 'bg-gray-100 text-gray-500';
     },

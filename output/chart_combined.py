@@ -188,11 +188,21 @@ def generate_combined_html(
         rvol_col = '#16a34a' if rvol >= rvol_min else '#9ca3af'
         # section: 'sig' | 'wtc' | ''
         item_cls = f'sb-item sb-{section}' if section else 'sb-item'
+        # For signal stocks show criteria type; others show RSM value
+        _CRIT_COL = {'Prime':'#ff6ec7','RVOL':'#3b82f6','STR':'#ef4444','RSM':'#f97316','SMA50':'#f59e0b'}
+        if section == 'sig':
+            sigs = d.get('signals', [])
+            latest_ft = sigs[-1].get('filter_type', '') if sigs else ''
+            rsm_label = latest_ft or 'Prime'
+            rsm_color = _CRIT_COL.get(rsm_label, '#ff6ec7')
+        else:
+            rsm_label = f'RSM {rsm:.0f}'
+            rsm_color = '#f59e0b' if rsm >= 80 else '#9ca3af'
         return f"""
         <div class="{item_cls}" id="sb-{idx}" onclick="loadStock({idx})">
           <div class="sb-top">
             <span class="sb-ticker">{d['ticker'].replace('.BK','')}</span>
-            <span class="sb-rsm">RSM {rsm:.0f}</span>
+            <span class="sb-rsm" style="color:{rsm_color}">{rsm_label}</span>
           </div>
           <div class="sb-bot">
             <span class="sb-rvol" style="color:{rvol_col}">RVol {rvol_str}</span>
