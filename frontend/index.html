@@ -57,6 +57,9 @@
       <button @click="tab='chart'"
         :class="tab === 'chart' ? 'tab-active' : 'hover:text-gray-700'"
         class="pb-2 pt-1 transition">Chart</button>
+      <button @click="tab='faq'"
+        :class="tab === 'faq' ? 'tab-active' : 'hover:text-gray-700'"
+        class="pb-2 pt-1 transition ml-auto">FAQ</button>
     </div>
   </header>
 
@@ -278,6 +281,86 @@
 
     </div>
     <!-- ── end DASHBOARD ──-->
+
+    <!-- ── FAQ TAB ─────────────────────────────────────────────────────── -->
+    <div x-show="tab === 'faq'">
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+        Frequently asked questions
+      </h2>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+          <h3 class="font-semibold text-sm mb-2">How often do scripts run?</h3>
+          <div class="text-xs text-gray-600 space-y-1">
+            <div>EOD scan: Mon-Fri 16:45 BKK</div>
+            <div>Intraday scan: every 15 min in market session (10:30-12:30, 14:30-16:00 BKK)</div>
+            <div>Fakeout review: Mon-Fri 16:15 BKK</div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+          <h3 class="font-semibold text-sm mb-2">What happens when I click Run now?</h3>
+          <div class="text-xs text-gray-600 space-y-1">
+            <div>It triggers the selected job immediately in background.</div>
+            <div>Manual web-triggered run does not send notification messages.</div>
+            <div>Scheduled Railway runs do send notifications.</div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+          <h3 class="font-semibold text-sm mb-2">How paper trade works</h3>
+          <div class="text-xs text-gray-600 space-y-1">
+            <div>Only Prime intraday signals can open positions.</div>
+            <div>Size is risk-based: capital x risk_pct / SL distance.</div>
+            <div>State persists in Postgres when DATABASE_URL is set.</div>
+            <div>Without Postgres, fallback storage may reset on container restart.</div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+          <h3 class="font-semibold text-sm mb-2">Signal criteria labels</h3>
+          <div class="text-xs text-gray-600 space-y-1">
+            <div>Prime: Proj RVol >= 2.0x and RSM >= 80 and STR <= 4.0x</div>
+            <div>RVOL: volume strong but momentum below threshold</div>
+            <div>RSM: momentum strong but projected volume below threshold</div>
+            <div>STR: overextended (stretch &gt; 4.0x)</div>
+            <div>SMA50: baseline filter, no high-conviction trigger</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
+        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+          <h3 class="font-semibold text-sm">Money management plan</h3>
+        </div>
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
+            <tr>
+              <th class="px-4 py-2 text-left">Rule</th>
+              <th class="px-4 py-2 text-left">Behavior</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr><td class="px-4 py-2 font-medium">SL</td><td class="px-4 py-2 text-gray-600">1 x ATR below entry</td></tr>
+            <tr><td class="px-4 py-2 font-medium">TP1</td><td class="px-4 py-2 text-gray-600">Entry + 2 x ATR, sell 30%</td></tr>
+            <tr><td class="px-4 py-2 font-medium">TP2</td><td class="px-4 py-2 text-gray-600">Entry + 4 x ATR, sell 30%</td></tr>
+            <tr><td class="px-4 py-2 font-medium">Breakeven</td><td class="px-4 py-2 text-gray-600">After 3 bars, SL moves to entry</td></tr>
+            <tr><td class="px-4 py-2 font-medium">MA10 trail</td><td class="px-4 py-2 text-gray-600">Exit remaining when close drops below MA10/EMA10 trail logic</td></tr>
+            <tr><td class="px-4 py-2 font-medium">Max risk</td><td class="px-4 py-2 text-gray-600">Default risk_pct = 0.5% of capital per position</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-xs text-gray-600">
+        <h3 class="font-semibold text-sm mb-2">How to read dashboard tables</h3>
+        <div class="space-y-1">
+          <div>Intraday Alerts: accumulates unique triggers during the day.</div>
+          <div>EOD Breakout Signals: latest end-of-day shortlist from EOD scan.</div>
+          <div>Fakeout Review: symbols that failed after trigger and dropped below level.</div>
+          <div>Recent Runs: click any row to inspect terminal output and errors.</div>
+        </div>
+      </div>
+    </div>
 
     <!-- ── Run detail modal ───────────────────────────────────────────────── -->
     <template x-if="runDetailModal">
