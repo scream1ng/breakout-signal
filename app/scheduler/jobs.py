@@ -12,17 +12,23 @@ Return value: dict with optional stats keys:
 import os
 import sys
 import json
+import re
 import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ANSI_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+
+
+def _strip_ansi(text: str) -> str:
+    return ANSI_RE.sub('', text)
 
 
 def _run(script: str, *extra_args: str) -> dict:
     """Run a project script as a subprocess; raise on non-zero exit."""
     cmd = [sys.executable, os.path.join(ROOT, script), *extra_args]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
-    stdout_tail = (result.stdout or '')[-4000:]
-    stderr_tail = (result.stderr or '')[-4000:]
+    stdout_tail = _strip_ansi((result.stdout or ''))[-4000:]
+    stderr_tail = _strip_ansi((result.stderr or ''))[-4000:]
     if result.returncode != 0:
         detail = (
             f'Exit code: {result.returncode}\n\n'
@@ -50,3 +56,18 @@ def run_intraday_scan() -> dict:
 def run_review_scan() -> dict:
     """16:15 BKK fakeout review — checks for failed breaks."""
     return _run('intraday.py', '--review')
+
+
+def run_eod_scan_notify() -> dict:
+    """Scheduled EOD scan with notifications enabled."""
+    return _run('main.py', '--discord')
+
+
+def run_intraday_scan_notify() -> dict:
+    """Scheduled intraday scan with notifications enabled."""
+    return _run('intraday.py', '--discord')
+
+
+def run_review_scan_notify() -> dict:
+    """Scheduled fakeout review with notifications enabled."""
+    return _run('intraday.py', '--review', '--discord')

@@ -78,14 +78,18 @@ def _tracked(job_name: str, fn: Callable, *args, **kwargs) -> None:
 
 def register_jobs() -> None:
     """Register all production scheduled jobs with APScheduler."""
-    from app.scheduler.jobs import run_eod_scan, run_intraday_scan, run_review_scan
+    from app.scheduler.jobs import (
+        run_eod_scan_notify,
+        run_intraday_scan_notify,
+        run_review_scan_notify,
+    )
 
     scheduler = get_scheduler()
 
     # ── EOD scan: Mon-Fri 09:45 UTC = 16:45 BKK ─────────────────────────────
     scheduler.add_job(
         _tracked, 'cron',
-        args=['eod_scan', run_eod_scan],
+        args=['eod_scan', run_eod_scan_notify],
         day_of_week='mon-fri', hour=9, minute=45,
         id='eod_scan', replace_existing=True,
     )
@@ -101,7 +105,7 @@ def register_jobs() -> None:
         h_utc = (h - 7) % 24
         scheduler.add_job(
             _tracked, 'cron',
-            args=['intraday_scan', run_intraday_scan],
+            args=['intraday_scan', run_intraday_scan_notify],
             day_of_week='mon-fri', hour=h_utc, minute=m,
             id=f'intraday_{i}', replace_existing=True,
         )
@@ -109,7 +113,7 @@ def register_jobs() -> None:
     # ── Fakeout review: Mon-Fri 09:15 UTC = 16:15 BKK ───────────────────────
     scheduler.add_job(
         _tracked, 'cron',
-        args=['review_scan', run_review_scan],
+        args=['review_scan', run_review_scan_notify],
         day_of_week='mon-fri', hour=9, minute=15,
         id='review_scan', replace_existing=True,
     )

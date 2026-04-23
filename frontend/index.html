@@ -283,7 +283,7 @@
     <template x-if="runDetailModal">
       <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
         @click.self="runDetailModal = null">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4 overflow-hidden">
           <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200">
             <span class="font-semibold text-sm" x-text="runDetailModal.job_name"></span>
             <button @click="runDetailModal = null"
