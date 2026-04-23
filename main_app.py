@@ -61,7 +61,13 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title='Breakout Signal', lifespan=lifespan)
+app = FastAPI(
+    title='Breakout Signal',
+    lifespan=lifespan,
+    docs_url='/api/docs',
+    redoc_url=None,
+    openapi_url='/api/openapi.json',
+)
 
 # ── API routes ────────────────────────────────────────────────────────────────
 app.include_router(system.router,    prefix='/api', tags=['System'])
@@ -81,6 +87,9 @@ def serve_chart():
     chart = os.path.join(FRONTEND_DIR, 'chart.html')
     if os.path.exists(chart):
         return FileResponse(chart)
+    docs_index = os.path.join(DOCS_DIR, 'index.html')
+    if os.path.exists(docs_index):
+        return FileResponse(docs_index)
     return {'detail': 'Chart not found — run python main.py first'}
 
 
