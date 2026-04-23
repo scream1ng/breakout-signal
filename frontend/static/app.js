@@ -98,13 +98,21 @@ function app() {
       try {
         const data = await fetch(`/api/jobs/run/${jobName}`, { method: 'POST' }).then(r => r.json());
         this.toast = { msg: `${data.job} triggered`, ok: true };
+        setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
+        // Poll until the job is no longer running (max 5 min)
+        const poll = async (attempts = 0) => {
+          if (attempts > 150) return;
+          await this.loadSystem();
+          const last = this.lastRuns[jobName] ?? {};
+          if (last.status === 'running') setTimeout(() => poll(attempts + 1), 2000);
+          else this.jobRunning = { ...this.jobRunning, [jobName]: false };
+        };
+        setTimeout(() => poll(), 2000);
       } catch (e) {
         this.toast = { msg: `Failed to trigger ${jobName}`, ok: false };
-      } finally {
-        this.jobRunning = { ...this.jobRunning, [jobName]: false };
         setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
+        this.jobRunning = { ...this.jobRunning, [jobName]: false };
       }
-      setTimeout(() => this.loadSystem(), 3000);
     },
     get btCriteriaStats() {
       if (!this.backtest?.rows?.length) return this.backtest?.overall_bt || null;
@@ -142,6 +150,7 @@ function app() {
     },
 
     get jobSummary() {
+      const STALE_MS = 15 * 60 * 1000;  // 15 minutes
       const jobs = [
         { id: 'eod_scan',      label: 'EOD Scan',       nextKey: 'eod_scan' },
         { id: 'intraday_scan', label: 'Intraday Scan',  nextKey: 'intraday_scan' },
@@ -149,8 +158,13 @@ function app() {
       ];
       return jobs.map(j => {
         const last     = this.lastRuns[j.id] ?? {};
-        const status   = last.status ?? 'never';
-        const dotClass = { completed: 'dot-green', failed: 'dot-red',
+        let   status   = last.status ?? 'never';
+        // Detect stale-running: job stuck in 'running' for > 15 min
+        if (status === 'running' && last.started_at) {
+          const age = Date.now() - new Date(last.started_at).getTime();
+          if (age > STALE_MS) status = 'stale';
+        }
+        const dotClass = { completed: 'dot-green', failed: 'dot-red', stale: 'dot-red',
                            running: 'dot-yellow', never: 'dot-grey' }[status] ?? 'dot-grey';
         return {
           name:        j.id,
@@ -159,7 +173,7 @@ function app() {
           lastRun:     last.started_at ? this.fmtDatetime(last.started_at) : '—',
           duration:    last.duration_s != null ? last.duration_s.toFixed(1) + 's' : '—',
           nextRun:     this.nextRuns[j.nextKey] ? this.fmtDatetime(this.nextRuns[j.nextKey]) : '—',
-          error:       last.error ?? null,
+          error:       last.error ?? (status === 'stale' ? 'Job appears stuck (>15 min). Restart server to reset.' : null),
           running:     !!this.jobRunning[j.id],
         };
       });

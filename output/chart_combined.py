@@ -369,7 +369,7 @@ def generate_combined_html(
       <div class="leg-item"><div class="leg-swatch" style="background:#f59e0b;height:1px"></div>EMA20</div>
       <div class="leg-item"><div class="leg-swatch" style="background:#ef4444"></div>SMA50</div>
       <div class="leg-item"><div class="leg-swatch" style="background:#9ca3af;height:1px"></div>SMA200</div>
-      <div class="leg-item"><div class="leg-swatch" style="background:rgba(249,115,22,.6)"></div>Resist</div>
+
     </div>
     <div id="no-stock">← Select a stock from the sidebar</div>
   </div>
@@ -503,39 +503,21 @@ function renderChart(D) {{
     {{ time: D.candles[D.candles.length - 1].d,      value: D.rvol_min }},
   ]);
 
-  // ── RSM line — middle band 72-86% ──
-  const rsmS = _chart.addLineSeries({{
-    priceScaleId:          'rsm',
-    color:                 '#f59e0b',
-    lineWidth:             1.5,
-    lastValueVisible:      false,
-    priceLineVisible:      false,
-    crosshairMarkerVisible: false,
+  // ── RSM background highlights (vertical grey bands for below-threshold bars) ──
+  const rsmBgS = _chart.addHistogramSeries({{
+    priceScaleId:    'rsm_bg',
+    color:           'rgba(209,213,219,0.3)',
+    lastValueVisible: false,
+    priceLineVisible: false,
   }});
-  _chart.priceScale('rsm').applyOptions({{
-    scaleMargins: {{ top: 0.72, bottom: 0.14 }},
+  _chart.priceScale('rsm_bg').applyOptions({{
+    scaleMargins: {{ top: 0, bottom: 0 }},
     visible: false,
   }});
-  const rsmData = [];
-  D.candles.forEach((c, i) => {{
-    const v = D.rsm ? D.rsm[i] : null;
-    if (v != null) rsmData.push({{ time: c.d, value: v }});
-  }});
-  if (rsmData.length) rsmS.setData(rsmData);
-
-  const rsmThresh = _chart.addLineSeries({{
-    priceScaleId:          'rsm',
-    color:                 'rgba(245,158,11,0.4)',
-    lineWidth:             1,
-    lineStyle:             LightweightCharts.LineStyle.Dashed,
-    lastValueVisible:      false,
-    priceLineVisible:      false,
-    crosshairMarkerVisible: false,
-  }});
-  rsmThresh.setData([
-    {{ time: D.candles[0].d,                    value: D.rsm_min }},
-    {{ time: D.candles[D.candles.length-1].d,   value: D.rsm_min }},
-  ]);
+  rsmBgS.setData(D.candles.map((c, i) => {{
+    const below = D.rsm && D.rsm[i] != null && D.rsm[i] < D.rsm_min;
+    return {{ time: c.d, value: below ? 1 : 0, color: below ? 'rgba(209,213,219,0.3)' : 'rgba(0,0,0,0)' }};
+  }}));
 
   // ── Moving averages ──
   const maList = [
@@ -587,13 +569,17 @@ function renderChart(D) {{
   (D.tl_slow || []).forEach(seg => addSegLine(seg, 'rgba(253,186,116,0.75)', 1.5, LightweightCharts.LineStyle.Solid));
 
   // ── Signal + trade markers ──
+  const CRIT_COLOR = {{
+    Prime: '#ff6ec7', RVOL: '#3b82f6', STR: '#ef4444', RSM: '#f97316', SMA50: '#f59e0b',
+  }};
   const markers = [];
   (D.signals || []).forEach(s => {{
+    const col = CRIT_COLOR[s.filter_type] || s.col || '#ff6ec7';
     markers.push({{
       time:     s.date,
-      position: 'aboveBar',
-      color:    s.col,
-      shape:    'arrowDown',
+      position: 'belowBar',
+      color:    col,
+      shape:    'arrowUp',
       text:     (s.filter_type && s.filter_type !== 'Below') ? s.filter_type : '',
       size:     1,
     }});
@@ -604,12 +590,12 @@ function renderChart(D) {{
                     : t.exit_reason === 'EMA10' ? '#f59e0b'
                     : '#6b7280';
     if (t.tp1_hit && t.tp1_bar != null && D.candles[t.tp1_bar])
-      markers.push({{ time: D.candles[t.tp1_bar].d, position:'aboveBar', color:'#16a34a', shape:'arrowUp', text:'TP1', size:0.7 }});
+      markers.push({{ time: D.candles[t.tp1_bar].d, position:'aboveBar', color:'#16a34a', shape:'arrowDown', text:'TP1', size:0.7 }});
     if (t.tp2_hit && t.tp2_bar != null && D.candles[t.tp2_bar])
-      markers.push({{ time: D.candles[t.tp2_bar].d, position:'aboveBar', color:'#15803d', shape:'arrowUp', text:'TP2', size:0.7 }});
+      markers.push({{ time: D.candles[t.tp2_bar].d, position:'aboveBar', color:'#15803d', shape:'arrowDown', text:'TP2', size:0.7 }});
     if (t.exit_bar != null && D.candles[t.exit_bar] && t.exit_reason !== 'End')
       markers.push({{ time: D.candles[t.exit_bar].d, position:'aboveBar', color:exitColor,
-                      shape:'arrowUp', text: t.exit_reason==='EMA10'?'MA10':t.exit_reason, size:0.7 }});
+                      shape:'arrowDown', text: t.exit_reason==='EMA10'?'MA10':t.exit_reason, size:0.7 }});
   }});
   markers.sort((a,b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0);
   _candle.setMarkers(markers);
@@ -828,7 +814,7 @@ function buildTradeSummary() {{
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 const firstSignal = ALL_STOCKS.findIndex(d => d.signals.some(s => s.col === '#ff6ec7'));
-loadStock(firstSignal >= 0 ? firstSignal : 0);
+requestAnimationFrame(() => loadStock(firstSignal >= 0 ? firstSignal : 0));
 
 // ── Intraday signals sidebar section ──────────────────────────────────────────
 (async function loadIntraday() {{

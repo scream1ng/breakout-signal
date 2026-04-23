@@ -585,12 +585,11 @@
                   <th class="px-4 py-2 text-right">Avg Loss</th>
                   <th class="px-4 py-2 text-right">PnL%</th>
                   <th class="px-4 py-2 text-right">RSM</th>
-                  <th class="px-4 py-2 text-center">Signal</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100">
                 <template x-if="btSortedRows.length === 0">
-                  <tr><td colspan="9" class="px-4 py-6 text-center text-gray-400">
+                  <tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">
                     No backtest data — run EOD scan first
                   </td></tr>
                 </template>
@@ -643,10 +642,6 @@
                     <td class="px-4 py-2 text-right"
                       :class="r.rsm >= 80 ? 'text-indigo-600' : 'text-gray-500'"
                       x-text="fmt0(r.rsm)"></td>
-                    <td class="px-4 py-2 text-center">
-                      <span x-show="r.has_signal" class="px-1.5 py-0.5 rounded bg-green-100 text-green-700 font-medium">▲ Signal</span>
-                      <span x-show="!r.has_signal && r.has_pending" class="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 font-medium">Watching</span>
-                    </td>
                   </tr>
                 </template>
               </tbody>
@@ -705,33 +700,25 @@
                     <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
                       <tr>
                         <th class="px-4 py-2 text-left">Ticker</th>
-                        <th class="px-4 py-2 text-left">Sector</th>
+                        <th class="px-4 py-2 text-right">Level</th>
                         <th class="px-4 py-2 text-right">Close</th>
+                        <th class="px-4 py-2 text-right">% to Level</th>
                         <th class="px-4 py-2 text-right">RSM</th>
-                        <th class="px-4 py-2 text-right">RVol</th>
-                        <th class="px-4 py-2 text-right">Levels</th>
-                        <th class="px-4 py-2 text-center">Copy</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                       <template x-for="(s, i) in watchlistDetail.groups[grpKey]" :key="i">
                         <tr class="hover:bg-gray-50">
                           <td class="px-4 py-2 font-medium" x-text="s.ticker"></td>
-                          <td class="px-4 py-2 text-gray-500 truncate max-w-[120px]" x-text="s.sector || '—'"></td>
+                          <td class="px-4 py-2 text-right text-gray-700"
+                            x-text="(s.levels && s.levels.length) ? '฿' + fmt2(s.levels[0].level) : '—'"></td>
                           <td class="px-4 py-2 text-right" x-text="s.close ? '฿' + fmt2(s.close) : '—'"></td>
+                          <td class="px-4 py-2 text-right"
+                            :class="(s.levels && s.levels.length && s.close) ? ((s.levels[0].level - s.close) / s.close * 100 <= 3 ? 'text-green-600 font-semibold' : 'text-gray-600') : 'text-gray-400'"
+                            x-text="(s.levels && s.levels.length && s.close) ? fmt1((s.levels[0].level - s.close) / s.close * 100) + '%' : '—'"></td>
                           <td class="px-4 py-2 text-right"
                             :class="s.rsm >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
                             x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
-                          <td class="px-4 py-2 text-right"
-                            :class="s.rvol >= 2 ? 'text-green-600 font-semibold' : 'text-gray-500'"
-                            x-text="s.rvol ? fmt1(s.rvol) + '×' : '—'"></td>
-                          <td class="px-4 py-2 text-right"
-                            x-text="s.levels ? s.levels.length : 0"></td>
-                          <td class="px-4 py-2 text-center">
-                            <button @click="navigator.clipboard.writeText((s.ticker_full || s.ticker + '.BK') + ',1D')"
-                              class="text-gray-400 hover:text-indigo-600 transition"
-                              title="Copy TradingView ticker">⎘</button>
-                          </td>
                         </tr>
                       </template>
                     </tbody>
