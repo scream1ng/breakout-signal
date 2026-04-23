@@ -737,56 +737,54 @@
           </template>
 
           <!-- Groups by MA position ----------------------------------------->
-          <template x-for="grpKey in ['> MA10', '> MA20', '> MA50', 'Other']" :key="grpKey">
-            <template x-if="watchlistDetail.groups[grpKey] && watchlistDetail.groups[grpKey].length > 0">
-              <div class="mb-6">
-                <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded"
-                    :class="grpKey.includes('10') ? 'bg-green-100 text-green-700' : grpKey.includes('20') ? 'bg-blue-100 text-blue-700' : grpKey.includes('50') ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'"
-                    x-text="grpKey"></span>
-                  <span x-text="watchlistDetail.groups[grpKey].length + ' stocks'"></span>
-                </h3>
-                <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                  <table class="w-full text-xs">
-                    <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-                      <tr>
-                        <th class="px-4 py-2 text-left cursor-pointer select-none hover:text-indigo-600"
-                          @click="wlSort === 'ticker' ? wlSortDir *= -1 : (wlSort='ticker', wlSortDir=1)"
-                          x-text="'Ticker' + (wlSort==='ticker' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                        <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                          @click="wlSort === 'level' ? wlSortDir *= -1 : (wlSort='level', wlSortDir=-1)"
-                          x-text="'Level' + (wlSort==='level' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                        <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                          @click="wlSort === 'close' ? wlSortDir *= -1 : (wlSort='close', wlSortDir=-1)"
-                          x-text="'Close' + (wlSort==='close' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                        <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                          @click="wlSort === 'pct_to_level' ? wlSortDir *= -1 : (wlSort='pct_to_level', wlSortDir=1)"
-                          x-text="'% to Level' + (wlSort==='pct_to_level' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                        <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                          @click="wlSort === 'rsm' ? wlSortDir *= -1 : (wlSort='rsm', wlSortDir=-1)"
-                          x-text="'RSM' + (wlSort==='rsm' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+          <template x-for="grp in wlGroupList()" :key="grp.key">
+            <div class="mb-6">
+              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded"
+                  :class="grp.key.includes('10') ? 'bg-green-100 text-green-700' : grp.key.includes('20') ? 'bg-blue-100 text-blue-700' : grp.key.includes('50') ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'"
+                  x-text="grp.key"></span>
+                <span x-text="grp.items.length + ' stocks'"></span>
+              </h3>
+              <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                <table class="w-full text-xs">
+                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
+                    <tr>
+                      <th class="px-4 py-2 text-left cursor-pointer select-none hover:text-indigo-600"
+                        @click="wlSort === 'ticker' ? wlSortDir *= -1 : (wlSort='ticker', wlSortDir=1)"
+                        x-text="'Ticker' + (wlSort==='ticker' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
+                        @click="wlSort === 'level' ? wlSortDir *= -1 : (wlSort='level', wlSortDir=-1)"
+                        x-text="'Level' + (wlSort==='level' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
+                        @click="wlSort === 'close' ? wlSortDir *= -1 : (wlSort='close', wlSortDir=-1)"
+                        x-text="'Close' + (wlSort==='close' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
+                        @click="wlSort === 'pct_to_level' ? wlSortDir *= -1 : (wlSort='pct_to_level', wlSortDir=1)"
+                        x-text="'% to Level' + (wlSort==='pct_to_level' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
+                        @click="wlSort === 'rsm' ? wlSortDir *= -1 : (wlSort='rsm', wlSortDir=-1)"
+                        x-text="'RSM' + (wlSort==='rsm' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <template x-for="(s, i) in wlSortedGroup(grp.items)" :key="i">
+                      <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2 font-medium" x-text="s.ticker"></td>
+                        <td class="px-4 py-2 text-right text-gray-700"
+                          x-text="(s.levels && s.levels.length) ? '฿' + fmt2(s.levels[0].level) : '—'"></td>
+                        <td class="px-4 py-2 text-right" x-text="s.close ? '฿' + fmt2(s.close) : '—'"></td>
+                        <td class="px-4 py-2 text-right"
+                          :class="(s.levels && s.levels.length && s.close) ? ((s.levels[0].level - s.close) / s.close * 100 <= 3 ? 'text-green-600 font-semibold' : 'text-gray-600') : 'text-gray-400'"
+                          x-text="(s.levels && s.levels.length && s.close) ? fmt1((s.levels[0].level - s.close) / s.close * 100) + '%' : '—'"></td>
+                        <td class="px-4 py-2 text-right"
+                          :class="s.rsm >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
+                          x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
                       </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100">
-                      <template x-for="(s, i) in wlSortedGroup(watchlistDetail.groups[grpKey])" :key="i">
-                        <tr class="hover:bg-gray-50">
-                          <td class="px-4 py-2 font-medium" x-text="s.ticker"></td>
-                          <td class="px-4 py-2 text-right text-gray-700"
-                            x-text="(s.levels && s.levels.length) ? '฿' + fmt2(s.levels[0].level) : '—'"></td>
-                          <td class="px-4 py-2 text-right" x-text="s.close ? '฿' + fmt2(s.close) : '—'"></td>
-                          <td class="px-4 py-2 text-right"
-                            :class="(s.levels && s.levels.length && s.close) ? ((s.levels[0].level - s.close) / s.close * 100 <= 3 ? 'text-green-600 font-semibold' : 'text-gray-600') : 'text-gray-400'"
-                            x-text="(s.levels && s.levels.length && s.close) ? fmt1((s.levels[0].level - s.close) / s.close * 100) + '%' : '—'"></td>
-                          <td class="px-4 py-2 text-right"
-                            :class="s.rsm >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
-                            x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
-                        </tr>
-                      </template>
-                    </tbody>
-                  </table>
-                </div>
+                    </template>
+                  </tbody>
+                </table>
               </div>
-            </template>
+            </div>
           </template>
         </div>
       </template>

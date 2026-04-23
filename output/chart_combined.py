@@ -198,8 +198,10 @@ def generate_combined_html(
         else:
             rsm_label = f'RSM {rsm:.0f}'
             rsm_color = '#f59e0b' if rsm >= 80 else '#9ca3af'
+        # For signal stocks add inline border-left-color matching criteria
+        border_style = f' style="border-left-color:{rsm_color}"' if section == 'sig' else ''
         return f"""
-        <div class="{item_cls}" id="sb-{idx}" onclick="loadStock({idx})">
+        <div class="{item_cls}" id="sb-{idx}" onclick="loadStock({idx})"{border_style}>
           <div class="sb-top">
             <span class="sb-ticker">{d['ticker'].replace('.BK','')}</span>
             <span class="sb-rsm" style="color:{rsm_color}">{rsm_label}</span>

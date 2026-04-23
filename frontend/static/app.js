@@ -185,6 +185,13 @@ function app() {
       });
     },
 
+    wlGroupList() {
+      if (!this.watchlistDetail?.groups) return [];
+      return ['> MA10', '> MA20', '> MA50', 'Other']
+        .map(key => ({ key, items: this.watchlistDetail.groups[key] || [] }))
+        .filter(g => g.items.length > 0);
+    },
+
     wlSortedGroup(items) {
       if (!items || !items.length) return [];
       const key = this.wlSort;
