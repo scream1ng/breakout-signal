@@ -202,6 +202,9 @@ def generate_combined_html(
 
     sidebar_parts = []
 
+    # ── Section 0: INTRADAY placeholder (populated at runtime via fetch) ──
+    sidebar_parts.append('<div id="intra-section"></div>')
+
     # ── Section 1: BREAKOUT ──────────────────────────────────────────────
     if sig_stocks:
         sidebar_parts.append(
@@ -255,6 +258,9 @@ def generate_combined_html(
                    background:#f9fafb;color:#6b7280;}}
   .sb-hdr-sig{{color:#db2777;background:#fdf2f8;border-left:3px solid #db2777;}}
   .sb-hdr-wtc{{color:#d97706;background:#fffbeb;border-left:3px solid #d97706;}}
+  .sb-hdr-intra{{color:#6366f1;background:#eef2ff;border-left:3px solid #6366f1;}}
+  .sb-intra{{border-left-color:rgba(99,102,241,.3);background:#f8f8ff;}}
+  .sb-intra.active{{border-left-color:#6366f1;background:#eef2ff;}}
   .sb-item{{padding:7px 10px 7px 12px;cursor:pointer;border-bottom:1px solid #f3f4f6;
             transition:background .1s;border-left:3px solid transparent;}}
   .sb-item:hover{{background:#f5f3ff;}}
@@ -552,20 +558,33 @@ function renderChart(D) {{
     if (pts.length) ms.setData(pts);
   }});
 
-  // ── Horizontal resistance lines ──
-  const seen = new Set();
-  const addHzLine = (price, color) => {{
-    const k = price.toFixed(4);
-    if (seen.has(k)) return;
-    seen.add(k);
-    _candle.createPriceLine({{
-      price, color, lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dashed,
-      axisLabelVisible: false,
+  // ── Helper: bar index → date string ──
+  const barDate = i => D.candles[Math.max(0, Math.min(D.candles.length - 1, i))].d;
+
+  // ── Segmented line helper (hz and trendlines) ──
+  const addSegLine = (seg, color, width, style) => {{
+    if (!seg.xs || seg.xs.length < 2) return;
+    const s = _chart.addLineSeries({{
+      color, lineWidth: width,
+      lineStyle: style ?? LightweightCharts.LineStyle.Solid,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
     }});
+    const dateMap = new Map();
+    seg.xs.forEach((x, i) => dateMap.set(barDate(x), seg.ys[i]));
+    const pts = [...dateMap.entries()].map(([time, value]) => ({{ time, value }}));
+    pts.sort((a, b) => a.time < b.time ? -1 : 1);
+    if (pts.length >= 2) s.setData(pts);
   }};
-  (D.hz_fast || []).forEach(seg => addHzLine(seg.ys[0], 'rgba(249,115,22,0.55)'));
-  (D.hz_slow || []).forEach(seg => addHzLine(seg.ys[0], 'rgba(253,186,116,0.55)'));
+
+  // ── Horizontal resistance lines (segmented) ──
+  (D.hz_fast || []).forEach(seg => addSegLine(seg, 'rgba(249,115,22,0.7)',  1, LightweightCharts.LineStyle.Dashed));
+  (D.hz_slow || []).forEach(seg => addSegLine(seg, 'rgba(253,186,116,0.7)', 1, LightweightCharts.LineStyle.Dashed));
+
+  // ── Trendlines ──
+  (D.tl_fast || []).forEach(seg => addSegLine(seg, 'rgba(249,115,22,0.75)',  1.5, LightweightCharts.LineStyle.Solid));
+  (D.tl_slow || []).forEach(seg => addSegLine(seg, 'rgba(253,186,116,0.75)', 1.5, LightweightCharts.LineStyle.Solid));
 
   // ── Signal + trade markers ──
   const markers = [];
@@ -810,6 +829,39 @@ function buildTradeSummary() {{
 // ── Boot ──────────────────────────────────────────────────────────────────────
 const firstSignal = ALL_STOCKS.findIndex(d => d.signals.some(s => s.col === '#ff6ec7'));
 loadStock(firstSignal >= 0 ? firstSignal : 0);
+
+// ── Intraday signals sidebar section ──────────────────────────────────────────
+(async function loadIntraday() {{
+  try {{
+    const data = await fetch('/api/signals').then(r => r.json());
+    const alerts = (data.alerted_today || []).filter(s => s && (s.ticker || s));
+    if (!alerts.length) return;
+    const CRIT_COL = {{
+      Prime:'#a21caf', STR:'#b91c1c', RVOL:'#1d4ed8', RSM:'#15803d', SMA50:'#b45309',
+    }};
+    const rows = alerts.map(s => {{
+      const ticker = ((s.ticker || s).replace ? (s.ticker || s) : String(s)).replace('.BK','');
+      const crit   = s.criteria || '';
+      const col    = CRIT_COL[crit] || '#6366f1';
+      const close  = s.close  ? `฿${{parseFloat(s.close).toFixed(2)}}`  : '—';
+      const level  = s.level  ? `฿${{parseFloat(s.level).toFixed(2)}}`  : '—';
+      return `<div class="sb-item sb-intra" title="${{ticker}} | ${{crit}} | Level ${{level}} | Price ${{close}}">
+        <div class="sb-top">
+          <span class="sb-ticker">${{ticker}}</span>
+          <span class="sb-rsm" style="color:${{col}}">${{crit || '—'}}</span>
+        </div>
+        <div class="sb-bot">
+          <span style="font-size:10px;color:#6b7280">Lvl ${{level}}</span>
+          <span style="font-size:10px;color:#374151">${{close}}</span>
+        </div>
+      </div>`;
+    }}).join('');
+    const section = document.getElementById('intra-section');
+    if (section) {{
+      section.innerHTML = `<div class="sb-section-hdr sb-hdr-intra">⚡ INTRADAY (${{alerts.length}})</div>${{rows}}`;
+    }}
+  }} catch(e) {{ /* silent */ }}
+}})();
 </script>
 </body>
 </html>"""
