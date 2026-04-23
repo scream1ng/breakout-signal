@@ -252,7 +252,7 @@ def generate_combined_html(
   *{{box-sizing:border-box;margin:0;padding:0;}}
   html,body{{height:100%;overflow:hidden;font-family:ui-sans-serif,system-ui,sans-serif;font-size:13px;}}
   /* ── Layout ── */
-  .app{{display:grid;grid-template-columns:200px 1fr 280px;grid-template-rows:52px 1fr;height:100vh;}}
+  .app{{display:grid;grid-template-columns:200px 1fr 280px;grid-template-rows:1fr;height:100vh;}}
   /* ── Sidebar ── */
   .sidebar{{display:flex;flex-direction:column;overflow:hidden;background:#fff;border-right:1px solid #e5e7eb;}}
   .sb-head{{padding:10px;border-bottom:1px solid #e5e7eb;flex-shrink:0;}}
@@ -345,14 +345,6 @@ def generate_combined_html(
 <body class="bg-gray-50 text-gray-800">
 
 <div class="app">
-  <!-- ── Header ── -->
-  <header style="grid-column:1/-1" class="bg-white border-b border-gray-200 flex items-center px-4 gap-3">
-    <span class="font-bold text-indigo-600 text-sm tracking-wide">📈 BREAKOUT SCANNER</span>
-    <span id="h-ticker" class="font-semibold text-gray-800">← Select a stock</span>
-    <span id="h-info" class="text-xs text-gray-400 hidden sm:block truncate max-w-xs"></span>
-    <span id="h-rsm" class="ml-auto text-xs text-amber-500 font-medium"></span>
-    <span class="text-xs text-gray-400 whitespace-nowrap">{date_str.replace('_','-')} · <span class="text-gray-700">{total}</span> stocks · <span class="text-pink-600">{n_sig}</span> signals · <span class="text-amber-500">{n_wtc}</span> watching</span>
-  </header>
 
   <!-- ── Sidebar ── -->
   <div class="sidebar">
@@ -445,8 +437,7 @@ function renderChart(D) {{
   container.innerHTML = '';
 
   _chart = LightweightCharts.createChart(container, {{
-    width:  container.clientWidth,
-    height: container.clientHeight,
+    autoSize: true,
     layout: {{
       background: {{ color: '#ffffff' }},
       textColor:  '#374151',
@@ -624,12 +615,9 @@ function renderChart(D) {{
     }}
   }})();
 
-  // Resize observer
+  // Resize observer — just fitContent on resize (autoSize handles dimensions)
   const ro = new ResizeObserver(() => {{
-    if (_chart) _chart.applyOptions({{
-      width:  container.clientWidth,
-      height: container.clientHeight,
-    }});
+    if (_chart) _chart.timeScale().fitContent();
   }});
   ro.observe(container);
 
@@ -748,9 +736,6 @@ function renderAnalysis(s) {{
 
 // ── Signal list ───────────────────────────────────────────────────────────────
 function buildSignalList() {{
-  document.getElementById('h-ticker').textContent = D.ticker;
-  document.getElementById('h-info').textContent   = (D.desc||'') + '  ' + (D.sector||'');
-  document.getElementById('h-rsm').textContent    = 'RSM ' + (D.rsm_now?.toFixed(0)||'—') + '  1D';
   document.getElementById('sig-count').textContent = D.signals.length;
   document.getElementById('sig-filter-info').textContent =
     `RVol>${{D.rvol_min}}x  RSM>${{D.rsm_min}}`;
@@ -824,7 +809,11 @@ function buildTradeSummary() {{
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 const firstSignal = ALL_STOCKS.findIndex(d => d.signals.some(s => s.col === '#ff6ec7'));
-requestAnimationFrame(() => loadStock(firstSignal >= 0 ? firstSignal : 0));
+(function _boot() {{
+  const el = document.getElementById('chart-container');
+  if (el && el.clientWidth > 0) {{ loadStock(firstSignal >= 0 ? firstSignal : 0); }}
+  else {{ setTimeout(_boot, 50); }}
+}})();
 
 // ── Intraday signals sidebar section ──────────────────────────────────────────
 (async function loadIntraday() {{

@@ -21,6 +21,7 @@ function app() {
     btCriteria:       'Prime',
     wlSort:           'pct_to_level',
     wlSortDir:        1,
+    runDetailModal:   null,   // JobRun dict to show in popup
     jobRunning:       {},
     toast:            { msg: '', ok: true },
     _refreshTimer:    null,
@@ -184,17 +185,17 @@ function app() {
       });
     },
 
-    wlSortedGroup(grpKey) {
-      const items = (this.watchlistDetail?.groups?.[grpKey] || []);
+    wlSortedGroup(items) {
+      if (!items || !items.length) return [];
       const key = this.wlSort;
       const dir = this.wlSortDir;
       return [...items].sort((a, b) => {
         let av, bv;
         if (key === 'pct_to_level') {
-          const aL = a.levels?.[0]?.level; const aC = a.close;
-          const bL = b.levels?.[0]?.level; const bC = b.close;
-          av = (aL && aC) ? (aL - aC) / aC * 100 :  9999;
-          bv = (bL && bC) ? (bL - bC) / bC * 100 :  9999;
+          const aL = a.levels?.[0]?.level, aC = a.close;
+          const bL = b.levels?.[0]?.level, bC = b.close;
+          av = (aL && aC) ? (aL - aC) / aC * 100 : 9999;
+          bv = (bL && bC) ? (bL - bC) / bC * 100 : 9999;
         } else if (key === 'rsm') {
           av = a.rsm ?? -1; bv = b.rsm ?? -1;
         } else if (key === 'close') {
@@ -202,8 +203,7 @@ function app() {
         } else if (key === 'level') {
           av = a.levels?.[0]?.level ?? 0; bv = b.levels?.[0]?.level ?? 0;
         } else {
-          av = a.ticker; bv = b.ticker;
-          return dir * (av < bv ? -1 : av > bv ? 1 : 0);
+          return dir * ((a.ticker || '') < (b.ticker || '') ? -1 : 1);
         }
         return dir * (av - bv);
       });
