@@ -7,7 +7,7 @@ Falls back to data/paper_portfolio.json for local use.
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 try:
     import psycopg2
@@ -22,7 +22,7 @@ DB_URL = os.environ.get('DATABASE_URL', '').strip()
 
 
 def _now_iso(now=None):
-    stamp = now or datetime.utcnow()
+    stamp = now or datetime.now(timezone.utc)
     return stamp.isoformat(timespec='seconds')
 
 
@@ -244,7 +244,7 @@ def open_positions(signals: list, now, cfg: dict) -> list:
             realized_pnl=0.0,
             rsm=float(sig.get('rsm', 0) or 0),
             stretch=float(sig.get('stretch', 0) or 0),
-            rvol=float(sig.get('rvol', sig.get('cur_rvol', 0)) or 0),
+            rvol=float(sig.get('proj_rvol', sig.get('rvol', sig.get('cur_rvol', 0))) or 0),
         )
         state['positions'].append(position)
         open_tickers.add(ticker_full)

@@ -190,21 +190,39 @@ def generate_combined_html(
         item_cls = f'sb-item sb-{section}' if section else 'sb-item'
         # For signal stocks show criteria type; others show RSM value
         _CRIT_COL = {'Prime':'#ff6ec7','RVOL':'#3b82f6','STR':'#ef4444','RSM':'#f97316','SMA50':'#f59e0b'}
+        sig_row_cls = ''
+        crit_badge_cls = ''
         if section == 'sig':
             sigs = d.get('signals', [])
             latest_ft = sigs[-1].get('filter_type', '') if sigs else ''
             rsm_label = latest_ft or 'Prime'
             rsm_color = _CRIT_COL.get(rsm_label, '#ff6ec7')
+            token = str(rsm_label).upper()
+            if token == 'STR':
+                sig_row_cls = ' crit-str'
+                crit_badge_cls = ' sb-crit sb-crit-str'
+            elif token == 'RVOL':
+                sig_row_cls = ' crit-rvol'
+                crit_badge_cls = ' sb-crit sb-crit-rvol'
+            elif token == 'RSM':
+                sig_row_cls = ' crit-rsm'
+                crit_badge_cls = ' sb-crit sb-crit-rsm'
+            elif token == 'SMA50':
+                sig_row_cls = ' crit-sma50'
+                crit_badge_cls = ' sb-crit sb-crit-sma50'
+            else:
+                sig_row_cls = ' crit-prime'
+                crit_badge_cls = ' sb-crit sb-crit-prime'
         else:
             rsm_label = f'RSM {rsm:.0f}'
             rsm_color = '#f59e0b' if rsm >= 80 else '#9ca3af'
         # For signal stocks add inline border-left-color matching criteria
         border_style = f' style="border-left-color:{rsm_color}"' if section == 'sig' else ''
         return f"""
-        <div class="{item_cls}" id="sb-{idx}" onclick="loadStock({idx})"{border_style}>
+        <div class="{item_cls}{sig_row_cls}" id="sb-{idx}" onclick="loadStock({idx})"{border_style}>
           <div class="sb-top">
             <span class="sb-ticker">{d['ticker'].replace('.BK','')}</span>
-            <span class="sb-rsm" style="color:{rsm_color}">{rsm_label}</span>
+            <span class="sb-rsm{crit_badge_cls}" style="color:{rsm_color}">{rsm_label}</span>
           </div>
           <div class="sb-bot">
             <span class="sb-rvol" style="color:{rvol_col}">RVol {rvol_str}</span>
@@ -279,12 +297,28 @@ def generate_combined_html(
   .sb-item.active{{background:#eef2ff;border-left-color:#6366f1;}}
   .sb-sig{{border-left-color:rgba(219,39,119,.3);background:#fff5fb;}}
   .sb-sig.active{{border-left-color:#db2777;background:#fde8f4;}}
+  .sb-sig.crit-str{{background:#fef2f2;}}
+  .sb-sig.crit-rvol{{background:#eff6ff;}}
+  .sb-sig.crit-rsm{{background:#f0fdf4;}}
+  .sb-sig.crit-sma50{{background:#fffbeb;}}
+  .sb-sig.crit-prime{{background:#fff5fb;}}
+  .sb-sig.crit-str.active{{background:#fee2e2;}}
+  .sb-sig.crit-rvol.active{{background:#dbeafe;}}
+  .sb-sig.crit-rsm.active{{background:#dcfce7;}}
+  .sb-sig.crit-sma50.active{{background:#fef3c7;}}
+  .sb-sig.crit-prime.active{{background:#fce7f3;}}
   .sb-wtc{{border-left-color:rgba(217,119,6,.3);background:#fffdf5;}}
   .sb-wtc.active{{border-left-color:#d97706;background:#fef3c7;}}
   .sb-top{{display:flex;justify-content:space-between;align-items:baseline;}}
   .sb-bot{{display:flex;justify-content:space-between;margin-top:3px;}}
   .sb-ticker{{font-weight:700;font-size:13px;color:#111827;}}
   .sb-rsm{{font-size:10px;color:#d97706;}}
+  .sb-crit{{display:inline-block;padding:1px 6px;border-radius:999px;font-weight:700;border:1px solid transparent;line-height:1.35;}}
+  .sb-crit-prime{{background:#fdf2f8;border-color:#fbcfe8;color:#be185d !important;}}
+  .sb-crit-str{{background:#fee2e2;border-color:#fecaca;color:#b91c1c !important;}}
+  .sb-crit-rvol{{background:#dbeafe;border-color:#bfdbfe;color:#1d4ed8 !important;}}
+  .sb-crit-rsm{{background:#dcfce7;border-color:#bbf7d0;color:#15803d !important;}}
+  .sb-crit-sma50{{background:#fffbeb;border-color:#fde68a;color:#b45309 !important;}}
   .sb-rvol,.sb-pnl{{font-size:10px;}}
   /* ── Chart area ── */
   .chart-area{{position:relative;background:#f9fafb;overflow:hidden;}}

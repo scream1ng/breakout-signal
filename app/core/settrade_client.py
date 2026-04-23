@@ -32,8 +32,12 @@ def get_market_data():
         broker_id = os.environ.get('SETTRADE_BROKER_ID')
         app_code = os.environ.get('SETTRADE_APP_CODE')
         
-        if not all([app_id, app_secret, broker_id, app_code]):
-            raise ValueError("SETTRADE credentials missing in environment.")
+        missing = [name for name, val in [
+            ('SETTRADE_APP_ID', app_id), ('SETTRADE_APP_SECRET', app_secret),
+            ('SETTRADE_BROKER_ID', broker_id), ('SETTRADE_APP_CODE', app_code),
+        ] if not val]
+        if missing:
+            raise ValueError(f"SETTRADE credentials missing in environment: {', '.join(missing)}")
             
         from settrade_v2 import Investor
         _investor = Investor(

@@ -2,10 +2,16 @@
 Send representative dummy notifications through the configured channels.
 
 Usage:
-    py -3 test_notifications.py
+    py -m tests.test_notifications
 """
 
+import os
+import sys
 from datetime import datetime
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from output.notifications import (
     send_eod_alert,
@@ -167,22 +173,97 @@ def build_entry_events(now):
     ]
 
 
-def build_exit_events(now):
+def build_exit_events_tp1(now):
+    """TP1 partial exit — 30% sold, position still open."""
     stamp = now.isoformat(timespec='seconds')
-    return [
-        {
-            'action': 'SELL',
-            'ticker': 'AAA',
-            'ticker_full': 'AAA.BK',
-            'at': stamp,
-            'price': 12.2,
-            'shares': 700,
-            'cash_after': 92_000.11,
-            'pnl': -595.14,
-            'ret_pct': -5.43,
-            'reason': 'FALSE_BREAKOUT',
-        }
-    ]
+    return [{
+        'action': 'SELL',
+        'ticker': 'AAA',
+        'ticker_full': 'AAA.BK',
+        'at': stamp,
+        'price': 13.6,
+        'shares': 210,
+        'shares_remaining': 490,
+        'shares_total': 700,
+        'running_pnl': 497.0,
+        'next_tp': 14.3,
+        'cash_after': 94_990.00,
+        'pnl': 497.0,
+        'ret_pct': 5.43,
+        'reason': 'TP1',
+    }]
+
+
+def build_exit_events_tp2(now):
+    """TP2 partial exit — another 30% sold."""
+    stamp = now.isoformat(timespec='seconds')
+    return [{
+        'action': 'SELL',
+        'ticker': 'AAA',
+        'ticker_full': 'AAA.BK',
+        'at': stamp,
+        'price': 14.3,
+        'shares': 210,
+        'shares_remaining': 280,
+        'shares_total': 700,
+        'running_pnl': 1_494.0,
+        'sl': 13.6,
+        'cash_after': 98_990.00,
+        'pnl': 997.0,
+        'ret_pct': 10.86,
+        'reason': 'TP2',
+    }]
+
+
+def build_exit_events_ma10(now):
+    """MA10 trail stop — full close of remaining position."""
+    stamp = now.isoformat(timespec='seconds')
+    return [{
+        'action': 'SELL',
+        'ticker': 'AAA',
+        'ticker_full': 'AAA.BK',
+        'at': stamp,
+        'price': 14.1,
+        'shares': 280,
+        'cash_after': 102_938.00,
+        'pnl': 1_334.0,
+        'ret_pct': 33.8,
+        'reason': 'EMA10',
+    }]
+
+
+def build_exit_events_sl(now):
+    """Stop loss — full close at loss."""
+    stamp = now.isoformat(timespec='seconds')
+    return [{
+        'action': 'SELL',
+        'ticker': 'BBB',
+        'ticker_full': 'BBB.BK',
+        'at': stamp,
+        'price': 23.85,
+        'shares': 300,
+        'cash_after': 90_868.00,
+        'pnl': -355.0,
+        'ret_pct': -2.26,
+        'reason': 'SL',
+    }]
+
+
+def build_exit_events_be(now):
+    """Breakeven stop — closed at entry level, near-zero P&L."""
+    stamp = now.isoformat(timespec='seconds')
+    return [{
+        'action': 'SELL',
+        'ticker': 'BBB',
+        'ticker_full': 'BBB.BK',
+        'at': stamp,
+        'price': 24.4,
+        'shares': 300,
+        'cash_after': 90_868.00,
+        'pnl': -45.0,
+        'ret_pct': -0.18,
+        'reason': 'BE',
+    }]
 
 
 def build_summary():
@@ -207,9 +288,9 @@ def build_summary():
         'recent_closed': [
             {
                 'ticker': 'AAA',
-                'pnl': -595.14,
-                'ret_pct': -5.43,
-                'reason': 'FALSE_BREAKOUT',
+                'pnl': 1_334.0,
+                'ret_pct': 33.8,
+                'reason': 'EMA10',
             }
         ],
     }
@@ -225,11 +306,23 @@ def main():
     print('Sending dummy paper trade entry update...')
     send_paper_trade_update(build_entry_events(now), now, title='PAPER TRADE ENTRY')
 
-    print('Sending dummy false breakout alert...')
-    send_review_alert(build_review_signals(), now, CFG)
+    print('Sending dummy TP1 exit...')
+    send_paper_trade_update(build_exit_events_tp1(now), now, title='PAPER TRADE TP1')
 
-    print('Sending dummy paper trade exit update...')
-    send_paper_trade_update(build_exit_events(now), now, title='PAPER TRADE EXIT')
+    print('Sending dummy TP2 exit...')
+    send_paper_trade_update(build_exit_events_tp2(now), now, title='PAPER TRADE TP2')
+
+    print('Sending dummy MA10 trail stop exit...')
+    send_paper_trade_update(build_exit_events_ma10(now), now, title='PAPER TRADE MA10 CLOSE')
+
+    print('Sending dummy SL exit...')
+    send_paper_trade_update(build_exit_events_sl(now), now, title='PAPER TRADE SL HIT')
+
+    print('Sending dummy BE stop exit...')
+    send_paper_trade_update(build_exit_events_be(now), now, title='PAPER TRADE BE STOP')
+
+    print('Sending dummy fakeout alert...')
+    send_review_alert(build_review_signals(), now, CFG)
 
     print('Sending dummy EOD alert...')
     send_eod_alert(

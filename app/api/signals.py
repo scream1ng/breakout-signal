@@ -29,13 +29,33 @@ def get_signals():
     watchlist_path    = os.path.join(ROOT, 'data', 'watchlist.json')
     alert_state_path  = os.path.join(ROOT, 'data', 'alert_state.json')
 
-    watchlist    = _read_json(watchlist_path,   {'stocks': [], 'updated_at': None})
-    alert_state  = _read_json(alert_state_path, {'date': None, 'alerted': [], 'failed': []})
+    watchlist_raw = _read_json(watchlist_path, {'stocks': [], 'updated_at': None})
+    alert_raw     = _read_json(alert_state_path, {'date': None, 'alerted': [], 'failed': []})
+
+    # Backward compatibility: some runs store watchlist.json as a plain list.
+    if isinstance(watchlist_raw, list):
+        watchlist_stocks = watchlist_raw
+        watchlist_date = None
+    elif isinstance(watchlist_raw, dict):
+        watchlist_stocks = watchlist_raw.get('stocks', [])
+        watchlist_date = watchlist_raw.get('updated_at') or watchlist_raw.get('date')
+    else:
+        watchlist_stocks = []
+        watchlist_date = None
+
+    if isinstance(alert_raw, dict):
+        alerted_today = alert_raw.get('alerted', [])
+        failed_today = alert_raw.get('failed', [])
+        alert_date = alert_raw.get('date')
+    else:
+        alerted_today = []
+        failed_today = []
+        alert_date = None
 
     return {
-        'watchlist':     watchlist.get('stocks', []),
-        'watchlist_date': watchlist.get('updated_at') or watchlist.get('date'),
-        'alerted_today': alert_state.get('alerted', []),
-        'failed_today':  alert_state.get('failed', []),
-        'alert_date':    alert_state.get('date'),
+        'watchlist':      watchlist_stocks,
+        'watchlist_date': watchlist_date,
+        'alerted_today':  alerted_today,
+        'failed_today':   failed_today,
+        'alert_date':     alert_date,
     }

@@ -6,6 +6,8 @@ Scans all SET stocks for horizontal and trendline breakouts, filters by RS Momen
 
 Currently running in **paper trade mode** (simulated fills). Switch to live trading via `TRADE_MODE=live` once SETTRADE order API is wired up.
 
+> 📖 **New to the system?** See [OPERATIONS.md](OPERATIONS.md) for a complete guide to how scripts work, when they run, and how to monitor the dashboard.
+
 ---
 
 ## HOW IT WORKS — END TO END
@@ -136,6 +138,7 @@ breakout-signal/
 | **STR** | stretch > 4 (overextended) | — EOD only | — |
 
 > Intraday uses **projected RVol** — full-day volume projected from time elapsed in SET session (10:00–12:30 + 14:00–16:30 = 300 min total).
+> Intraday Discord table shows **Proj RVol** (with current RVOL only as fallback).
 
 ---
 
@@ -168,6 +171,8 @@ All signal types now go to LINE. Discord receives job failures only.
 | **Trade closed** | SL / trail / false breakout | Flex bubble: final P&L |
 | **Portfolio snapshot** | EOD | Total equity, cash, win rate |
 | **Trade history** | EOD | Last 10 closed trades table |
+
+Paper-trade entry records use **Proj RVol** first, then fallback to current RVOL only if projected value is unavailable.
 
 ---
 
@@ -212,10 +217,15 @@ cp .env.example .env   # fill in your keys
 .venv\Scripts\python main.py --period 2y --capital 200000 --rsm 60
 ```
 
-**Test notifications:**
+**Automated API/workflow smoke tests:**
 ```bash
-.venv\Scripts\python tests/test_notifications.py
-.venv\Scripts\python tests/test_settrade.py
+.venv\Scripts\python -m pytest -q tests/test_api_smoke.py
+```
+
+**Manual notification/API connectivity checks:**
+```bash
+.venv\Scripts\python -m tests.test_notifications
+.venv\Scripts\python -m tests.test_settrade
 ```
 
 ---
@@ -269,6 +279,19 @@ SETTRADE_APP_CODE=...
 ```
 
 4. Railway → **Settings → Networking → Generate Domain**
+
+**Production preflight (must pass before replacing existing service):**
+```bash
+# 1) Syntax safety
+py -m compileall app main_app.py output
+
+# 2) Automated API/workflow smoke checks
+py -m pytest -q tests/test_api_smoke.py
+
+# 3) Optional manual notification/settrade checks
+py -m tests.test_notifications
+py -m tests.test_settrade
+```
 
 **Automated schedule (APScheduler, runs inside the web process):**
 

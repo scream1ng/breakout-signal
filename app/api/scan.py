@@ -61,9 +61,43 @@ def get_watchlist_detail():
     if not data:
         return {'date': None, 'items': [], 'groups': {}, 'copy_str': ''}
     items = data.get('watchlist', [])
-    groups: dict[str, list] = {}
+    deduped_items: list[dict] = []
+    seen_tickers: set[str] = set()
     for item in items:
-        g = item.get('ma_group', 'Other')
+        t = str(item.get('ticker_full') or item.get('ticker') or '').upper()
+        if not t:
+            continue
+        if t in seen_tickers:
+            continue
+        seen_tickers.add(t)
+        deduped_items.append(item)
+
+    items = deduped_items
+    groups: dict[str, list] = {}
+
+    def _normalize_group(raw: str | None) -> str:
+        text = str(raw or '').upper().replace(' ', '')
+        if 'MA10' in text or 'EMA10' in text:
+            return '> MA10'
+        if 'MA20' in text or 'EMA20' in text:
+            return '> MA20'
+        if 'MA50' in text or 'SMA50' in text:
+            return '> MA50'
+        return 'Other'
+
+    def _group_from_item(item: dict) -> str:
+        if item.get('ma_group'):
+            return _normalize_group(item.get('ma_group'))
+        if item.get('above_ema10') or item.get('above_ma10'):
+            return '> MA10'
+        if item.get('above_ema20') or item.get('above_ma20'):
+            return '> MA20'
+        if item.get('above_sma50') or item.get('above_ma50'):
+            return '> MA50'
+        return 'Other'
+
+    for item in items:
+        g = _group_from_item(item)
         groups.setdefault(g, []).append(item)
     # Build TradingView copy string: ###> MA10,SET:A,SET:B,###> MA20,...
     parts: list[str] = []

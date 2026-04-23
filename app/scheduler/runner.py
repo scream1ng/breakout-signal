@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
 
 
+def _as_utc(dt: datetime) -> datetime:
+    """Return a timezone-aware UTC datetime for safe arithmetic."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:
@@ -44,8 +51,9 @@ def _tracked(job_name: str, fn: Callable, *args, **kwargs) -> None:
     try:
         result = fn(*args, **kwargs) or {}
         run.status = 'completed'
+        started_utc = _as_utc(run.started_at)
         logger.info('Job %s completed in %.1fs', job_name,
-                    (datetime.now(timezone.utc) - run.started_at).total_seconds())
+                    (datetime.now(timezone.utc) - started_utc).total_seconds())
     except Exception as exc:
         run.status = 'failed'
         run.error  = str(exc)[:800]
@@ -58,7 +66,7 @@ def _tracked(job_name: str, fn: Callable, *args, **kwargs) -> None:
             pass
     finally:
         run.finished_at = datetime.now(timezone.utc)
-        run.duration_s  = (run.finished_at - run.started_at).total_seconds()
+        run.duration_s  = (_as_utc(run.finished_at) - _as_utc(run.started_at)).total_seconds()
         for key in ('stocks_scanned', 'signals_found', 'trades_opened', 'trades_closed'):
             if key in result:
                 setattr(run, key, result[key])

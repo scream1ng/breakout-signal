@@ -186,9 +186,60 @@ function app() {
     },
 
     wlGroupList() {
-      if (!this.watchlistDetail?.groups) return [];
+      const detail = this.watchlistDetail;
+      if (!detail) return [];
+
+      const normalized = {
+        '> MA10': [],
+        '> MA20': [],
+        '> MA50': [],
+        'Other': [],
+      };
+      const seen = new Set();
+
+      const normalizeKey = (raw) => {
+        const text = String(raw || '').toUpperCase().replace(/\s+/g, '');
+        if (text.includes('MA10') || text.includes('EMA10')) return '> MA10';
+        if (text.includes('MA20') || text.includes('EMA20')) return '> MA20';
+        if (text.includes('MA50') || text.includes('SMA50')) return '> MA50';
+        return 'Other';
+      };
+
+      const detectFromItem = (item) => {
+        const rawGroup = item?.ma_group || item?.group || item?.maGroup;
+        if (rawGroup) return normalizeKey(rawGroup);
+        if (item?.above_ema10 || item?.above_ma10) return '> MA10';
+        if (item?.above_ema20 || item?.above_ma20) return '> MA20';
+        if (item?.above_sma50 || item?.above_ma50) return '> MA50';
+        return 'Other';
+      };
+
+      const itemKey = (item) => {
+        const t = String(item?.ticker_full || item?.ticker || '').toUpperCase();
+        return t || JSON.stringify(item || {});
+      };
+
+      const pushUnique = (key, item) => {
+        const k = itemKey(item);
+        if (seen.has(k)) return;
+        seen.add(k);
+        normalized[key].push(item);
+      };
+
+      Object.entries(detail.groups || {}).forEach(([rawKey, items]) => {
+        const key = normalizeKey(rawKey);
+        (items || []).forEach((item) => {
+          pushUnique(key, item);
+        });
+      });
+
+      (detail.items || []).forEach((item) => {
+        const key = detectFromItem(item);
+        pushUnique(key, item);
+      });
+
       return ['> MA10', '> MA20', '> MA50', 'Other']
-        .map(key => ({ key, items: this.watchlistDetail.groups[key] || [] }))
+        .map(key => ({ key, items: normalized[key] }))
         .filter(g => g.items.length > 0);
     },
 
