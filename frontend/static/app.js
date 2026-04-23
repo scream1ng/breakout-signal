@@ -354,6 +354,13 @@ function app() {
     fmt0(v) { return v != null ? Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'; },
     fmt1(v) { return v != null ? Number(v).toFixed(1) : '—'; },
     fmt2(v) { return v != null ? Number(v).toFixed(2) : '—'; },
+    kindLabel(row) {
+      const kind = String(row?.kind || '').toLowerCase();
+      if (kind === 'tl') {
+        return row?.tl_angle != null ? `TL (${Number(row.tl_angle).toFixed(0)}°)` : 'TL';
+      }
+      return 'Hz';
+    },
 
     statusBadge(status) {
       return {

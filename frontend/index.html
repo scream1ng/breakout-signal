@@ -121,31 +121,45 @@
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
                 <th class="px-4 py-2 text-left">Ticker</th>
+                <th class="px-4 py-2 text-left">Sector</th>
                 <th class="px-4 py-2 text-right">Level</th>
                 <th class="px-4 py-2 text-right">Price</th>
-                <th class="px-4 py-2 text-center">Type</th>
+                <th class="px-4 py-2 text-left">Type</th>
                 <th class="px-4 py-2 text-center">Criteria</th>
+                <th class="px-4 py-2 text-right">RVol</th>
+                <th class="px-4 py-2 text-right">RSM</th>
+                <th class="px-4 py-2 text-right">STR</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="dashboardIntradayRows.length === 0">
-                <tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">No intraday alerts</td></tr>
+                <tr><td colspan="9" class="px-4 py-4 text-center text-gray-400">No intraday alerts</td></tr>
               </template>
               <template x-for="(s, i) in dashboardIntradayRows" :key="i">
                 <tr class="hover:bg-gray-50">
                   <td class="px-4 py-2 font-semibold text-green-600"
                     x-text="(s.ticker||s).replace ? (s.ticker||s).replace('.BK','') : s"></td>
+                  <td class="px-4 py-2 text-gray-500" x-text="s.sector || '—'"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="s.level ? '฿'+fmt2(s.level) : '—'"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
-                  <td class="px-4 py-2 text-center text-gray-500"
-                    x-text="s.kind||'—'"></td>
+                  <td class="px-4 py-2 text-gray-500"
+                    x-text="kindLabel(s)"></td>
                   <td class="px-4 py-2 text-center">
-                    <span :class="critBadge(s.criteria)"
-                      class="px-1.5 py-0.5 rounded text-xs font-medium"
+                    <span class="text-xs font-medium"
+                      :class="s.criteria === 'Prime' ? 'text-indigo-600' : s.criteria === 'RVOL' ? 'text-green-600' : s.criteria === 'RSM' ? 'text-orange-600' : s.criteria === 'STR' ? 'text-red-600' : 'text-gray-500'"
                       x-text="s.criteria||'—'"></span>
                   </td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(s.proj_rvol || s.cur_rvol || 0) >= 2 ? 'text-green-600 font-semibold' : 'text-red-500'"
+                    x-text="(s.proj_rvol || s.cur_rvol) ? fmt1(s.proj_rvol || s.cur_rvol)+'×' : '—'"></td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(s.rsm || 0) >= 80 ? 'text-green-600 font-semibold' : 'text-red-500'"
+                    x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(s.stretch || 0) <= 4 ? 'text-green-600 font-semibold' : 'text-red-500'"
+                    x-text="s.stretch ? fmt1(s.stretch)+'×' : '—'"></td>
                 </tr>
               </template>
             </tbody>
@@ -166,16 +180,18 @@
               <tr>
                 <th class="px-4 py-2 text-left">Ticker</th>
                 <th class="px-4 py-2 text-left">Sector</th>
-                <th class="px-4 py-2 text-right">Entry</th>
-                <th class="px-4 py-2 text-right">SL</th>
-                <th class="px-4 py-2 text-right">TP1</th>
-                <th class="px-4 py-2 text-right">RSM</th>
+                <th class="px-4 py-2 text-right">Level</th>
+                <th class="px-4 py-2 text-right">Price</th>
+                <th class="px-4 py-2 text-left">Type</th>
+                <th class="px-4 py-2 text-center">Crit</th>
                 <th class="px-4 py-2 text-right">RVol</th>
+                <th class="px-4 py-2 text-right">RSM</th>
+                <th class="px-4 py-2 text-right">STR</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="dashboardEodRows.length === 0">
-                <tr><td colspan="7" class="px-4 py-4 text-center text-gray-400">No EOD signals</td></tr>
+                <tr><td colspan="9" class="px-4 py-4 text-center text-gray-400">No EOD signals</td></tr>
               </template>
               <template x-for="(s, i) in dashboardEodRows" :key="i">
                 <tr class="hover:bg-gray-50">
@@ -184,17 +200,24 @@
                   <td class="px-4 py-2 text-gray-500 truncate max-w-[100px]"
                     x-text="s.sector||'—'"></td>
                   <td class="px-4 py-2 text-right font-medium text-indigo-600"
-                    x-text="s.bp ? '฿'+fmt2(s.bp) : '—'"></td>
-                  <td class="px-4 py-2 text-right text-red-500"
-                    x-text="s.sl ? '฿'+fmt2(s.sl) : '—'"></td>
-                  <td class="px-4 py-2 text-right text-green-600"
-                    x-text="s.tp1 ? '฿'+fmt2(s.tp1) : '—'"></td>
+                    x-text="(s.bp || s.level) ? '฿'+fmt2(s.bp || s.level) : '—'"></td>
                   <td class="px-4 py-2 text-right"
-                    :class="s.rsm >= 80 ? 'text-amber-600 font-semibold' : 'text-gray-500'"
+                    x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
+                  <td class="px-4 py-2 text-gray-500" x-text="kindLabel(s)"></td>
+                  <td class="px-4 py-2 text-center">
+                    <span class="text-xs font-medium"
+                      :class="(s.filter_type || s.criteria) === 'Prime' ? 'text-indigo-600' : (s.filter_type || s.criteria) === 'RVOL' ? 'text-green-600' : (s.filter_type || s.criteria) === 'RSM' ? 'text-orange-600' : (s.filter_type || s.criteria) === 'STR' ? 'text-red-600' : 'text-gray-500'"
+                      x-text="s.filter_type || s.criteria || '—'"></span>
+                  </td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(s.rvol || 0) >= 2 ? 'text-green-600 font-semibold' : 'text-red-500'"
+                    x-text="s.rvol ? fmt1(s.rvol)+'×' : '—'"></td>
+                  <td class="px-4 py-2 text-right"
+                    :class="(s.rsm || 0) >= 80 ? 'text-green-600 font-semibold' : 'text-red-500'"
                     x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
                   <td class="px-4 py-2 text-right"
-                    :class="s.rvol >= 2 ? 'text-green-600 font-semibold' : 'text-gray-500'"
-                    x-text="s.rvol ? fmt1(s.rvol)+'×' : '—'"></td>
+                    :class="(s.stretch || 0) <= 4 ? 'text-green-600 font-semibold' : 'text-red-500'"
+                    x-text="s.stretch ? fmt1(s.stretch)+'×' : '—'"></td>
                 </tr>
               </template>
             </tbody>
@@ -216,8 +239,8 @@
                 <th class="px-4 py-2 text-left">Ticker</th>
                 <th class="px-4 py-2 text-right">Level</th>
                 <th class="px-4 py-2 text-right">Close</th>
-                <th class="px-4 py-2 text-center">Type</th>
-                <th class="px-4 py-2 text-left">Failed at</th>
+                <th class="px-4 py-2 text-left">Pattern</th>
+                <th class="px-4 py-2 text-left">Detected at</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -230,7 +253,7 @@
                     x-text="(f.ticker||'').replace('.BK','')"></td>
                   <td class="px-4 py-2 text-right" x-text="f.level ? '฿'+fmt2(f.level) : '—'"></td>
                   <td class="px-4 py-2 text-right" x-text="f.close ? '฿'+fmt2(f.close) : '—'"></td>
-                  <td class="px-4 py-2 text-center text-gray-500" x-text="f.kind || '—'"></td>
+                  <td class="px-4 py-2 text-gray-500" x-text="kindLabel(f)"></td>
                   <td class="px-4 py-2 text-gray-500" x-text="f.failed_at ? fmtDatetime(f.failed_at) : '—'"></td>
                 </tr>
               </template>
