@@ -24,9 +24,19 @@ except ImportError:
 TRADE_MODE: str = os.getenv('TRADE_MODE', 'paper').lower()   # 'paper' | 'live'
 PORT: int = int(os.getenv('PORT', '8080'))
 
-# Database: prefer Postgres (Railway) → fallback to local SQLite
-_sqlite_path = os.path.join(_ROOT, 'data', 'app.db')
-DATABASE_URL: str = os.getenv('DATABASE_URL', f'sqlite:///{_sqlite_path}')
+def _default_sqlite_url() -> str:
+    # Railway may boot without a Postgres plugin attached. Use a writable
+    # ephemeral path instead of /app/data, which may not exist at startup.
+    if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RAILWAY_PROJECT_ID'):
+        sqlite_dir = os.path.join(os.getenv('TMPDIR', '/tmp'), 'breakout-signal')
+    else:
+        sqlite_dir = os.path.join(_ROOT, 'data')
+    os.makedirs(sqlite_dir, exist_ok=True)
+    return f"sqlite:///{os.path.join(sqlite_dir, 'app.db')}"
+
+
+# Database: prefer Postgres (Railway) → fallback to SQLite
+DATABASE_URL: str = os.getenv('DATABASE_URL', _default_sqlite_url())
 
 # Notification channels
 DISCORD_WEBHOOK: str       = os.getenv('DISCORD_WEBHOOK', '').strip()
