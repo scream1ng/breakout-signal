@@ -21,9 +21,20 @@ def _run(script: str, *extra_args: str) -> dict:
     """Run a project script as a subprocess; raise on non-zero exit."""
     cmd = [sys.executable, os.path.join(ROOT, script), *extra_args]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    stdout_tail = (result.stdout or '')[-4000:]
+    stderr_tail = (result.stderr or '')[-4000:]
     if result.returncode != 0:
-        raise RuntimeError(result.stderr[-800:] or result.stdout[-400:])
-    return {}
+        detail = (
+            f'Exit code: {result.returncode}\n\n'
+            f'STDERR:\n{stderr_tail[-2000:] or "(empty)"}\n\n'
+            f'STDOUT:\n{stdout_tail[-2000:] or "(empty)"}'
+        )
+        raise RuntimeError(detail)
+    return {
+        'return_code': result.returncode,
+        'stdout': stdout_tail,
+        'stderr': stderr_tail,
+    }
 
 
 def run_eod_scan() -> dict:

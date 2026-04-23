@@ -26,6 +26,70 @@ function app() {
     toast:            { msg: '', ok: true },
     _refreshTimer:    null,
 
+    // ── Dashboard session helpers ───────────────────────────────────────
+    bkkNowParts() {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', hour12: false,
+      }).formatToParts(new Date());
+      const get = (k) => Number(parts.find(p => p.type === k)?.value || 0);
+      return {
+        year: get('year'), month: get('month'), day: get('day'),
+        hour: get('hour'), minute: get('minute'),
+      };
+    },
+
+    bkkDateIso() {
+      const p = this.bkkNowParts();
+      return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
+    },
+
+    isMarketOpenOrLater() {
+      const p = this.bkkNowParts();
+      return (p.hour * 60 + p.minute) >= (10 * 60);
+    },
+
+    get dashboardIntradayRows() {
+      const rows = this.signals?.alerted_today || [];
+      if (!this.isMarketOpenOrLater()) return rows;
+      return this.signals?.alert_date === this.bkkDateIso() ? rows : [];
+    },
+
+    get dashboardFakeoutRows() {
+      const rows = this.signals?.failed_today || [];
+      if (!this.isMarketOpenOrLater()) return rows;
+      return this.signals?.alert_date === this.bkkDateIso() ? rows : [];
+    },
+
+    get dashboardEodRows() {
+      const rows = this.scanLatest?.signals || [];
+      if (!this.isMarketOpenOrLater()) return rows;
+      return this.scanLatest?.date === this.bkkDateIso() ? rows : [];
+    },
+
+    getRunResult(run) {
+      try {
+        const obj = run?.result_json ? JSON.parse(run.result_json) : {};
+        return obj && typeof obj === 'object' ? obj : {};
+      } catch {
+        return {};
+      }
+    },
+
+    runLogText(run) {
+      const result = this.getRunResult(run);
+      const stdout = String(result.stdout || '').trim();
+      const stderr = String(result.stderr || '').trim();
+      if (!stdout && !stderr) return '';
+      return [
+        'STDOUT:',
+        stdout || '(empty)',
+        '',
+        'STDERR:',
+        stderr || '(empty)',
+      ].join('\n');
+    },
+
     // ── Lifecycle ──────────────────────────────────────────────────────────
     init() {
       this.loadSystem();

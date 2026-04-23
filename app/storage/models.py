@@ -46,6 +46,7 @@ class JobRun(Base):
             'trades_opened':  self.trades_opened,
             'trades_closed':  self.trades_closed,
             'error':          self.error,
+            'result_json':    self.result_json,
         }
 
 
