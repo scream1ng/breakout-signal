@@ -151,13 +151,20 @@ def save_state(state: dict, now=None) -> None:
         json.dump(state, f, indent=2)
 
 
+_LOT = 100  # SET board lot size
+
+
+def _floor_lot(shares: int) -> int:
+    return (shares // _LOT) * _LOT
+
+
 def _max_affordable_shares(cash: float, entry_price: float, commission: float) -> int:
     if entry_price <= 0:
         return 0
     unit_cost = entry_price * (1.0 + commission)
     if unit_cost <= 0:
         return 0
-    return max(0, int(cash // unit_cost))
+    return _floor_lot(max(0, int(cash // unit_cost)))
 
 
 def _position_shares(entry_price: float, atr: float, cash: float, cfg: dict) -> int:
@@ -171,7 +178,7 @@ def _position_shares(entry_price: float, atr: float, cash: float, cfg: dict) -> 
         risk_budget = capital * risk_pct
         stop_distance = atr * sl_mult
         if stop_distance > 0:
-            shares = int(risk_budget / stop_distance)
+            shares = _floor_lot(int(risk_budget / stop_distance))
 
     max_affordable = _max_affordable_shares(cash, entry_price, commission)
     if shares <= 0:
@@ -427,13 +434,13 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
 
         # TP1 — sell 30% at tp1 price
         if not pos['tp1_hit'] and tp1 and close >= tp1:
-            sh = max(1, int(pos['shares_remaining'] * 0.30))
+            sh = _floor_lot(int(pos['shares_remaining'] * 0.30)) or int(pos['shares_remaining'])
             _sell(sh, tp1, 'TP1', next_tp=tp2)
             pos['tp1_hit'] = True
 
         # TP2 — sell 3/7 of remaining (≈30% of original) at tp2 price
         if pos['tp1_hit'] and not pos['tp2_hit'] and tp2 and close >= tp2:
-            sh = max(1, int(pos['shares_remaining'] * (3 / 7)))
+            sh = _floor_lot(int(pos['shares_remaining'] * (3 / 7))) or int(pos['shares_remaining'])
             _sell(sh, tp2, 'TP2', next_tp=None)
             pos['tp2_hit'] = True
 

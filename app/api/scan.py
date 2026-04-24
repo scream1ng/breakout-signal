@@ -9,6 +9,8 @@ Endpoints:
 from __future__ import annotations
 import json
 import os
+from datetime import datetime
+import pytz
 
 from fastapi import APIRouter
 
@@ -17,6 +19,35 @@ router = APIRouter()
 # Path to the JSON file written by main.py after each EOD scan
 _ROOT             = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _SCAN_RESULTS     = os.path.join(_ROOT, 'data', 'scan_results.json')
+_LIVE_PRICES      = os.path.join(_ROOT, 'data', 'watchlist_live.json')
+
+
+def _read_live_prices() -> dict:
+    """Return live price dict keyed by ticker if written today (BKK)."""
+    if not os.path.exists(_LIVE_PRICES):
+        return {}
+    today = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%Y-%m-%d')
+    try:
+        with open(_LIVE_PRICES, encoding='utf-8') as f:
+            raw = json.load(f)
+        if isinstance(raw, dict) and raw.get('date') == today:
+            return raw.get('prices', {})
+    except Exception:
+        pass
+    return {}
+
+
+def _merge_live(items: list[dict], live: dict) -> list[dict]:
+    if not live:
+        return items
+    merged = []
+    for item in items:
+        ticker = item.get('ticker_full') or item.get('ticker', '')
+        lp = live.get(ticker)
+        if lp:
+            item = dict(item, close=lp['close'], rvol=lp['rvol'], broke=lp.get('broke', False))
+        merged.append(item)
+    return merged
 
 
 def _read_scan() -> dict | None:
@@ -95,6 +126,9 @@ def get_watchlist_detail():
         if item.get('above_sma50') or item.get('above_ma50'):
             return '> MA50'
         return 'Other'
+
+    live = _read_live_prices()
+    items = _merge_live(items, live)
 
     for item in items:
         g = _group_from_item(item)

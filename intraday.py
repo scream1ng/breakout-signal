@@ -33,6 +33,11 @@ parser.add_argument('--review', action='store_true')
 args = parser.parse_args()
 
 
+def _log(msg: str):
+    stamp = datetime.now(BKK).strftime('%H:%M:%S')
+    print(f'[{stamp}] {msg}', flush=True)
+
+
 def _alert_key(ticker, level, kind=None):
     kind_part = str(kind or '').lower()
     return f'{ticker}|{kind_part}|{float(level):.4f}'
@@ -161,7 +166,7 @@ def fetch_price_and_ema10(tickers: list) -> tuple[dict, dict]:
             except Exception:
                 continue
     except Exception as e:
-        print(f'  Position price fetch error: {e}')
+        _log(f'[warn] Position price fetch error: {e}')
     return prices, ema10s
 
 
@@ -185,14 +190,14 @@ def run():
     failed_keys = {item.get('key') for item in alert_state.get('failed', [])}
 
     if not os.path.exists(WL_PATH):
-        print('  watchlist.json not found — run main.py first.')
+        _log('watchlist.json not found — run main.py first')
         return
 
     with open(WL_PATH) as f:
         watchlist = json.load(f)
 
     if not watchlist:
-        print('  Watchlist is empty.')
+        _log('Watchlist empty')
         return
 
     try:
@@ -200,13 +205,11 @@ def run():
         get_market_data()
         data_source = "SETTRADE OpenAPI"
     except Exception:
-        data_source = "Yahoo Finance (Fallback)"
+        data_source = "Yahoo Finance"
 
     tickers = list({w['ticker'] for w in watchlist})
-    print(f'\n  [{now.strftime("%H:%M")}] Checking {len(tickers)} stocks... (Data Source: {data_source})')
-
-    # Batch download data
-    print(f'  Downloading data...', flush=True)
+    _log(f'Checking {len(tickers)} stocks ({data_source})')
+    _log('Downloading prices...')
     data = {}
     use_yfinance = False
     
@@ -227,7 +230,7 @@ def run():
             # If settrade connected but returned empty for all
             raise ValueError("No data returned from Settrade")
     except Exception as e:
-        print(f'  [fallback] Settrade failed for intraday ({e}). Using yfinance.', flush=True)
+        _log(f'Settrade unavailable → yfinance fallback')
         use_yfinance = True
         
     if use_yfinance:
@@ -249,18 +252,44 @@ def run():
                 except Exception:
                     continue
         except Exception as e:
-            print(f'  Download error: {e}')
+            _log(f'Download error: {e}')
             return
 
+    no_data_tickers = []
+    broke_tickers   = []
+    live_data = {}
     for ticker in tickers:
         short   = ticker.replace('.BK', '')
-        levels  = [w['level'] for w in watchlist if w['ticker'] == ticker]
-        lvl_str = ', '.join(f'฿{l:.2f}' for l in levels)
+        w_items = [w for w in watchlist if w['ticker'] == ticker]
+        levels  = [w['level'] for w in w_items]
         d       = data.get(ticker)
-        if d:
-            print(f'  {short:<8}  levels {lvl_str:<20}  close ฿{d["close"]:.2f}')
-        else:
-            print(f'  {short:<8}  levels {lvl_str:<20}  no data')
+        if not d:
+            no_data_tickers.append(short)
+            continue
+        avg_vol  = w_items[0].get('avg_volume', 0) if w_items else 0
+        proj_rv  = proj_volume(d['volume'], avg_vol, now) if avg_vol > 0 else 0.0
+        rsm      = w_items[0].get('rsm', 0) if w_items else 0
+        stretch  = w_items[0].get('stretch', 0) if w_items else 0
+        broke    = any(d['close'] > lv for lv in levels)
+        if broke:
+            crit = criteria_label(rsm, proj_rv, stretch)
+            _log(f'{short} → BREAK → {crit}  RVol {proj_rv:.1f}×  RSM {int(rsm)}')
+            broke_tickers.append(short)
+        live_data[ticker] = dict(close=round(float(d['close']), 4), rvol=proj_rv, broke=broke)
+
+    below = len(tickers) - len(broke_tickers) - len(no_data_tickers)
+    summary_parts = [f'{below} below level']
+    if no_data_tickers:
+        summary_parts.append(f'{len(no_data_tickers)} no data ({", ".join(no_data_tickers)})')
+    _log(' · '.join(summary_parts))
+
+    _live_path = os.path.join(ROOT, 'data', 'watchlist_live.json')
+    try:
+        with open(_live_path, 'w') as _lf:
+            json.dump({'date': date_str, 'updated_at': now.isoformat(timespec='seconds'), 'prices': live_data}, _lf, indent=2)
+        _log('Dashboard updated (watchlist_live.json)')
+    except Exception as _e:
+        _log(f'[warn] live price save failed: {_e}')
 
     # ── Check open paper positions for TP/SL/EMA10 exit ─────────────────
     open_pos_tickers = list({
@@ -273,11 +302,14 @@ def run():
     for t, d in data.items():
         if t not in pos_prices:
             pos_prices[t] = d['close']
+    if open_pos_tickers:
+        _log(f'Checking {len(open_pos_tickers)} open position(s)...')
     position_exit_events = check_positions(pos_prices, pos_ema10s, CFG, now)
-    if position_exit_events:
-        print(f'  {len(position_exit_events)} position exit(s) triggered.')
-        if args.discord:
-            send_paper_trade_update(position_exit_events, now, title='PAPER TRADE EXIT')
+    for ev in position_exit_events:
+        pnl_str = f'+฿{ev["pnl"]:.0f}' if ev.get('pnl', 0) >= 0 else f'-฿{abs(ev.get("pnl", 0)):.0f}'
+        _log(f'{ev["ticker"]} → {ev.get("reason","EXIT")}  {ev["shares"]}sh @ ฿{ev["price"]:.2f}  {pnl_str}')
+    if position_exit_events and args.discord:
+        send_paper_trade_update(position_exit_events, now, title='PAPER TRADE EXIT')
 
     signals = []
     seen    = set()
@@ -384,37 +416,40 @@ def run():
 
     if args.review:
         if not signals:
-            print('  No false breakouts detected.')
+            _log('No fakeouts. Done.')
             return
-        print(f"  {len(signals)} false breakouts detected.")
+        _log(f'{len(signals)} fakeout(s): {", ".join(s["ticker"] for s in signals)}')
         closed_events = close_positions(signals, now, CFG, reason='FALSE_BREAKOUT')
         _save_alert_state(alert_state)
         if args.discord:
+            _log(f'Sending LINE → fakeout review')
             send_review_alert(signals, now, CFG)
             if closed_events:
                 send_paper_trade_update(closed_events, now, title='PAPER TRADE EXIT')
+        _log(f'Done. {len(signals)} fakeout(s), {len(closed_events)} exit(s)')
         return
 
     if not signals:
-        print('  No breakouts detected.')
+        _log(f'No breakouts. Done.')
         return
 
-    # Save state to prevent duplicate alerts
     _save_alert_state(alert_state)
-
     print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
     alert = signals
     prime_only = [s for s in alert if s.get('criteria') == 'Prime']
     opened_events = open_positions(prime_only, now, CFG) if prime_only else []
+    for ev in opened_events:
+        _log(f'{ev["ticker"]} → paper BUY  {ev["shares"]}sh @ ฿{ev["price"]:.2f}')
 
     if args.discord:
         if alert:
+            _log(f'Sending LINE → {len(alert)} break(s)')
             send_intraday_alert(alert, now, CFG)
             if opened_events:
                 send_paper_trade_update(opened_events, now, title='PAPER TRADE ENTRY')
-        else:
-            print('  No alertable signals — notifications skipped')
+
+    _log(f'Done. {len(signals)} break(s), {len(position_exit_events)} exit(s), {len(opened_events)} opened')
 
 
 if __name__ == '__main__':

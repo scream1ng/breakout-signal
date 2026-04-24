@@ -7,6 +7,8 @@ Data is read from the JSON files written by intraday.py / main.py.
 
 import os
 import json
+from datetime import datetime
+import pytz
 from fastapi import APIRouter
 
 router = APIRouter()
@@ -51,6 +53,24 @@ def get_signals():
         alerted_today = []
         failed_today = []
         alert_date = None
+
+    # Merge live prices written by intraday.py (same trading day only)
+    _today = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%Y-%m-%d')
+    live_path = os.path.join(ROOT, 'data', 'watchlist_live.json')
+    live_raw  = _read_json(live_path, {})
+    live_prices: dict = {}
+    if isinstance(live_raw, dict) and live_raw.get('date') == _today:
+        live_prices = live_raw.get('prices', {})
+
+    if live_prices:
+        merged = []
+        for item in watchlist_stocks:
+            ticker = item.get('ticker', '')
+            lp = live_prices.get(ticker)
+            if lp:
+                item = dict(item, close=lp['close'], rvol=lp['rvol'], broke=lp.get('broke', False))
+            merged.append(item)
+        watchlist_stocks = merged
 
     return {
         'watchlist':      watchlist_stocks,

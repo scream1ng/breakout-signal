@@ -503,6 +503,7 @@
                 <th class="px-4 py-2 text-right">SL</th>
                 <th class="px-4 py-2 text-right">TP1</th>
                 <th class="px-4 py-2 text-right">TP2</th>
+                <th class="px-4 py-2 text-center">Stage</th>
                 <th class="px-4 py-2 text-right">RSM</th>
                 <th class="px-4 py-2 text-right">RVol</th>
                 <th class="px-4 py-2 text-right">Stretch</th>
@@ -512,7 +513,7 @@
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.open_positions.length === 0">
-                <tr><td colspan="12" class="px-4 py-6 text-center text-gray-400">
+                <tr><td colspan="13" class="px-4 py-6 text-center text-gray-400">
                   No open positions
                 </td></tr>
               </template>
@@ -529,10 +530,17 @@
                     <span x-show="pos.sl && pos.entry_price" class="text-red-400 ml-1"
                       x-text="'(' + fmt1((pos.sl - pos.entry_price) / pos.entry_price * 100) + '%)'"></span>
                   </td>
-                  <td class="px-4 py-2 text-right text-green-600"
+                  <td class="px-4 py-2 text-right"
+                    :class="pos.tp1_hit ? 'text-green-400 line-through' : 'text-green-600'"
                     x-text="pos.tp1 ? '฿' + fmt2(pos.tp1) : '—'"></td>
-                  <td class="px-4 py-2 text-right text-green-700"
+                  <td class="px-4 py-2 text-right"
+                    :class="pos.tp2_hit ? 'text-green-400 line-through' : 'text-green-700'"
                     x-text="pos.tp2 ? '฿' + fmt2(pos.tp2) : '—'"></td>
+                  <td class="px-4 py-2 text-center">
+                    <span class="text-xs font-medium px-1.5 py-0.5 rounded"
+                      :class="pos.tp2_hit ? 'bg-green-100 text-green-800' : pos.tp1_hit ? 'bg-yellow-100 text-yellow-700' : 'bg-indigo-50 text-indigo-600'"
+                      x-text="pos.tp2_hit ? 'TP2 ✓' : pos.tp1_hit ? 'TP1 ✓' : 'OPEN'"></span>
+                  </td>
                   <td class="px-4 py-2 text-right"
                     :class="(pos.rsm||0) >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
                     x-text="pos.rsm ? fmt0(pos.rsm) : '—'"></td>
@@ -681,17 +689,19 @@
               <th class="px-4 py-2 text-center">Criteria</th>
               <th class="px-4 py-2 text-right">RVol</th>
               <th class="px-4 py-2 text-right">RSM</th>
+              <th class="px-4 py-2 text-right">STR</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
             <template x-if="signals.watchlist.length === 0">
-              <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">
+              <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">
                 Watchlist is empty — run EOD scan first
               </td></tr>
             </template>
             <template x-for="(s, i) in signals.watchlist" :key="i">
-              <tr class="hover:bg-gray-50">
+              <tr :class="s.broke ? 'bg-green-50' : 'hover:bg-gray-50'">
                 <td class="px-4 py-2 font-medium"
+                  :class="s.broke ? 'text-green-700' : ''"
                   x-text="(s.ticker || '').replace('.BK','')"></td>
                 <td class="px-4 py-2 text-right"
                   x-text="s.bp || s.level ? '฿' + fmt2(s.bp || s.level) : '—'"></td>
@@ -703,11 +713,14 @@
                     x-text="s.criteria || '—'"></span>
                 </td>
                 <td class="px-4 py-2 text-right"
-                  :class="s.rvol >= 2 ? 'text-green-600' : 'text-gray-500'"
+                  :class="s.rvol >= 2 ? 'text-green-600 font-semibold' : 'text-gray-800'"
                   x-text="s.rvol ? fmt1(s.rvol) + '×' : '—'"></td>
                 <td class="px-4 py-2 text-right"
-                  :class="s.rsm >= 80 ? 'text-green-600' : 'text-gray-500'"
+                  :class="s.rsm >= 80 ? 'text-green-600 font-semibold' : 'text-gray-800'"
                   x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
+                <td class="px-4 py-2 text-right"
+                  :class="(s.stretch || 0) > 4 ? 'text-red-500 font-semibold' : (s.stretch ? 'text-gray-800' : 'text-gray-400')"
+                  x-text="s.stretch ? fmt1(s.stretch) + '×' : '—'"></td>
               </tr>
             </template>
           </tbody>
@@ -916,23 +929,39 @@
                         @click="wlSort === 'pct_to_level' ? wlSortDir *= -1 : (wlSort='pct_to_level', wlSortDir=1)"
                         x-text="'% to Level' + (wlSort==='pct_to_level' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
                       <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
+                        @click="wlSort === 'rvol' ? wlSortDir *= -1 : (wlSort='rvol', wlSortDir=-1)"
+                        x-text="'RVol' + (wlSort==='rvol' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
                         @click="wlSort === 'rsm' ? wlSortDir *= -1 : (wlSort='rsm', wlSortDir=-1)"
                         x-text="'RSM' + (wlSort==='rsm' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
+                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
+                        @click="wlSort === 'stretch' ? wlSortDir *= -1 : (wlSort='stretch', wlSortDir=1)"
+                        x-text="'STR' + (wlSort==='stretch' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-gray-100">
                     <template x-for="(s, i) in wlSortedGroup(grp.items)" :key="i">
-                      <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-2 font-medium" x-text="s.ticker"></td>
+                      <tr :class="s.broke ? 'bg-green-50' : 'hover:bg-gray-50'">
+                        <td class="px-4 py-2 font-medium"
+                          :class="s.broke ? 'text-green-700' : ''"
+                          x-text="s.ticker"></td>
                         <td class="px-4 py-2 text-right text-gray-700"
                           x-text="(s.levels && s.levels.length) ? '฿' + fmt2(s.levels[0].level) : '—'"></td>
-                        <td class="px-4 py-2 text-right" x-text="s.close ? '฿' + fmt2(s.close) : '—'"></td>
+                        <td class="px-4 py-2 text-right"
+                          :class="s.broke ? 'text-green-700 font-semibold' : ''"
+                          x-text="s.close ? '฿' + fmt2(s.close) : '—'"></td>
                         <td class="px-4 py-2 text-right"
                           :class="(s.levels && s.levels.length && s.close) ? ((s.levels[0].level - s.close) / s.close * 100 <= 3 ? 'text-green-600 font-semibold' : 'text-gray-600') : 'text-gray-400'"
                           x-text="(s.levels && s.levels.length && s.close) ? fmt1((s.levels[0].level - s.close) / s.close * 100) + '%' : '—'"></td>
                         <td class="px-4 py-2 text-right"
-                          :class="s.rsm >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
+                          :class="(s.rvol || 0) >= 2 ? 'text-green-600 font-semibold' : 'text-gray-800'"
+                          x-text="s.rvol ? fmt1(s.rvol) + '×' : '—'"></td>
+                        <td class="px-4 py-2 text-right"
+                          :class="s.rsm >= 80 ? 'text-green-600 font-semibold' : 'text-gray-800'"
                           x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
+                        <td class="px-4 py-2 text-right"
+                          :class="(s.stretch || 0) > 4 ? 'text-red-500 font-semibold' : (s.stretch ? 'text-gray-800' : 'text-gray-400')"
+                          x-text="s.stretch ? fmt1(s.stretch) + '×' : '—'"></td>
                       </tr>
                     </template>
                   </tbody>

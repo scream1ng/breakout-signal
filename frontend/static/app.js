@@ -320,6 +320,10 @@ function app() {
           bv = (bL && bC) ? (bL - bC) / bC * 100 : 9999;
         } else if (key === 'rsm') {
           av = a.rsm ?? -1; bv = b.rsm ?? -1;
+        } else if (key === 'rvol') {
+          av = a.rvol ?? -1; bv = b.rvol ?? -1;
+        } else if (key === 'stretch') {
+          av = a.stretch ?? 9999; bv = b.stretch ?? 9999;
         } else if (key === 'close') {
           av = a.close ?? 0; bv = b.close ?? 0;
         } else if (key === 'level') {
@@ -330,6 +334,7 @@ function app() {
         return dir * (av - bv);
       });
     },
+
 
     // ── Formatting helpers ─────────────────────────────────────────────────
     fmtDatetime(iso) {
