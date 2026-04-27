@@ -189,8 +189,30 @@ def run():
     legacy_tickers = {item.get('ticker') for item in alert_state['alerted'] if item.get('level') is None}
     failed_keys = {item.get('key') for item in alert_state.get('failed', [])}
 
+    # ── Check open paper positions first (independent of watchlist) ─────────
+    _open_pos_tickers = list({
+        p['ticker_full'] for p in load_state(CFG).get('positions', [])
+        if p.get('status') == 'OPEN'
+    })
+    if _open_pos_tickers:
+        _log(f'Checking {len(_open_pos_tickers)} open position(s) (pre-watchlist)...')
+        _pos_prices, _pos_ema10s = fetch_price_and_ema10(_open_pos_tickers)
+        _pos_exit_events = check_positions(_pos_prices, _pos_ema10s, CFG, now)
+        for ev in _pos_exit_events:
+            pnl_str = f'+฿{ev["pnl"]:.0f}' if ev.get('pnl', 0) >= 0 else f'-฿{abs(ev.get("pnl", 0)):.0f}'
+            _log(f'{ev["ticker"]} → {ev.get("reason","EXIT")}  {ev["shares"]}sh @ ฿{ev["price"]:.2f}  {pnl_str}')
+        if _pos_exit_events:
+            _log(f'Sending LINE → {len(_pos_exit_events)} exit(s)')
+            send_paper_trade_update(_pos_exit_events, now, title='PAPER TRADE EXIT')
+    else:
+        _pos_exit_events = []
+        _pos_prices = {}
+        _pos_ema10s = {}
+
     if not os.path.exists(WL_PATH):
         _log('watchlist.json not found — run main.py first')
+        if _pos_exit_events:
+            _log(f'Done. {len(_pos_exit_events)} position exit(s) processed.')
         return
 
     with open(WL_PATH) as f:
@@ -291,25 +313,9 @@ def run():
     except Exception as _e:
         _log(f'[warn] live price save failed: {_e}')
 
-    # ── Check open paper positions for TP/SL/EMA10 exit ─────────────────
-    open_pos_tickers = list({
-        p['ticker_full'] for p in load_state(CFG).get('positions', [])
-        if p.get('status') == 'OPEN'
-    })
-    extra_tickers = [t for t in open_pos_tickers if t not in data]
-    pos_prices, pos_ema10s = fetch_price_and_ema10(open_pos_tickers)
-    # merge watchlist prices into pos_prices (already fetched)
-    for t, d in data.items():
-        if t not in pos_prices:
-            pos_prices[t] = d['close']
-    if open_pos_tickers:
-        _log(f'Checking {len(open_pos_tickers)} open position(s)...')
-    position_exit_events = check_positions(pos_prices, pos_ema10s, CFG, now)
-    for ev in position_exit_events:
-        pnl_str = f'+฿{ev["pnl"]:.0f}' if ev.get('pnl', 0) >= 0 else f'-฿{abs(ev.get("pnl", 0)):.0f}'
-        _log(f'{ev["ticker"]} → {ev.get("reason","EXIT")}  {ev["shares"]}sh @ ฿{ev["price"]:.2f}  {pnl_str}')
-    if position_exit_events and args.discord:
-        send_paper_trade_update(position_exit_events, now, title='PAPER TRADE EXIT')
+    # Position exits already processed above (pre-watchlist).
+    # Re-use results; use variable name expected by summary line below.
+    position_exit_events = _pos_exit_events
 
     signals = []
     seen    = set()
@@ -421,11 +427,12 @@ def run():
         _log(f'{len(signals)} fakeout(s): {", ".join(s["ticker"] for s in signals)}')
         closed_events = close_positions(signals, now, CFG, reason='FALSE_BREAKOUT')
         _save_alert_state(alert_state)
+        if closed_events:
+            _log(f'Sending LINE → {len(closed_events)} exit(s)')
+            send_paper_trade_update(closed_events, now, title='PAPER TRADE EXIT')
         if args.discord:
-            _log(f'Sending LINE → fakeout review')
+            _log(f'Sending Discord → fakeout review')
             send_review_alert(signals, now, CFG)
-            if closed_events:
-                send_paper_trade_update(closed_events, now, title='PAPER TRADE EXIT')
         _log(f'Done. {len(signals)} fakeout(s), {len(closed_events)} exit(s)')
         return
 
@@ -442,12 +449,13 @@ def run():
     for ev in opened_events:
         _log(f'{ev["ticker"]} → paper BUY  {ev["shares"]}sh @ ฿{ev["price"]:.2f}')
 
-    if args.discord:
-        if alert:
-            _log(f'Sending LINE → {len(alert)} break(s)')
-            send_intraday_alert(alert, now, CFG)
-            if opened_events:
-                send_paper_trade_update(opened_events, now, title='PAPER TRADE ENTRY')
+    if opened_events:
+        _log(f'Sending LINE → {len(opened_events)} trade(s) opened')
+        send_paper_trade_update(opened_events, now, title='PAPER TRADE ENTRY')
+
+    if args.discord and alert:
+        _log(f'Sending Discord → {len(alert)} break(s)')
+        send_intraday_alert(alert, now, CFG)
 
     _log(f'Done. {len(signals)} break(s), {len(position_exit_events)} exit(s), {len(opened_events)} opened')
 
