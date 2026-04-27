@@ -2,7 +2,7 @@
 
 Automated breakout scanner + paper trading system for Thai SET market.
 
-Scans all SET stocks for horizontal/trendline breakouts, filters by RS Momentum + projected volume, simulates paper trades with risk-based sizing + partial TP exits, publishes signals via **LINE** + **web dashboard**.
+Scans all SET stocks for horizontal/trendline breakouts, filters by RS Momentum + projected volume, simulates paper trades with risk-based sizing + partial TP exits, publishes alerts to **Discord**, paper-trade updates to **LINE**, and status to the **web dashboard**.
 
 Currently in **paper trade mode** (simulated fills). Switch to live: `TRADE_MODE=live` once SETTRADE order API wired up.
 
@@ -29,10 +29,11 @@ app/core/rsm.py         ← calculate RS Momentum vs ^SET.BK benchmark
 main.py (EOD)           ← rank, filter, classify (Prime/RVOL/RSM/STR/SMA50)
 intraday.py (live)      ← check watchlist every 15 min against live prices
       │
-      ├─► output/chart_combined.py  ← generate docs/index.html (interactive chart)
-      ├─► app/core/paper_trade.py   ← open/close/check positions (paper ledger)
-      └─► app/notifications/line.py ← send Flex Message bubbles to LINE
-           app/notifications/discord.py  ← job failures + ops alerts only
+       ├─► output/chart_combined.py  ← generate docs/index.html (interactive chart)
+       ├─► app/core/paper_trade.py   ← open/close/check positions (paper ledger)
+       └─► output/notifications.py   ← current scheduled notification path
+             ├─ Discord → intraday / fakeout / EOD alerts
+             └─ LINE    → paper-trade entry / exit / summary
       │
       ▼
 app/scheduler/runner.py ← APScheduler calls main.py + intraday.py on schedule
@@ -82,8 +83,8 @@ breakout-signal/
 │   │   └── live.py         ← LiveTradeEngine stub (SETTRADE orders — Phase 5)
 │   │
 │   ├── notifications/
-│   │   ├── line.py         ← PRIMARY channel — all signals + trades
-│   │   └── discord.py      ← Ops-only (job failures, system alerts)
+│   │   ├── line.py         ← New LINE notifier module (not yet the scheduled path)
+│   │   └── discord.py      ← Job failure + system alert helpers
 │   │
 │   ├── scheduler/
 │   │   ├── jobs.py         ← Job definitions (eod_scan, intraday_scan, review)
@@ -129,16 +130,17 @@ breakout-signal/
 
 ## SIGNAL CRITERIA
 
-| Label | Condition | LINE alert | Paper trade |
+| Label | Condition | Discord alert | Paper trade |
 |---|---|---|---|
-| **Prime** | proj_rvol ≥ 2× **and** RSM ≥ 80 **and** stretch ≤ 4 | ✓ Flex bubble | ✓ Opens position |
-| **RVOL** | proj_rvol ≥ 2×, RSM below threshold | ✓ Flex bubble | — |
-| **RSM** | RSM ≥ 80, proj_rvol below threshold | ✓ EOD summary | — |
-| **SMA50** | Above SMA50 only | — EOD only | — |
-| **STR** | stretch > 4 (overextended) | — EOD only | — |
+| **Prime** | proj_rvol ≥ 2× **and** RSM ≥ 80 **and** stretch ≤ 4 | ✓ Intraday/EOD alert | ✓ Opens position |
+| **RVOL** | proj_rvol ≥ 2×, RSM below threshold | ✓ Intraday/EOD alert | — |
+| **RSM** | RSM ≥ 80, proj_rvol below threshold | ✓ EOD alert | — |
+| **SMA50** | Above SMA50 only | ✓ EOD alert | — |
+| **STR** | stretch > 4 (overextended) | ✓ Intraday/EOD alert | — |
 
 > Intraday uses **projected RVol** — full-day volume projected from time elapsed in SET session (10:00–12:30 + 14:00–16:30 = 300 min total).
 > Intraday Discord table shows **Proj RVol** (current RVOL fallback only).
+> EOD is a fresh full-market close scan. An intraday fire from yesterday's watchlist should appear in today's EOD results only if it still qualifies on the final daily close. EOD shows all close-qualified signals, not every intraday touch.
 
 ---
 
@@ -157,20 +159,23 @@ Checked every intraday scan. Size formula: `capital × risk_pct / (ATR × sl_mul
 
 ---
 
-## LINE NOTIFICATIONS (Primary channel)
+## Notification Routing
 
-All signal types go to LINE. Discord receives job failures only.
+Current scheduled flow:
+
+- Discord sends alerting output: intraday breakouts, fakeout review, EOD summary.
+- LINE sends paper-trade output: trade opened, TP/SL exits, portfolio snapshot, trade history.
 
 | Notification | Trigger | Type |
 |---|---|---|
-| **Intraday breakout** | Live break during session | Flex bubble per stock (≤4) or summary card |
-| **Fakeout warning** | 16:15 review | Flex bubble with gap table |
-| **EOD summary** | 16:45 scan | Flex card with breakout table + watchlist count |
-| **Trade opened** | Prime signal → paper buy | Flex bubble: entry, shares, RVol/RSM/STR |
-| **TP1 / TP2** | Partial exit hit | Flex bubble: tranche P&L, shares left, next target |
-| **Trade closed** | SL / trail / false breakout | Flex bubble: final P&L |
-| **Portfolio snapshot** | EOD | Total equity, cash, win rate |
-| **Trade history** | EOD | Last 10 closed trades table |
+| **Intraday breakout** | Live break during session | Discord table alert |
+| **Fakeout warning** | 16:15 review | Discord fakeout alert |
+| **EOD summary** | 16:45 scan | Discord summary table |
+| **Trade opened** | Prime signal → paper buy | LINE bubble: entry, shares, RVol/RSM/STR |
+| **TP1 / TP2** | Partial exit hit | LINE bubble: tranche P&L, shares left, next target |
+| **Trade closed** | SL / trail / false breakout | LINE bubble: final P&L |
+| **Portfolio snapshot** | EOD | LINE portfolio summary |
+| **Trade history** | EOD | LINE trade history table |
 
 Paper-trade entry records use **Proj RVol** first, fallback to current RVOL if unavailable.
 
@@ -193,10 +198,10 @@ cp .env.example .env   # fill in your keys
 
 **Run scans manually (CLI — no web app needed):**
 ```bash
-# EOD scan — generate chart + watchlist + LINE notifications
+# EOD scan — generate chart + watchlist + Discord alert + LINE paper-trade summary
 .venv\Scripts\python main.py
 
-# Intraday scan — check watchlist against live prices + LINE alerts
+# Intraday scan — check watchlist against live prices + Discord alerts + LINE trade updates
 .venv\Scripts\python intraday.py
 
 # Fakeout review

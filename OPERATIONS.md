@@ -25,7 +25,7 @@ Complete guide to understanding what each script does, when they run, and how to
         ├─► Calculate RS Momentum + volume
         ├─► Filter & rank by criteria
         ├─► Generate chart HTML
-        ├─► Send LINE notifications
+        ├─► Send Discord alerts + LINE paper-trade notifications
         └─► Store results in watchlist.json
         
 ┌──────────────────────────────────────────────────────────┐
@@ -54,14 +54,19 @@ Complete guide to understanding what each script does, when they run, and how to
 5. Filter by volume + momentum thresholds
 6. Save **watchlist.json** (tomorrow's opportunities)
 7. Generate **docs/index.html** (interactive chart)
-8. Send LINE notification: 📊 "End-of-day watchlist — N active"
-9. Send Discord notification: 📈 "Carry into tomorrow — open positions"
+8. Send Discord notification: EOD summary table with all close-qualified signals
+9. Send LINE paper-trade summary: portfolio snapshot + recent trade history
 
 **Key outputs:**
 - `data/watchlist.json` — Tomorrow's scan list (grouped by criteria)
 - `docs/index.html` — Interactive chart with breakouts highlighted
-- LINE message with 3-5 top opportunities
 - Discord embed with full metrics table (ticker, level, price, criteria, RVOL, RSM, STR)
+- LINE portfolio snapshot and trade-history messages
+
+**Important behavior:**
+- EOD is a fresh full-market close scan.
+- An intraday fire from yesterday's watchlist should appear in today's EOD output only if it still qualifies on the final daily close.
+- EOD shows all stocks that qualify at the close, not every intraday touch from the session.
 
 **Example signal entry:**
 ```json
@@ -87,13 +92,14 @@ Complete guide to understanding what each script does, when they run, and how to
 1. Fetch live prices for all stocks in **watchlist.json**
 2. Check if any have closed above their breakout level
 3. Flag new breakouts, fakeouts (false breaks), and extended moves (STR > 4x)
-4. Send LINE alerts: 🎯 "Live breakout signal" (per signal)
-5. Send Discord alerts: ⚠️ "Fakeout detected" (false breaks only)
+4. Send Discord alerts for live breakouts detected from yesterday's watchlist
+5. Send Discord alerts for fakeout review at 16:15
+6. Send LINE notifications only when a paper-trade entry or exit is created
 
 **Key outputs:**
-- LINE intraday carousel: 1 Flex bubble per live breakout
-- Discord embeds for fakeouts
+- Discord embeds for intraday breakout and fakeout alerts
 - Paper trade entries (if `TRADE_MODE=paper`)
+- LINE trade entry / exit messages
 
 **Alert types:**
 - ✅ **Breakout detected** → Signal triggered above level
@@ -203,24 +209,25 @@ Interactive chart view:
 
 ## 📱 Notification Channels
 
-### **LINE (Primary)**
-- ✅ All signal types (intraday, breakouts, paper trade entries/exits)
+### **LINE**
+- ✅ Paper trade entries / exits
 - ✅ Portfolio snapshots (daily at close)
 - ✅ Trade summaries (when position closed)
 
 **Message Format:**
 ```
-🎯 SMT.BK breakout
-Price: 1.60 BT (↑7.8% vol, RSM:89)
-Level: 1.60 BT
-Risk: 0.02 BT | Reward: 0.04–0.06 BT
+💼 PAPER TRADE ENTRY
+SMT.BK 3,000 sh @ 1.60 BT
+Stop: 1.58 BT | TP1: 1.64 BT | TP2: 1.68 BT
+Proj RVol: 2.8x | RSM: 89
 ```
 
-### **Discord (Ops Only)**
+### **Discord**
+- ✅ Intraday breakout alerts
+- ✅ Fakeout alerts (false breakouts only)
+- ✅ EOD summary embed (full metrics table)
 - ✅ Job failures (scheduler errors, data fetch failures)
 - ✅ System alerts (warnings, configuration issues)
-- ✅ EOD summary embed (full metrics table)
-- ⚠️ Fakeout alerts (false breakouts only)
 
 **Message Format:**
 ```
@@ -245,7 +252,7 @@ TEAM     3.48     3.48     Hz        STR
 09:30 ← Intraday scanner starts (15-min intervals)
        ├─ Fetch live prices for yesterday's watchlist
        ├─ Check for new breakouts or fakeouts
-       └─ Send LINE alerts + open paper trades
+      └─ Send Discord alerts + open paper trades
 ```
 
 ### **Throughout Day (09:30–16:30)**
@@ -271,7 +278,8 @@ TEAM     3.48     3.48     Hz        STR
        ├─ Download day's OHLCV
        ├─ Detect new breakouts (for tomorrow)
        ├─ Generate chart + watchlist.json
-       ├─ Send LINE/Discord notifications
+      ├─ Send Discord EOD summary
+      └─ Send LINE paper-trade summary
        └─ Update dashboard with new signals
        
 18:00 ← Ready for tomorrow's intraday scans
@@ -289,7 +297,7 @@ Before deploying to Railway, verify:
 ✅ Smoke tests pass: `py -m pytest -q tests/test_api_smoke.py`
 ✅ Integration tests pass:
   - `py -m tests.test_settrade` (data fetch OK)
-  - `py -m tests.test_notifications` (Discord/LINE sends OK)
+  - `py -m tests.test_notifications` (Discord alerts + LINE paper-trade sends OK)
 
 ✅ SETTRADE credentials in `.env` (not committed to git)
 ✅ LINE token in `.env` (not committed to git)
@@ -318,12 +326,12 @@ Before deploying to Railway, verify:
 3. **Verify on Railway:**
    - Dashboard loads: `https://your-service.up.railway.app/`
    - API responds: `curl https://your-service.up.railway.app/api/signals`
-   - First EOD scan runs at 17:30 BKT (check Discord/LINE)
-   - Intraday scans start at 09:30 BKT tomorrow (check LINE alerts)
+  - First EOD scan runs at 17:30 BKT (check Discord summary + LINE paper-trade summary)
+  - Intraday scans start at 09:30 BKT tomorrow (check Discord alerts)
 
 4. **Monitor first 48 hours:**
    - Check scheduler job history in dashboard
-   - Verify notifications arrive (Discord/LINE)
+  - Verify notifications arrive on the expected channel (Discord alerts, LINE paper-trade)
    - Watch for data errors in railway logs
    - Manual override available: trigger `main.py` via `/api/scan` endpoint if needed
 
