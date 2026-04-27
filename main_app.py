@@ -19,7 +19,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.storage.db import init_db
@@ -40,6 +40,23 @@ STATIC_DIR   = os.path.join(FRONTEND_DIR, 'static')
 # Ensure required directories exist
 os.makedirs(DOCS_DIR,   exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
+
+
+def _frontend_asset_version() -> str:
+    commit_sha = os.getenv('RAILWAY_GIT_COMMIT_SHA', '').strip()
+    if commit_sha:
+        return commit_sha[:12]
+
+    candidates = [
+        os.path.join(FRONTEND_DIR, 'index.html'),
+        os.path.join(STATIC_DIR, 'app.js'),
+        os.path.join(STATIC_DIR, 'style.css'),
+    ]
+    latest_mtime = 0
+    for path in candidates:
+        if os.path.exists(path):
+            latest_mtime = max(latest_mtime, int(os.path.getmtime(path)))
+    return str(latest_mtime or 1)
 
 
 @asynccontextmanager
@@ -101,5 +118,11 @@ def spa(full_path: str = ''):
     # This catch-all only fires for unknown paths → serve the SPA shell.
     index = os.path.join(FRONTEND_DIR, 'index.html')
     if os.path.exists(index):
-        return FileResponse(index)
+        with open(index, encoding='utf-8') as f:
+            html = f.read()
+
+        asset_version = _frontend_asset_version()
+        html = html.replace('/static/style.css', f'/static/style.css?v={asset_version}')
+        html = html.replace('/static/app.js', f'/static/app.js?v={asset_version}')
+        return HTMLResponse(html)
     return {'detail': 'Frontend not found — run from project root'}
