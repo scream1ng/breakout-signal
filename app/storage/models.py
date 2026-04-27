@@ -75,3 +75,19 @@ class ScanSnapshot(Base):
             'n_signals':  self.n_signals,
             'n_watching': self.n_watching,
         }
+
+
+# ── DailyState — key/value store for ephemeral daily data ────────────────────
+class DailyState(Base):
+    """Persists daily data that must survive Railway redeploys.
+
+    Keys used:
+      'watchlist'              — EOD watchlist (written by main.py, read by intraday.py)
+      'alert_state:{YYYY-MM-DD}' — intraday alert dedup + fakeout log for one day
+    """
+    __tablename__ = 'daily_state'
+
+    state_key  = Column(String(80), primary_key=True)
+    state_json = Column(Text, nullable=False)
+    updated_at = Column(DateTime, nullable=False,
+                        default=lambda: datetime.now(timezone.utc))

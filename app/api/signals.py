@@ -31,8 +31,20 @@ def get_signals():
     watchlist_path    = os.path.join(ROOT, 'data', 'watchlist.json')
     alert_state_path  = os.path.join(ROOT, 'data', 'alert_state.json')
 
-    watchlist_raw = _read_json(watchlist_path, {'stocks': [], 'updated_at': None})
-    alert_raw     = _read_json(alert_state_path, {'date': None, 'alerted': [], 'failed': []})
+    # DB first, JSON fallback
+    _today = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%Y-%m-%d')
+    watchlist_raw = None
+    alert_raw = None
+    try:
+        from app.storage.state import load_state as db_load
+        watchlist_raw = db_load('watchlist')
+        alert_raw = db_load(f'alert_state:{_today}')
+    except Exception:
+        pass
+    if watchlist_raw is None:
+        watchlist_raw = _read_json(watchlist_path, {'stocks': [], 'updated_at': None})
+    if alert_raw is None:
+        alert_raw = _read_json(alert_state_path, {'date': None, 'alerted': [], 'failed': []})
 
     # Backward compatibility: some runs store watchlist.json as a plain list.
     if isinstance(watchlist_raw, list):

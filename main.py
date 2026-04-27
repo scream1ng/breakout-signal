@@ -618,6 +618,12 @@ def main():
     with open(wl_path, 'w') as f:
         json.dump(watchlist, f, indent=2)
     print(f'  Watchlist saved → {len(watchlist)} levels')
+    try:
+        from app.storage.state import save_state
+        save_state('watchlist', watchlist)
+        print(f'  Watchlist saved → DB')
+    except Exception as _e:
+        print(f'  [warn] Watchlist DB save skipped: {_e}')
 
     # Generate/update chart
     regime_results = [r for r in results if r.get('in_regime')]

@@ -51,7 +51,21 @@ def _merge_live(items: list[dict], live: dict) -> list[dict]:
 
 
 def _read_scan() -> dict | None:
-    """Return parsed scan_results.json or None if unavailable."""
+    """Return latest scan snapshot. Tries DB (scan_snapshots) first, falls back to JSON."""
+    try:
+        from app.storage.db import SessionLocal, init_db
+        from app.storage.models import ScanSnapshot
+        init_db()
+        db = SessionLocal()
+        try:
+            row = db.query(ScanSnapshot).order_by(ScanSnapshot.scan_date.desc()).first()
+            if row:
+                return json.loads(row.data_json)
+        finally:
+            db.close()
+    except Exception:
+        pass
+    # JSON fallback (local dev)
     if not os.path.exists(_SCAN_RESULTS):
         return None
     try:

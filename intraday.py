@@ -43,20 +43,10 @@ def _alert_key(ticker, level, kind=None):
     return f'{ticker}|{kind_part}|{float(level):.4f}'
 
 
-def _load_alert_state(date_str):
+def _normalize_alert_state(saved: dict, date_str: str) -> dict:
     state = {'date': date_str, 'alerted': [], 'failed': []}
-    if not os.path.exists(STATE_PATH):
-        return state
-
-    try:
-        with open(STATE_PATH) as f:
-            saved = json.load(f)
-    except Exception:
-        return state
-
     if saved.get('date') != date_str:
         return state
-
     normalized = []
     for item in saved.get('alerted', []):
         if isinstance(item, dict):
@@ -72,7 +62,6 @@ def _load_alert_state(date_str):
                 ))
         elif isinstance(item, str):
             normalized.append(dict(ticker=item, level=None, kind='', key=item, alerted_at=None))
-
     failed = []
     for item in saved.get('failed', []):
         if isinstance(item, dict):
@@ -87,13 +76,40 @@ def _load_alert_state(date_str):
                     failed_at=item.get('failed_at'),
                     close=item.get('close'),
                 ))
-
     state['alerted'] = normalized
     state['failed'] = failed
     return state
 
 
+def _load_alert_state(date_str):
+    state = {'date': date_str, 'alerted': [], 'failed': []}
+    # DB first
+    try:
+        from app.storage.state import load_state as db_load
+        saved = db_load(f'alert_state:{date_str}')
+        if saved:
+            return _normalize_alert_state(saved, date_str)
+    except Exception:
+        pass
+    # JSON fallback
+    if not os.path.exists(STATE_PATH):
+        return state
+    try:
+        with open(STATE_PATH) as f:
+            saved = json.load(f)
+        return _normalize_alert_state(saved, date_str)
+    except Exception:
+        return state
+
+
 def _save_alert_state(state):
+    # DB first
+    try:
+        from app.storage.state import save_state
+        save_state(f'alert_state:{state["date"]}', state)
+    except Exception:
+        pass
+    # JSON always (local dev + legacy)
     os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
     with open(STATE_PATH, 'w') as f:
         json.dump(state, f, indent=2)
@@ -209,14 +225,21 @@ def run():
         _pos_prices = {}
         _pos_ema10s = {}
 
-    if not os.path.exists(WL_PATH):
-        _log('watchlist.json not found — run main.py first')
-        if _pos_exit_events:
-            _log(f'Done. {len(_pos_exit_events)} position exit(s) processed.')
-        return
-
-    with open(WL_PATH) as f:
-        watchlist = json.load(f)
+    # Load watchlist — DB first, JSON fallback
+    watchlist = None
+    try:
+        from app.storage.state import load_state as db_load
+        watchlist = db_load('watchlist')
+    except Exception:
+        pass
+    if watchlist is None:
+        if not os.path.exists(WL_PATH):
+            _log('watchlist not found in DB or file — run main.py first')
+            if _pos_exit_events:
+                _log(f'Done. {len(_pos_exit_events)} position exit(s) processed.')
+            return
+        with open(WL_PATH) as f:
+            watchlist = json.load(f)
 
     if not watchlist:
         _log('Watchlist empty')
