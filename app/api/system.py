@@ -10,6 +10,9 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.config import DISCORD_WEBHOOK, LINE_MODE, LINE_TARGETS, LINE_TOKEN
+from app.notifications.discord import send_test_alert as send_discord_test_alert
+from app.notifications.line import send_test_message as send_line_test_message
 from app.storage.db import get_db
 from app.storage.models import JobRun
 from app.scheduler.runner import get_scheduler
@@ -100,3 +103,26 @@ def trigger_job(job_name: str, background_tasks: BackgroundTasks):
     from app.scheduler.runner import _tracked
     background_tasks.add_task(_tracked, job_name, job_map[job_name])
     return {'status': 'triggered', 'job': job_name}
+
+
+@router.post('/notify/test/{channel}')
+def trigger_notification_test(channel: str):
+    channel_name = channel.strip().lower()
+
+    if channel_name == 'discord':
+        if not DISCORD_WEBHOOK:
+            raise HTTPException(status_code=400, detail='DISCORD_WEBHOOK is not configured')
+        ok = send_discord_test_alert()
+    elif channel_name == 'line':
+        if not LINE_TOKEN:
+            raise HTTPException(status_code=400, detail='LINE_CHANNEL_ACCESS_TOKEN is not configured')
+        if LINE_MODE != 'broadcast' and not LINE_TARGETS:
+            raise HTTPException(status_code=400, detail='LINE target is not configured')
+        ok = send_line_test_message()
+    else:
+        raise HTTPException(status_code=404, detail="Unknown channel. Valid: ['discord', 'line']")
+
+    if not ok:
+        raise HTTPException(status_code=502, detail=f'{channel_name.upper()} test notification failed')
+
+    return {'status': 'sent', 'channel': channel_name}

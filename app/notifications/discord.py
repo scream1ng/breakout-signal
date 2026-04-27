@@ -11,6 +11,7 @@ Signal alerts (intraday, EOD, fakeout) → app/notifications/line.py
 
 import logging
 import time
+from datetime import datetime
 
 import requests
 
@@ -57,3 +58,9 @@ def send_system_alert(title: str, message: str) -> bool:
     ok = _post({'embeds': [embed]})
     time.sleep(0.4)
     return ok
+
+
+def send_test_alert() -> bool:
+    """Manual dashboard test notification."""
+    stamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    return send_system_alert('Discord notification test', f'Test message from dashboard at {stamp}.')

@@ -23,6 +23,7 @@ function app() {
     wlSortDir:        1,
     runDetailModal:   null,   // JobRun dict to show in popup
     jobRunning:       {},
+    notifyTesting:    {},
     toast:            { msg: '', ok: true },
     _refreshTimer:    null,
 
@@ -179,6 +180,23 @@ function app() {
         this.toast = { msg: `Failed to trigger ${jobName}`, ok: false };
         setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
         this.jobRunning = { ...this.jobRunning, [jobName]: false };
+      }
+    },
+
+    async testNotify(channel) {
+      this.notifyTesting = { ...this.notifyTesting, [channel]: true };
+      try {
+        const response = await fetch(`/api/notify/test/${channel}`, { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.detail || `Failed to send ${channel} test`);
+        }
+        this.toast = { msg: `${data.channel.toUpperCase()} test notification sent`, ok: true };
+      } catch (e) {
+        this.toast = { msg: e.message || `Failed to send ${channel} test`, ok: false };
+      } finally {
+        this.notifyTesting = { ...this.notifyTesting, [channel]: false };
+        setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
       }
     },
     get btCriteriaStats() {

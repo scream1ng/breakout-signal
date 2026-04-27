@@ -84,6 +84,15 @@ def _send(label: str, messages: list) -> bool:
     return ok
 
 
+def send_test_message() -> bool:
+    """Manual dashboard test notification."""
+    stamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return _send('manual test', [{
+        'type': 'text',
+        'text': f'Breakout Signal LINE test from dashboard at {stamp}',
+    }])
+
+
 # ── Flex component helpers ────────────────────────────────────────────────────
 
 def _ltext(text, color='#222222', size='sm', weight='regular', flex=None, align='start') -> dict:
