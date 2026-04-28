@@ -122,7 +122,7 @@ def register_jobs() -> None:
     scheduler.add_job(
         _tracked, 'cron',
         args=['intraday_scan', run_intraday_scan_notify],
-        day_of_week='sun-thu', hour=23, minute=15,
+        day_of_week='sun,mon,tue,wed,thu', hour=23, minute=15,
         id='intraday_early', replace_existing=True,
     )
 
@@ -130,7 +130,7 @@ def register_jobs() -> None:
     scheduler.add_job(
         _tracked, 'cron',
         args=['review_scan', run_review_scan_notify],
-        day_of_week='sun-thu', hour=23, minute=25,
+        day_of_week='sun,mon,tue,wed,thu', hour=23, minute=25,
         id='review_scan_early', replace_existing=True,
     )
 
