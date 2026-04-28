@@ -94,15 +94,16 @@ def register_jobs() -> None:
         id='eod_scan', replace_existing=True,
     )
 
-    # ── Intraday scans: 15-min cadence during market hours ───────────────────
+    # ── Intraday scans: every 15 min 10:15–16:15 BKK = 03:15–09:15 UTC ────────
     _intraday_bkk = [
-        '10:30', '10:45', '11:00', '11:15', '11:30', '11:45',
-        '12:00', '12:15', '12:30',
-        '14:30', '14:45', '15:00', '15:15', '15:30', '15:45', '16:00',
+        f'{h:02d}:{m:02d}'
+        for h in range(10, 17)
+        for m in (0, 15, 30, 45)
+        if (h * 60 + m) >= (10 * 60 + 15) and (h * 60 + m) <= (16 * 60 + 15)
     ]
     for i, t_bkk in enumerate(_intraday_bkk):
         h, m = map(int, t_bkk.split(':'))
-        h_utc = (h - 7) % 24
+        h_utc = h - 7
         scheduler.add_job(
             _tracked, 'cron',
             args=['intraday_scan', run_intraday_scan_notify],
@@ -110,28 +111,12 @@ def register_jobs() -> None:
             id=f'intraday_{i}', replace_existing=True,
         )
 
-    # ── Fakeout review: Mon-Fri 09:15 UTC = 16:15 BKK ───────────────────────
+    # ── Fakeout review: Mon-Fri 09:25 UTC = 16:25 BKK ───────────────────────
     scheduler.add_job(
         _tracked, 'cron',
         args=['review_scan', run_review_scan_notify],
-        day_of_week='mon-fri', hour=9, minute=15,
+        day_of_week='mon-fri', hour=9, minute=25,
         id='review_scan', replace_existing=True,
-    )
-
-    # ── Early morning: 06:15 BKK = 23:15 UTC prev day (Sun-Thu) ─────────────
-    scheduler.add_job(
-        _tracked, 'cron',
-        args=['intraday_scan', run_intraday_scan_notify],
-        day_of_week='sun,mon,tue,wed,thu', hour=23, minute=15,
-        id='intraday_early', replace_existing=True,
-    )
-
-    # ── Early fakeout: 06:25 BKK = 23:25 UTC prev day (Sun-Thu) ─────────────
-    scheduler.add_job(
-        _tracked, 'cron',
-        args=['review_scan', run_review_scan_notify],
-        day_of_week='sun,mon,tue,wed,thu', hour=23, minute=25,
-        id='review_scan_early', replace_existing=True,
     )
 
     logger.info('Registered %d jobs', len(scheduler.get_jobs()))
