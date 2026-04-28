@@ -467,8 +467,8 @@ def run():
     print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
     alert = signals
-    prime_only = [s for s in alert if s.get('criteria') == 'Prime']
-    opened_events = open_positions(prime_only, now, CFG) if prime_only else []
+    tradeable = [s for s in alert if s.get('criteria') in ('Prime', 'RVOL')]
+    opened_events = open_positions(tradeable, now, CFG) if tradeable else []
     for ev in opened_events:
         _log(f'{ev["ticker"]} → paper BUY  {ev["shares"]}sh @ ฿{ev["price"]:.2f}')
 

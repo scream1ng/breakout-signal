@@ -207,8 +207,8 @@ def open_positions(signals: list, now, cfg: dict) -> list:
         if not ticker_full or ticker_full in open_tickers:
             print(f'  [paper] skip {ticker_full} — position already open')
             continue
-        if sig.get('criteria') != 'Prime':   # paper trade: Prime only
-            print(f'  [paper] skip {ticker_full} — criteria {sig.get("criteria")} not Prime')
+        if sig.get('criteria') not in ('Prime', 'RVOL'):
+            print(f'  [paper] skip {ticker_full} — criteria {sig.get("criteria")} not tradeable')
             continue
 
         entry_price = float(sig.get('close', 0) or 0)
@@ -374,6 +374,10 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
         if not close:
             keep.append(pos)
             continue
+
+        pos['last_price'] = round(float(close), 4)
+        pos['last_price_at'] = _now_iso(now)
+        updated = True
 
         # backwards-compat: fill missing tracking fields
         pos.setdefault('shares_remaining', pos['shares'])

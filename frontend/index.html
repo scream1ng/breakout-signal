@@ -518,20 +518,21 @@
                 <th class="px-4 py-2 text-right">Entry</th>
                 <th class="px-4 py-2 text-right">Shares</th>
                 <th class="px-4 py-2 text-right">Value</th>
+                <th class="px-4 py-2 text-right">Current</th>
                 <th class="px-4 py-2 text-right">SL</th>
                 <th class="px-4 py-2 text-right">TP1</th>
                 <th class="px-4 py-2 text-right">TP2</th>
                 <th class="px-4 py-2 text-center">Stage</th>
                 <th class="px-4 py-2 text-right">RSM</th>
                 <th class="px-4 py-2 text-right">RVol</th>
-                <th class="px-4 py-2 text-right">Stretch</th>
+                <th class="px-4 py-2 text-right">STR</th>
                 <th class="px-4 py-2 text-center">Crit</th>
                 <th class="px-4 py-2 text-right">Opened</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.open_positions.length === 0">
-                <tr><td colspan="13" class="px-4 py-6 text-center text-gray-400">
+                <tr><td colspan="14" class="px-4 py-6 text-center text-gray-400">
                   No open positions
                 </td></tr>
               </template>
@@ -543,10 +544,11 @@
                   <td class="px-4 py-2 text-right" x-text="pos.shares_remaining ?? pos.shares"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="'฿' + fmt0(pos.entry_price * (pos.shares_remaining ?? pos.shares))"></td>
+                  <td class="px-4 py-2 text-right"
+                    :class="pos.last_price ? (pos.last_price >= pos.entry_price ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-400'"
+                    x-text="pos.last_price ? '฿' + fmt2(pos.last_price) : '—'"></td>
                   <td class="px-4 py-2 text-right">
                     <span class="text-red-500" x-text="pos.sl ? '฿' + fmt2(pos.sl) : '—'"></span>
-                    <span x-show="pos.sl && pos.entry_price" class="text-red-400 ml-1"
-                      x-text="'(' + fmt1((pos.sl - pos.entry_price) / pos.entry_price * 100) + '%)'"></span>
                   </td>
                   <td class="px-4 py-2 text-right"
                     :class="pos.tp1_hit ? 'text-green-400 line-through' : 'text-green-600'"
