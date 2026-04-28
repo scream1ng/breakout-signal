@@ -94,12 +94,13 @@ def register_jobs() -> None:
         id='eod_scan', replace_existing=True,
     )
 
-    # ── Intraday scans: every 15 min 10:15–16:15 BKK = 03:15–09:15 UTC ────────
+    # ── Intraday scans: every 15 min 10:15–12:30 + 14:00–16:15 BKK ────────────
     _intraday_bkk = [
         f'{h:02d}:{m:02d}'
         for h in range(10, 17)
         for m in (0, 15, 30, 45)
-        if (h * 60 + m) >= (10 * 60 + 15) and (h * 60 + m) <= (16 * 60 + 15)
+        if (10 * 60 + 15) <= (h * 60 + m) <= (12 * 60 + 30)
+        or (14 * 60 + 0)  <= (h * 60 + m) <= (16 * 60 + 15)
     ]
     for i, t_bkk in enumerate(_intraday_bkk):
         h, m = map(int, t_bkk.split(':'))
