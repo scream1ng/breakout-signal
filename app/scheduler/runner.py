@@ -118,4 +118,20 @@ def register_jobs() -> None:
         id='review_scan', replace_existing=True,
     )
 
+    # ── Early morning: 06:15 BKK = 23:15 UTC prev day (Sun-Thu) ─────────────
+    scheduler.add_job(
+        _tracked, 'cron',
+        args=['intraday_scan', run_intraday_scan_notify],
+        day_of_week='sun-thu', hour=23, minute=15,
+        id='intraday_early', replace_existing=True,
+    )
+
+    # ── Early fakeout: 06:25 BKK = 23:25 UTC prev day (Sun-Thu) ─────────────
+    scheduler.add_job(
+        _tracked, 'cron',
+        args=['review_scan', run_review_scan_notify],
+        day_of_week='sun-thu', hour=23, minute=25,
+        id='review_scan_early', replace_existing=True,
+    )
+
     logger.info('Registered %d jobs', len(scheduler.get_jobs()))

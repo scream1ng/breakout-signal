@@ -510,72 +510,72 @@
         <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
           Open positions
         </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto mb-6">
-          <table class="w-full text-xs">
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
+          <table class="w-full text-xs table-fixed">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
-                <th class="px-4 py-2 text-left">Ticker</th>
-                <th class="px-4 py-2 text-right">Entry</th>
-                <th class="px-4 py-2 text-right">Shares</th>
-                <th class="px-4 py-2 text-right">Value</th>
-                <th class="px-4 py-2 text-right">Current</th>
-                <th class="px-4 py-2 text-right">SL</th>
-                <th class="px-4 py-2 text-right">TP1</th>
-                <th class="px-4 py-2 text-right">TP2</th>
-                <th class="px-4 py-2 text-center">Stage</th>
-                <th class="px-4 py-2 text-right">RSM</th>
-                <th class="px-4 py-2 text-right">RVol</th>
-                <th class="px-4 py-2 text-right">STR</th>
-                <th class="px-4 py-2 text-center">Crit</th>
-                <th class="px-4 py-2 text-right">Opened</th>
+                <th class="px-2 py-2 text-left w-14">Ticker</th>
+                <th class="px-2 py-2 text-right w-14">Entry</th>
+                <th class="px-2 py-2 text-right w-12">Shares</th>
+                <th class="px-2 py-2 text-right w-16">Value</th>
+                <th class="px-2 py-2 text-right w-14">Current</th>
+                <th class="px-2 py-2 text-right w-14">SL</th>
+                <th class="px-2 py-2 text-right w-14">TP1</th>
+                <th class="px-2 py-2 text-right w-14">TP2</th>
+                <th class="px-2 py-2 text-center w-14">Stage</th>
+                <th class="px-2 py-2 text-right w-10">RSM</th>
+                <th class="px-2 py-2 text-right w-12">RVol</th>
+                <th class="px-2 py-2 text-right w-10">STR</th>
+                <th class="px-2 py-2 text-center w-12">Crit</th>
+                <th class="px-2 py-2 text-right w-14">Opened</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.open_positions.length === 0">
-                <tr><td colspan="14" class="px-4 py-6 text-center text-gray-400">
+                <tr><td colspan="14" class="px-2 py-6 text-center text-gray-400">
                   No open positions
                 </td></tr>
               </template>
               <template x-for="pos in portfolio.open_positions" :key="pos.id">
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2 font-medium"
+                  <td class="px-2 py-2 font-medium truncate"
                     x-text="(pos.ticker_full || pos.ticker || '').replace('.BK','')"></td>
-                  <td class="px-4 py-2 text-right" x-text="'฿' + fmt2(pos.entry_price)"></td>
-                  <td class="px-4 py-2 text-right" x-text="pos.shares_remaining ?? pos.shares"></td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-2 py-2 text-right" x-text="'฿' + fmt2(pos.entry_price)"></td>
+                  <td class="px-2 py-2 text-right" x-text="pos.shares_remaining ?? pos.shares"></td>
+                  <td class="px-2 py-2 text-right"
                     x-text="'฿' + fmt0(pos.entry_price * (pos.shares_remaining ?? pos.shares))"></td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-2 py-2 text-right"
                     :class="pos.last_price ? (pos.last_price >= pos.entry_price ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-400'"
                     x-text="pos.last_price ? '฿' + fmt2(pos.last_price) : '—'"></td>
-                  <td class="px-4 py-2 text-right">
+                  <td class="px-2 py-2 text-right">
                     <span class="text-red-500" x-text="pos.sl ? '฿' + fmt2(pos.sl) : '—'"></span>
                   </td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-2 py-2 text-right"
                     :class="pos.tp1_hit ? 'text-green-400 line-through' : 'text-green-600'"
                     x-text="pos.tp1 ? '฿' + fmt2(pos.tp1) : '—'"></td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-2 py-2 text-right"
                     :class="pos.tp2_hit ? 'text-green-400 line-through' : 'text-green-700'"
                     x-text="pos.tp2 ? '฿' + fmt2(pos.tp2) : '—'"></td>
-                  <td class="px-4 py-2 text-center">
-                    <span class="text-xs font-medium px-1.5 py-0.5 rounded"
+                  <td class="px-2 py-2 text-center">
+                    <span class="text-xs font-medium px-1 py-0.5 rounded"
                       :class="pos.tp2_hit ? 'bg-green-100 text-green-800' : pos.tp1_hit ? 'bg-yellow-100 text-yellow-700' : 'bg-indigo-50 text-indigo-600'"
                       x-text="pos.tp2_hit ? 'TP2 ✓' : pos.tp1_hit ? 'TP1 ✓' : 'OPEN'"></span>
                   </td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-2 py-2 text-right"
                     :class="(pos.rsm||0) >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
                     x-text="pos.rsm ? fmt0(pos.rsm) : '—'"></td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-2 py-2 text-right"
                     :class="(pos.rvol||0) >= 1.5 ? 'text-green-600 font-semibold' : 'text-gray-500'"
                     x-text="pos.rvol ? fmt1(pos.rvol) + '×' : '—'"></td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-2 py-2 text-right"
                     :class="(pos.stretch||0) > 4 ? 'text-red-500' : 'text-gray-500'"
                     x-text="pos.stretch ? fmt1(pos.stretch) + '×' : '—'"></td>
-                  <td class="px-4 py-2 text-center">
+                  <td class="px-2 py-2 text-center">
                     <span :class="critBadge(pos.criteria)"
-                      class="px-1.5 py-0.5 rounded text-xs font-medium"
+                      class="px-1 py-0.5 rounded text-xs font-medium"
                       x-text="pos.criteria || '—'"></span>
                   </td>
-                  <td class="px-4 py-2 text-right text-gray-400"
+                  <td class="px-2 py-2 text-right text-gray-400"
                     x-text="fmtDate(pos.opened_at || pos.entered_at)"></td>
                 </tr>
               </template>
