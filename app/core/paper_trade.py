@@ -479,13 +479,32 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
 def get_summary(cfg: dict) -> dict:
     state = load_state(cfg)
     open_positions = [p for p in state['positions'] if p.get('status') == 'OPEN']
-    recent_closed = state.get('closed_positions', [])[-10:]
+    closed_positions = state.get('closed_positions', [])
+    recent_closed = closed_positions[-10:]
+
+    capital = round(float(state.get('capital', 0)), 2)
+    cash    = round(float(state.get('cash', 0)), 2)
+    realized = round(float(state.get('realized_pnl', 0)), 2)
+
+    open_value = round(sum(
+        float(p.get('last_price', p.get('entry_price', 0)))
+        * float(p.get('shares_remaining', p.get('shares', 0)))
+        for p in open_positions
+    ), 2)
+    equity = round(cash + realized + open_value, 2)
+
+    wins = [p for p in closed_positions if float(p.get('pnl', 0)) > 0]
+    win_rate = round(len(wins) / len(closed_positions) * 100, 1) if closed_positions else 0.0
+
     return dict(
-        capital=round(float(state.get('capital', 0)), 2),
-        cash=round(float(state.get('cash', 0)), 2),
-        realized_pnl=round(float(state.get('realized_pnl', 0)), 2),
+        capital=capital,
+        cash=cash,
+        realized_pnl=realized,
+        open_value=open_value,
+        equity=equity,
+        win_rate=win_rate,
         open_count=len(open_positions),
-        closed_count=len(state.get('closed_positions', [])),
+        closed_count=len(closed_positions),
         updated_at=state.get('updated_at'),
         positions=[
             dict(
@@ -503,8 +522,13 @@ def get_summary(cfg: dict) -> dict:
         recent_closed=[
             dict(
                 ticker=p.get('ticker'),
+                entry_price=p.get('entry_price'),
+                exit_price=p.get('exit_price'),
+                shares=p.get('shares'),
                 pnl=p.get('pnl'),
-                ret_pct=p.get('ret_pct'),
+                ret_pct=round(
+                    float(p.get('pnl', 0)) / float(p.get('net_cost', 0)) * 100, 2
+                ) if float(p.get('net_cost', 0)) else p.get('ret_pct'),
                 reason=p.get('close_reason'),
             )
             for p in recent_closed

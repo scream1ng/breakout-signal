@@ -511,26 +511,52 @@ def _build_line_trade_close(event: dict) -> dict:
 
 def _build_line_portfolio(summary: dict, date_label: str) -> dict:
     """Flex bubble for portfolio snapshot."""
-    capital    = float(summary.get('capital', 0))
-    cash       = float(summary.get('cash', 0))
-    realized   = float(summary.get('realized_pnl', 0))
-    open_count = int(summary.get('open_count', 0))
+    capital      = float(summary.get('capital', 0))
+    cash         = float(summary.get('cash', 0))
+    realized     = float(summary.get('realized_pnl', 0))
+    open_value   = float(summary.get('open_value', 0))
+    open_count   = int(summary.get('open_count', 0))
     closed_count = int(summary.get('closed_count', 0))
-    equity     = cash + realized  # simplified; actual equity = cash + open position values
-    ret_pct    = (equity - capital) / capital * 100 if capital > 0 else 0
+    win_rate     = float(summary.get('win_rate', 0))
+    equity       = float(summary.get('equity', cash + realized + open_value))
+    ret_pct      = (equity - capital) / capital * 100 if capital > 0 else 0
 
     eq_col  = '#00b900' if equity >= capital else '#e03131'
     ret_str = f'{ret_pct:+.1f}%'
 
-    # Recent closed trades
     recent = summary.get('recent_closed', [])
-    recent_lines = []
-    for t in recent[:4]:
-        pnl   = float(t.get('pnl', 0) or 0)
-        col   = '#00b900' if pnl >= 0 else '#e03131'
-        label = f"{t.get('ticker','?')} · {t.get('reason','—')}"
-        val   = f"{'+'if pnl>=0 else ''}฿{abs(pnl):,.0f}"
-        recent_lines.append(_lrow(label, val, col))
+    recent_blocks = []
+    for t in recent[:3]:
+        pnl      = float(t.get('pnl', 0) or 0)
+        ret_pct_t = float(t.get('ret_pct', 0) or 0)
+        entry_p  = t.get('entry_price')
+        exit_p   = t.get('exit_price')
+        shares_t = t.get('shares')
+        reason_t = str(t.get('reason', '—'))
+        col      = '#00b900' if pnl >= 0 else '#e03131'
+        pnl_str  = f'{"+"if pnl>=0 else ""}฿{abs(pnl):,.0f} ({ret_pct_t:+.2f}%)'
+
+        row1 = {
+            'type': 'box', 'layout': 'horizontal', 'margin': 'xs', 'contents': [
+                _ltext(t.get('ticker', '?'), color='#1a1a1a', size='xs', weight='bold', flex=4),
+                _ltext(reason_t, color=col, size='xs', weight='bold', flex=3, align='end'),
+            ],
+        }
+        price_parts = []
+        if entry_p is not None:
+            price_parts.append(f'฿{float(entry_p):.2f}')
+        if exit_p is not None:
+            price_parts.append(f'฿{float(exit_p):.2f}')
+        price_str = '→'.join(price_parts) if price_parts else '—'
+        shares_str = f'{int(shares_t):,}sh' if shares_t is not None else ''
+        detail_parts = [p for p in [price_str, shares_str] if p]
+        row2 = {
+            'type': 'box', 'layout': 'horizontal', 'margin': 'none', 'contents': [
+                _ltext('  ' + ' · '.join(detail_parts), color='#888888', size='xs', flex=4),
+                _ltext(pnl_str, color=col, size='xs', weight='bold', flex=5, align='end'),
+            ],
+        }
+        recent_blocks.extend([row1, row2])
 
     body_contents = [
         {
@@ -542,17 +568,27 @@ def _build_line_portfolio(summary: dict, date_label: str) -> dict:
             ],
         },
         _lsep(),
-        _lrow('Cash',        f'฿{cash:,.0f}'),
-        _lrow('Open trades', str(open_count)),
-        _lrow('Closed',      str(closed_count)),
+        _lrow('Cash',         f'฿{cash:,.0f}'),
+        _lrow('Open trades',  str(open_count)),
+        _lrow('Closed',       str(closed_count)),
         _lrow('Realized P&L', f'{"+"if realized>=0 else ""}฿{abs(realized):,.0f}',
               '#00b900' if realized >= 0 else '#e03131'),
     ]
+    if open_value:
+        body_contents.append(
+            _lrow('Unrealized', f'{"+"if open_value>=0 else ""}฿{abs(open_value):,.0f}',
+                  '#00b900' if open_value >= 0 else '#e03131')
+        )
+    if closed_count > 0:
+        body_contents.append(
+            _lrow('Win rate', f'{win_rate:.0f}%',
+                  '#00b900' if win_rate >= 50 else '#e03131')
+        )
 
-    if recent_lines:
+    if recent_blocks:
         body_contents.append(_lsep())
         body_contents.append(_ltext('Recent closes', color='#888888', size='xs', weight='bold'))
-        body_contents.extend(recent_lines)
+        body_contents.extend(recent_blocks)
 
     return {
         'type': 'flex',

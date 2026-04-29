@@ -559,7 +559,7 @@
                 <th class="px-2 py-2 text-center">TP1</th>
                 <th class="px-2 py-2 text-center">TP2</th>
                 <th class="px-2 py-2 text-center">Stage</th>
-                <th class="px-2 py-2 text-center">Unreal</th>
+                <th class="px-2 py-2 text-center">Unrealized</th>
                 <th class="px-2 py-2 text-center">Crit</th>
                 <th class="px-2 py-2 text-center">Opened</th>
               </tr>
@@ -637,41 +637,40 @@
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
                 <th class="px-4 py-2 text-left">Ticker</th>
-                <th class="px-4 py-2 text-center">Crit</th>
                 <th class="px-4 py-2 text-center">Entry</th>
+                <th class="px-4 py-2 text-center">Shares</th>
                 <th class="px-4 py-2 text-center">Exit</th>
-                <th class="px-4 py-2 text-center">Ret%</th>
-                <th class="px-4 py-2 text-center">P&L</th>
+                <th class="px-4 py-2 text-center">Realized</th>
                 <th class="px-4 py-2 text-center">Reason</th>
                 <th class="px-4 py-2 text-center">Closed</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.recent_closed.length === 0">
-                <tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">
+                <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">
                   No closed trades yet
                 </td></tr>
               </template>
               <template x-for="pos in portfolio.recent_closed" :key="pos.id">
-                <tr class="hover:bg-gray-50">
+                <tr class="hover:bg-gray-50"
+                  x-data="{
+                    get ret() {
+                      if (pos.net_cost && pos.net_cost > 0) return (pos.pnl || 0) / pos.net_cost * 100;
+                      if (pos.ret_pct != null) return pos.ret_pct;
+                      if (pos.entry_price && pos.exit_price) return (pos.exit_price - pos.entry_price) / pos.entry_price * 100;
+                      return 0;
+                    }
+                  }">
                   <td class="px-4 py-2 font-medium"
                     x-text="(pos.ticker_full || pos.ticker || '').replace('.BK','')"></td>
-                  <td class="px-4 py-2 text-center">
-                    <span :class="critBadge(pos.criteria)"
-                      class="px-1.5 py-0.5 rounded text-xs font-medium"
-                      x-text="pos.criteria || '—'"></span>
-                  </td>
-                  <td class="px-4 py-2 text-center" x-text="'฿' + fmt2(pos.entry_price)"></td>
+                  <td class="px-4 py-2 text-center" x-text="pos.entry_price ? '฿' + fmt2(pos.entry_price) : '—'"></td>
+                  <td class="px-4 py-2 text-center text-gray-600"
+                    x-text="pos.shares != null ? fmt0(pos.shares) : '—'"></td>
                   <td class="px-4 py-2 text-center"
                     x-text="pos.exit_price ? '฿' + fmt2(pos.exit_price) : '—'"></td>
                   <td class="px-4 py-2 text-center font-semibold"
-                    x-data="{ get ret() { if (pos.ret_pct != null) return pos.ret_pct; if (pos.entry_price && pos.exit_price) return (pos.exit_price - pos.entry_price) / pos.entry_price * 100; return pos.pnl_pct ?? 0; } }"
-                    :class="ret >= 0 ? 'text-green-600' : 'text-red-500'"
-                    x-text="(ret >= 0 ? '+' : '') + fmt2(ret) + '%'"></td>
-                  <td class="px-4 py-2 text-center font-medium"
                     :class="(pos.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-500'"
-                    x-text="((pos.pnl||0) >= 0 ? '+' : '') + '฿' + fmt0(Math.abs(pos.pnl||0))">
-                  </td>
+                    x-text="((pos.pnl||0) >= 0 ? '+' : '') + '฿' + fmt0(Math.abs(pos.pnl||0)) + ' (' + (ret >= 0 ? '+' : '') + fmt2(ret) + '%)'"></td>
                   <td class="px-4 py-2 text-center">
                     <span :class="reasonBadge(pos.close_reason || pos.reason)"
                       class="px-1.5 py-0.5 rounded text-xs"

@@ -175,7 +175,7 @@ def save_scan_snapshot(results: list, today_signals: list,
             db.close()
     except Exception as _e:
         print(f'  [warn] DB snapshot skipped: {_e}')
-from output.notifications     import send_eod_alert, send_paper_trade_summary, send_line_history
+from output.notifications     import send_eod_alert, send_paper_trade_summary
 
 # ── Config ────────────────────────────────────────────────────────────────────
 try:
@@ -638,7 +638,6 @@ def main():
         send_eod_alert(today_signals, pending_list, results, DATE_STR, CFG, intraday_recap=build_intraday_recap(today_signals, DATE_STR))
         pt_summary = get_paper_trade_summary(CFG)
         send_paper_trade_summary(pt_summary, DATE_STR.replace('_', '-'))
-        send_line_history(pt_summary.get('recent_closed', []))
 
 
 if __name__ == '__main__':
