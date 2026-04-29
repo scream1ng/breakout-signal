@@ -35,7 +35,11 @@ args = parser.parse_args()
 
 def _log(msg: str):
     stamp = datetime.now(BKK).strftime('%H:%M:%S')
-    print(f'[{stamp}] {msg}', flush=True)
+    line = f'[{stamp}] {msg}'
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:
+        print(line.encode('ascii', errors='replace').decode('ascii'), flush=True)
 
 
 def _alert_key(ticker, level, kind=None):
@@ -326,7 +330,7 @@ def run():
     summary_parts = [f'{below} below level']
     if no_data_tickers:
         summary_parts.append(f'{len(no_data_tickers)} no data ({", ".join(no_data_tickers)})')
-    _log(' · '.join(summary_parts))
+    _log(' | '.join(summary_parts))
 
     _live_path = os.path.join(ROOT, 'data', 'watchlist_live.json')
     try:

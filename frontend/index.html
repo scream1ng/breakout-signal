@@ -547,21 +547,21 @@
           Open positions
         </h2>
         <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
-          <table class="w-full text-xs table-fixed">
+          <table class="w-full text-xs">
             <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
               <tr>
-                <th class="px-2 py-2 text-left w-14">Ticker</th>
-                <th class="px-2 py-2 text-right w-14">Entry</th>
-                <th class="px-2 py-2 text-right w-12">Shares</th>
-                <th class="px-2 py-2 text-right w-16">Value</th>
-                <th class="px-2 py-2 text-right w-14">Current</th>
-                <th class="px-2 py-2 text-right w-14">SL</th>
-                <th class="px-2 py-2 text-right w-14">TP1</th>
-                <th class="px-2 py-2 text-right w-14">TP2</th>
-                <th class="px-2 py-2 text-center w-14">Stage</th>
-                <th class="px-2 py-2 text-right w-24">Unreal</th>
-                <th class="px-2 py-2 text-center w-12">Crit</th>
-                <th class="px-2 py-2 text-right w-14">Opened</th>
+                <th class="px-2 py-2 text-left">Ticker</th>
+                <th class="px-2 py-2 text-center">Entry</th>
+                <th class="px-2 py-2 text-center">Shares</th>
+                <th class="px-2 py-2 text-center">Value</th>
+                <th class="px-2 py-2 text-center">Current</th>
+                <th class="px-2 py-2 text-center">SL</th>
+                <th class="px-2 py-2 text-center">TP1</th>
+                <th class="px-2 py-2 text-center">TP2</th>
+                <th class="px-2 py-2 text-center">Stage</th>
+                <th class="px-2 py-2 text-center">Unreal</th>
+                <th class="px-2 py-2 text-center">Crit</th>
+                <th class="px-2 py-2 text-center">Opened</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -574,20 +574,20 @@
                 <tr class="hover:bg-gray-50">
                   <td class="px-2 py-2 font-medium truncate"
                     x-text="(pos.ticker_full || pos.ticker || '').replace('.BK','')"></td>
-                  <td class="px-2 py-2 text-right" x-text="'฿' + fmt2(pos.entry_price)"></td>
-                  <td class="px-2 py-2 text-right" x-text="pos.shares_remaining ?? pos.shares"></td>
-                  <td class="px-2 py-2 text-right"
+                  <td class="px-2 py-2 text-center" x-text="'฿' + fmt2(pos.entry_price)"></td>
+                  <td class="px-2 py-2 text-center" x-text="pos.shares_remaining ?? pos.shares"></td>
+                  <td class="px-2 py-2 text-center"
                     x-text="'฿' + fmt0(pos.entry_price * (pos.shares_remaining ?? pos.shares))"></td>
-                  <td class="px-2 py-2 text-right"
+                  <td class="px-2 py-2 text-center"
                     :class="pos.last_price ? (pos.last_price >= pos.entry_price ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold') : 'text-gray-400'"
                     x-text="pos.last_price ? '฿' + fmt2(pos.last_price) : '—'"></td>
-                  <td class="px-2 py-2 text-right">
+                  <td class="px-2 py-2 text-center">
                     <span class="text-red-500" x-text="pos.sl ? '฿' + fmt2(pos.sl) : '—'"></span>
                   </td>
-                  <td class="px-2 py-2 text-right"
+                  <td class="px-2 py-2 text-center"
                     :class="pos.tp1_hit ? 'text-green-400 line-through' : 'text-green-600'"
                     x-text="pos.tp1 ? '฿' + fmt2(pos.tp1) : '—'"></td>
-                  <td class="px-2 py-2 text-right"
+                  <td class="px-2 py-2 text-center"
                     :class="pos.tp2_hit ? 'text-green-400 line-through' : 'text-green-700'"
                     x-text="pos.tp2 ? '฿' + fmt2(pos.tp2) : '—'"></td>
                   <td class="px-2 py-2 text-center">
@@ -595,7 +595,7 @@
                       :class="pos.tp2_hit ? 'bg-green-100 text-green-800' : pos.tp1_hit ? 'bg-yellow-100 text-yellow-700' : 'bg-indigo-50 text-indigo-600'"
                       x-text="pos.tp2_hit ? 'TP2 ✓' : pos.tp1_hit ? 'TP1 ✓' : 'OPEN'"></span>
                   </td>
-                  <td class="px-2 py-2 text-right"
+                  <td class="px-2 py-2 text-center"
                     x-data="{
                       get unreal() {
                         const rp = parseFloat(pos.realized_pnl || 0);
@@ -620,7 +620,7 @@
                       class="px-1 py-0.5 rounded text-xs font-medium"
                       x-text="pos.criteria || '—'"></span>
                   </td>
-                  <td class="px-2 py-2 text-right text-gray-400"
+                  <td class="px-2 py-2 text-center text-gray-400"
                     x-text="fmtDate(pos.opened_at || pos.entered_at)"></td>
                 </tr>
               </template>
@@ -661,13 +661,14 @@
                       class="px-1.5 py-0.5 rounded text-xs font-medium"
                       x-text="pos.criteria || '—'"></span>
                   </td>
-                  <td class="px-4 py-2 text-right" x-text="'฿' + fmt2(pos.entry_price)"></td>
-                  <td class="px-4 py-2 text-right"
+                  <td class="px-4 py-2 text-center" x-text="'฿' + fmt2(pos.entry_price)"></td>
+                  <td class="px-4 py-2 text-center"
                     x-text="pos.exit_price ? '฿' + fmt2(pos.exit_price) : '—'"></td>
-                  <td class="px-4 py-2 text-right font-semibold"
-                    :class="(pos.ret_pct||pos.pnl_pct||0) >= 0 ? 'text-green-600' : 'text-red-500'"
-                    x-text="((pos.ret_pct||pos.pnl_pct||0) >= 0 ? '+' : '') + fmt2(pos.ret_pct||pos.pnl_pct||0) + '%'"></td>
-                  <td class="px-4 py-2 text-right font-medium"
+                  <td class="px-4 py-2 text-center font-semibold"
+                    x-data="{ get ret() { if (pos.ret_pct != null) return pos.ret_pct; if (pos.entry_price && pos.exit_price) return (pos.exit_price - pos.entry_price) / pos.entry_price * 100; return pos.pnl_pct ?? 0; } }"
+                    :class="ret >= 0 ? 'text-green-600' : 'text-red-500'"
+                    x-text="(ret >= 0 ? '+' : '') + fmt2(ret) + '%'"></td>
+                  <td class="px-4 py-2 text-center font-medium"
                     :class="(pos.pnl || 0) >= 0 ? 'text-green-600' : 'text-red-500'"
                     x-text="((pos.pnl||0) >= 0 ? '+' : '') + '฿' + fmt0(Math.abs(pos.pnl||0))">
                   </td>
@@ -676,7 +677,7 @@
                       class="px-1.5 py-0.5 rounded text-xs"
                       x-text="pos.close_reason || pos.reason || '—'"></span>
                   </td>
-                  <td class="px-4 py-2 text-right text-gray-400"
+                  <td class="px-4 py-2 text-center text-gray-400"
                     x-text="fmtDate(pos.closed_at || pos.exit_at)"></td>
                 </tr>
               </template>
