@@ -457,11 +457,13 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
                 at_be  = sl is not None and abs(sl - entry) < 0.0001
                 reason = 'EMA10' if (ema_exit and not sl_hit) else ('BE' if at_be else 'SL')
                 _sell(sh, close, reason)
+            ret_pct = round((close - entry) / entry * 100, 2) if entry else 0.0
             pos.update(
                 status='CLOSED',
                 closed_at=_now_iso(now),
                 exit_price=round(close, 4),
                 pnl=round(float(pos['realized_pnl']), 2),
+                ret_pct=ret_pct,
                 close_reason=pos.get('close_reason', reason if (sl_hit or ema_exit) else 'PARTIAL'),
             )
             state['closed_positions'].append(pos)

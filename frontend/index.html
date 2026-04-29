@@ -65,6 +65,9 @@
       <button @click="tab='faq'"
         :class="tab === 'faq' ? 'tab-active' : 'hover:text-gray-700'"
         class="pb-2 pt-1 transition ml-auto">FAQ</button>
+      <button @click="tab='tools'"
+        :class="tab === 'tools' ? 'tab-active' : 'hover:text-gray-700'"
+        class="pb-2 pt-1 transition">Tools</button>
     </div>
   </header>
 
@@ -86,44 +89,6 @@
 
     <!-- ── DASHBOARD TAB ────────────────────────────────────────────────── -->
     <div x-show="tab === 'dashboard'">
-
-      <div class="mb-6 flex flex-wrap gap-3">
-        <button @click="testNotify('discord')"
-          :disabled="notifyTesting.discord === true"
-          class="px-3 py-2 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
-          x-text="notifyTesting.discord ? 'Sending Discord…' : 'Discord Notify Test'"></button>
-        <button @click="testNotify('line')"
-          :disabled="notifyTesting.line === true"
-          class="px-3 py-2 rounded bg-green-600 hover:bg-green-500 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
-          x-text="notifyTesting.line ? 'Sending LINE…' : 'LINE Notify Test'"></button>
-      </div>
-
-      <!-- Job summary cards -->
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Scheduled jobs
-      </h2>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <template x-for="job in jobSummary" :key="job.name">
-          <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-            <div class="flex items-center justify-between mb-1">
-              <span class="font-medium text-sm" x-text="job.label"></span>
-              <span :class="job.statusClass" class="status-dot ml-1"></span>
-            </div>
-            <div class="text-xs text-gray-500 space-y-0.5">
-              <div>Last: <span class="text-gray-700" x-text="job.lastRun"></span></div>
-              <div>Duration: <span class="text-gray-700" x-text="job.duration"></span></div>
-              <div>Next: <span class="text-gray-700" x-text="job.nextRun"></span></div>
-            </div>
-            <div x-show="job.error"
-              class="mt-2 text-xs text-red-600 bg-red-50 rounded p-1 truncate"
-              x-text="job.error"></div>
-            <button @click="runJob(job.name)"
-              :disabled="job.running"
-              class="mt-3 w-full text-xs px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              x-text="job.running ? 'Running…' : 'Run now'"></button>
-          </div>
-        </template>
-      </div>
 
       <!-- ── Intraday alerts (fixed table) ─────────────────────────────── -->
       <div class="mt-6">
@@ -177,6 +142,43 @@
                   <td class="px-4 py-2 text-right"
                     :class="(s.stretch || 0) <= 4 ? 'text-green-600 font-semibold' : 'text-red-500'"
                     x-text="s.stretch ? fmt1(s.stretch)+'×' : '—'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ── Fakeout review (fixed table) ──────────────────────────────── -->
+      <div class="mt-6">
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          Fakeout review
+          <span class="ml-1 text-gray-400 font-normal normal-case"
+            x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
+        </h2>
+        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
+          <table class="w-full text-xs table-fixed">
+            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
+              <tr>
+                <th class="px-4 py-2 text-left w-24">Ticker</th>
+                <th class="px-4 py-2 text-right w-24">Level</th>
+                <th class="px-4 py-2 text-right w-24">Close</th>
+                <th class="px-4 py-2 text-left w-32">Pattern</th>
+                <th class="px-4 py-2 text-left w-40">Detected at</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-if="dashboardFakeoutRows.length === 0">
+                <tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">No fakeouts</td></tr>
+              </template>
+              <template x-for="(f, i) in dashboardFakeoutRows" :key="i">
+                <tr class="hover:bg-gray-50">
+                  <td class="px-4 py-2 font-semibold text-red-600"
+                    x-text="(f.ticker||'').replace('.BK','')"></td>
+                  <td class="px-4 py-2 text-right" x-text="f.level ? '฿'+fmt2(f.level) : '—'"></td>
+                  <td class="px-4 py-2 text-right" x-text="f.close ? '฿'+fmt2(f.close) : '—'"></td>
+                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap" x-text="kindLabel(f)"></td>
+                  <td class="px-4 py-2 text-gray-500" x-text="f.failed_at ? fmtDatetime(f.failed_at) : '—'"></td>
                 </tr>
               </template>
             </tbody>
@@ -243,47 +245,23 @@
         </div>
       </div>
 
-      <!-- ── Fakeout review (fixed table) ──────────────────────────────── -->
-      <div class="mt-6">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Fakeout review
-          <span class="ml-1 text-gray-400 font-normal normal-case"
-            x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
+      <!-- Recent job history table -->
+      <div class="flex items-center justify-between mt-6 mb-3">
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+          Recent runs
+          <span class="text-gray-400 font-normal normal-case ml-1"
+            x-text="recentRuns.length ? '(' + recentRuns.length + ' total)' : ''"></span>
         </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
-          <table class="w-full text-xs table-fixed">
-            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-              <tr>
-                <th class="px-4 py-2 text-left w-24">Ticker</th>
-                <th class="px-4 py-2 text-right w-24">Level</th>
-                <th class="px-4 py-2 text-right w-24">Close</th>
-                <th class="px-4 py-2 text-left w-32">Pattern</th>
-                <th class="px-4 py-2 text-left w-40">Detected at</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <template x-if="dashboardFakeoutRows.length === 0">
-                <tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">No fakeouts</td></tr>
-              </template>
-              <template x-for="(f, i) in dashboardFakeoutRows" :key="i">
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2 font-semibold text-red-600"
-                    x-text="(f.ticker||'').replace('.BK','')"></td>
-                  <td class="px-4 py-2 text-right" x-text="f.level ? '฿'+fmt2(f.level) : '—'"></td>
-                  <td class="px-4 py-2 text-right" x-text="f.close ? '฿'+fmt2(f.close) : '—'"></td>
-                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap" x-text="kindLabel(f)"></td>
-                  <td class="px-4 py-2 text-gray-500" x-text="f.failed_at ? fmtDatetime(f.failed_at) : '—'"></td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
+        <div class="flex items-center gap-2 text-xs text-gray-500" x-show="runsTotalPages > 1">
+          <button @click="runsPage = Math.max(1, runsPage - 1)"
+            :disabled="runsPage === 1"
+            class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition">‹</button>
+          <span x-text="runsPage + ' / ' + runsTotalPages"></span>
+          <button @click="runsPage = Math.min(runsTotalPages, runsPage + 1)"
+            :disabled="runsPage === runsTotalPages"
+            class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition">›</button>
         </div>
       </div>
-
-      <!-- Recent job history table -->
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-6">
-        Recent runs
-      </h2>
       <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <table class="w-full text-xs">
           <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
@@ -301,7 +279,7 @@
                 No runs recorded yet
               </td></tr>
             </template>
-            <template x-for="run in recentRuns" :key="run.id">
+            <template x-for="run in paginatedRuns" :key="run.id">
               <tr class="hover:bg-gray-50 transition cursor-pointer" @click="runDetailModal = run">
                 <td class="px-4 py-2 font-medium" x-text="run.job_name"></td>
                 <td class="px-4 py-2 text-gray-500" x-text="fmtDatetime(run.started_at)"></td>
@@ -323,6 +301,61 @@
     </div>
     <!-- ── end DASHBOARD ──-->
 
+    <!-- ── TOOLS TAB ─────────────────────────────────────────────────────── -->
+    <div x-show="tab === 'tools'">
+
+      <!-- Notify buttons -->
+      <div class="mb-6 flex flex-wrap gap-3">
+        <button @click="testNotify('discord')"
+          :disabled="notifyTesting.discord === true"
+          class="px-3 py-2 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
+          x-text="notifyTesting.discord ? 'Sending Discord…' : 'Discord Notify Test'"></button>
+        <button @click="testNotify('line')"
+          :disabled="notifyTesting.line === true"
+          class="px-3 py-2 rounded bg-green-600 hover:bg-green-500 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
+          x-text="notifyTesting.line ? 'Sending LINE…' : 'LINE Notify Test'"></button>
+      </div>
+
+      <!-- Scheduled job cards -->
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Scheduled jobs</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <template x-for="job in jobSummary" :key="job.name">
+          <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-1">
+              <span class="font-medium text-sm" x-text="job.label"></span>
+              <span :class="job.statusClass" class="status-dot ml-1"></span>
+            </div>
+            <div class="text-xs text-gray-500 space-y-0.5">
+              <div>Last: <span class="text-gray-700" x-text="job.lastRun"></span></div>
+              <div>Duration: <span class="text-gray-700" x-text="job.duration"></span></div>
+              <div>Next: <span class="text-gray-700" x-text="job.nextRun"></span></div>
+            </div>
+            <div x-show="job.error"
+              class="mt-2 text-xs text-red-600 bg-red-50 rounded p-1 truncate"
+              x-text="job.error"></div>
+            <button @click="runJob(job.name)"
+              :disabled="job.running"
+              class="mt-3 w-full text-xs px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              x-text="job.running ? 'Running…' : 'Run now'"></button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Console -->
+      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Console</h2>
+      <div class="bg-gray-50 rounded-lg border border-gray-200 p-3 font-mono text-xs space-y-0.5 overflow-y-auto" style="height:320px">
+        <template x-if="toolsLog.length === 0">
+          <div class="text-gray-400">No activity yet…</div>
+        </template>
+        <template x-for="(line, i) in toolsLog" :key="i">
+          <div :class="line.includes('ERROR') ? 'text-red-600' : 'text-gray-700'"
+            x-text="line"></div>
+        </template>
+      </div>
+
+    </div>
+    <!-- ── end TOOLS ──-->
+
     <!-- ── FAQ TAB ─────────────────────────────────────────────────────── -->
     <div x-show="tab === 'faq'">
       <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
@@ -333,9 +366,12 @@
         <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
           <h3 class="font-semibold text-sm mb-2">How often do scripts run?</h3>
           <div class="text-xs text-gray-600 space-y-1">
-            <div>EOD scan: Mon-Fri 16:45 BKK</div>
-            <div>Intraday scan: every 15 min in market session (10:30-12:30, 14:30-16:00 BKK)</div>
-            <div>Fakeout review: Mon-Fri 16:15 BKK</div>
+            <div class="font-medium text-gray-700">Market session</div>
+            <div>10:30–12:30, 14:30–16:15 — Intraday scan every 15 min</div>
+            <div class="font-medium text-gray-700 pt-1">End of day</div>
+            <div>16:25 — Fakeout review</div>
+            <div>16:45 — EOD scan</div>
+            <div class="text-gray-400 pt-1">All times BKK (UTC+7), Mon–Fri</div>
           </div>
         </div>
 
@@ -523,16 +559,14 @@
                 <th class="px-2 py-2 text-right w-14">TP1</th>
                 <th class="px-2 py-2 text-right w-14">TP2</th>
                 <th class="px-2 py-2 text-center w-14">Stage</th>
-                <th class="px-2 py-2 text-right w-10">RSM</th>
-                <th class="px-2 py-2 text-right w-12">RVol</th>
-                <th class="px-2 py-2 text-right w-10">STR</th>
+                <th class="px-2 py-2 text-right w-24">Unreal</th>
                 <th class="px-2 py-2 text-center w-12">Crit</th>
                 <th class="px-2 py-2 text-right w-14">Opened</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.open_positions.length === 0">
-                <tr><td colspan="14" class="px-2 py-6 text-center text-gray-400">
+                <tr><td colspan="11" class="px-2 py-6 text-center text-gray-400">
                   No open positions
                 </td></tr>
               </template>
@@ -562,14 +596,25 @@
                       x-text="pos.tp2_hit ? 'TP2 ✓' : pos.tp1_hit ? 'TP1 ✓' : 'OPEN'"></span>
                   </td>
                   <td class="px-2 py-2 text-right"
-                    :class="(pos.rsm||0) >= 80 ? 'text-indigo-600 font-semibold' : 'text-gray-500'"
-                    x-text="pos.rsm ? fmt0(pos.rsm) : '—'"></td>
-                  <td class="px-2 py-2 text-right"
-                    :class="(pos.rvol||0) >= 1.5 ? 'text-green-600 font-semibold' : 'text-gray-500'"
-                    x-text="pos.rvol ? fmt1(pos.rvol) + '×' : '—'"></td>
-                  <td class="px-2 py-2 text-right"
-                    :class="(pos.stretch||0) > 4 ? 'text-red-500' : 'text-gray-500'"
-                    x-text="pos.stretch ? fmt1(pos.stretch) + '×' : '—'"></td>
+                    x-data="{
+                      get unreal() {
+                        const rp = parseFloat(pos.realized_pnl || 0);
+                        const lp = parseFloat(pos.last_price || 0);
+                        const ep = parseFloat(pos.entry_price || 0);
+                        const sr = parseFloat(pos.shares_remaining ?? pos.shares ?? 0);
+                        const s  = parseFloat(pos.shares || sr);
+                        if (!ep || !s) return null;
+                        const pnl = rp + (lp - ep) * sr;
+                        const pct = pnl / (ep * s) * 100;
+                        return { pnl, pct };
+                      }
+                    }"
+                    :class="unreal && unreal.pct >= 0 ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'">
+                    <template x-if="unreal">
+                      <span x-text="'฿' + fmt0(unreal.pnl) + ' (' + (unreal.pct >= 0 ? '+' : '') + fmt1(unreal.pct) + '%)'"></span>
+                    </template>
+                    <template x-if="!unreal"><span class="text-gray-400">—</span></template>
+                  </td>
                   <td class="px-2 py-2 text-center">
                     <span :class="critBadge(pos.criteria)"
                       class="px-1 py-0.5 rounded text-xs font-medium"

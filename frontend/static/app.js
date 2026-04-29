@@ -25,6 +25,9 @@ function app() {
     jobRunning:       {},
     notifyTesting:    {},
     toast:            { msg: '', ok: true },
+    toolsLog:         [],
+    runsPage:         1,
+    runsPerPage:      25,
     _refreshTimer:    null,
 
     // ── Dashboard session helpers ───────────────────────────────────────
@@ -108,6 +111,12 @@ function app() {
       if (this.tab === 'watchlist') this.loadWatchlistDetail();
     },
 
+    _consoleLog(msg) {
+      const now = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      this.toolsLog.unshift(`[${now}] ${msg}`);
+      if (this.toolsLog.length > 20) this.toolsLog.splice(20);
+    },
+
     // ── API calls ──────────────────────────────────────────────────────────
     async loadSystem() {
       try {
@@ -116,7 +125,10 @@ function app() {
         this.recentRuns       = data.recent_history    ?? [];
         this.nextRuns         = data.next_runs         ?? {};
         this.lastRuns         = data.last_runs         ?? {};
+        if (this.runsPage > this.runsTotalPages) this.runsPage = this.runsTotalPages;
+        this._consoleLog(`Scheduler ${this.schedulerRunning ? 'running' : 'stopped'} · ${this.recentRuns.length} runs loaded`);
       } catch (e) {
+        this._consoleLog(`ERROR: loadSystem failed — ${e.message}`);
         console.error('loadSystem failed', e);
       }
     },
@@ -163,20 +175,27 @@ function app() {
 
     async runJob(jobName) {
       this.jobRunning = { ...this.jobRunning, [jobName]: true };
+      this._consoleLog(`Triggering job: ${jobName}…`);
       try {
         const data = await fetch(`/api/jobs/run/${jobName}`, { method: 'POST' }).then(r => r.json());
+        this._consoleLog(`Job triggered: ${data.job}`);
         this.toast = { msg: `${data.job} triggered`, ok: true };
         setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
-        // Poll until the job is no longer running (max 5 min)
         const poll = async (attempts = 0) => {
           if (attempts > 150) return;
           await this.loadSystem();
           const last = this.lastRuns[jobName] ?? {};
-          if (last.status === 'running') setTimeout(() => poll(attempts + 1), 2000);
-          else this.jobRunning = { ...this.jobRunning, [jobName]: false };
+          if (last.status === 'running') {
+            this._consoleLog(`${jobName} running… (${attempts * 2}s)`);
+            setTimeout(() => poll(attempts + 1), 2000);
+          } else {
+            this._consoleLog(`${jobName} ${last.status ?? 'done'} · ${last.duration_s != null ? last.duration_s.toFixed(1) + 's' : ''}`);
+            this.jobRunning = { ...this.jobRunning, [jobName]: false };
+          }
         };
         setTimeout(() => poll(), 2000);
       } catch (e) {
+        this._consoleLog(`ERROR: ${jobName} trigger failed — ${e.message}`);
         this.toast = { msg: `Failed to trigger ${jobName}`, ok: false };
         setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
         this.jobRunning = { ...this.jobRunning, [jobName]: false };
@@ -185,14 +204,17 @@ function app() {
 
     async testNotify(channel) {
       this.notifyTesting = { ...this.notifyTesting, [channel]: true };
+      this._consoleLog(`Sending ${channel.toUpperCase()} test notification…`);
       try {
         const response = await fetch(`/api/notify/test/${channel}`, { method: 'POST' });
         const data = await response.json();
         if (!response.ok) {
           throw new Error(data.detail || `Failed to send ${channel} test`);
         }
+        this._consoleLog(`${data.channel.toUpperCase()} notification sent OK`);
         this.toast = { msg: `${data.channel.toUpperCase()} test notification sent`, ok: true };
       } catch (e) {
+        this._consoleLog(`ERROR: ${channel.toUpperCase()} notify failed — ${e.message}`);
         this.toast = { msg: e.message || `Failed to send ${channel} test`, ok: false };
       } finally {
         this.notifyTesting = { ...this.notifyTesting, [channel]: false };
@@ -235,6 +257,15 @@ function app() {
         }
         return dir * (av - bv);
       });
+    },
+
+    get runsTotalPages() {
+      return Math.max(1, Math.ceil(this.recentRuns.length / this.runsPerPage));
+    },
+
+    get paginatedRuns() {
+      const start = (this.runsPage - 1) * this.runsPerPage;
+      return this.recentRuns.slice(start, start + this.runsPerPage);
     },
 
     get jobSummary() {
