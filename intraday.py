@@ -59,8 +59,16 @@ def _normalize_alert_state(saved: dict, date_str: str) -> dict:
             if ticker and level is not None:
                 normalized.append(dict(
                     ticker=ticker,
+                    sector=item.get('sector', ''),
                     level=float(level),
                     kind=item.get('kind', ''),
+                    tl_angle=item.get('tl_angle'),
+                    criteria=item.get('criteria', ''),
+                    close=item.get('close'),
+                    cur_rvol=item.get('cur_rvol'),
+                    proj_rvol=item.get('proj_rvol'),
+                    rsm=item.get('rsm'),
+                    stretch=item.get('stretch'),
                     key=item.get('key') or _alert_key(ticker, level, item.get('kind')),
                     alerted_at=item.get('alerted_at'),
                 ))
@@ -471,7 +479,7 @@ def run():
     print_intraday(signals, now.strftime('%Y-%m-%d'), now.strftime('%H:%M'))
 
     alert = signals
-    tradeable = [s for s in alert if s.get('criteria') in ('Prime', 'RVOL')]
+    tradeable = [s for s in alert if s.get('criteria') == 'Prime']
     opened_events = open_positions(tradeable, now, CFG) if tradeable else []
     for ev in opened_events:
         _log(f'{ev["ticker"]} → paper BUY  {ev["shares"]}sh @ ฿{ev["price"]:.2f}')

@@ -141,6 +141,24 @@ function app() {
       }
     },
 
+    async deleteTrade(id, kind) {
+      const label = kind === 'open' ? 'open position' : 'closed trade';
+      if (!confirm(`Delete this ${label} (id=${id})? Cash and P&L will NOT be adjusted.`)) return;
+      try {
+        const res = await fetch(`/api/trades/${id}?kind=${kind}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          this.toast = { msg: err.detail || 'Delete failed', ok: false };
+        } else {
+          this.toast = { msg: `Deleted ${label} #${id}`, ok: true };
+          await this.loadPortfolio();
+        }
+      } catch (e) {
+        this.toast = { msg: 'Delete failed', ok: false };
+      }
+      setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
+    },
+
     async loadSignals() {
       try {
         this.signals = await fetch('/api/signals').then(r => r.json());

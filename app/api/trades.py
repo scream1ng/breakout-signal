@@ -1,12 +1,12 @@
 """
-app/api/trades.py — POST /api/trades/close
-============================================
-Manual override to close a specific open position from the web UI.
+app/api/trades.py — POST /api/trades/close, DELETE /api/trades/{trade_id}
+===========================================================================
+Manual override to close or hard-delete a position from the web UI.
 Only available in paper mode for now (live mode raises 503).
 """
 
-from datetime import datetime, timezone
-from fastapi import APIRouter, HTTPException
+from datetime import datetime
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import pytz
 
@@ -40,6 +40,33 @@ def close_trade(body: CloseRequest):
     if not target:
         raise HTTPException(status_code=404, detail=f'No open position for {body.ticker}')
 
-    # Mark as closed at current known price (entry price used as fallback)
     closed = pt.close_positions(now, TRADE_CFG)
     return {'closed': closed}
+
+
+@router.delete('/trades/{trade_id}')
+def delete_trade(
+    trade_id: int,
+    kind: str = Query('open', pattern='^(open|closed)$'),
+):
+    """Hard-delete a position by id. Does NOT adjust cash or realized P&L."""
+    if TRADE_MODE != 'paper':
+        raise HTTPException(status_code=503, detail='Live trading not yet enabled.')
+
+    import app.core.paper_trade as pt
+
+    state = pt.load_state(TRADE_CFG)
+
+    if kind == 'open':
+        before = len(state['positions'])
+        state['positions'] = [p for p in state['positions'] if p.get('id') != trade_id]
+        if len(state['positions']) == before:
+            raise HTTPException(status_code=404, detail=f'Open position id={trade_id} not found')
+    else:
+        before = len(state['closed_positions'])
+        state['closed_positions'] = [p for p in state['closed_positions'] if p.get('id') != trade_id]
+        if len(state['closed_positions']) == before:
+            raise HTTPException(status_code=404, detail=f'Closed position id={trade_id} not found')
+
+    pt.save_state(state)
+    return {'deleted': trade_id, 'kind': kind}

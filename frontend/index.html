@@ -562,6 +562,7 @@
                 <th class="px-2 py-2 text-center">Unrealized</th>
                 <th class="px-2 py-2 text-center">Crit</th>
                 <th class="px-2 py-2 text-center">Opened</th>
+                <th class="px-2 py-2 w-8"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
@@ -622,6 +623,10 @@
                   </td>
                   <td class="px-2 py-2 text-center text-gray-400"
                     x-text="fmtDate(pos.opened_at || pos.entered_at)"></td>
+                  <td class="px-2 py-2 text-center">
+                    <button @click="deleteTrade(pos.id, 'open')"
+                      class="text-gray-300 hover:text-red-500 transition" title="Delete position">✕</button>
+                  </td>
                 </tr>
               </template>
             </tbody>
@@ -643,11 +648,12 @@
                 <th class="px-4 py-2 text-center">Realized</th>
                 <th class="px-4 py-2 text-center">Reason</th>
                 <th class="px-4 py-2 text-center">Closed</th>
+                <th class="px-4 py-2 w-8"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
               <template x-if="portfolio.recent_closed.length === 0">
-                <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">
+                <tr><td colspan="8" class="px-4 py-6 text-center text-gray-400">
                   No closed trades yet
                 </td></tr>
               </template>
@@ -678,6 +684,10 @@
                   </td>
                   <td class="px-4 py-2 text-center text-gray-400"
                     x-text="fmtDate(pos.closed_at || pos.exit_at)"></td>
+                  <td class="px-4 py-2 text-center">
+                    <button @click="deleteTrade(pos.id, 'closed')"
+                      class="text-gray-300 hover:text-red-500 transition" title="Delete trade">✕</button>
+                  </td>
                 </tr>
               </template>
             </tbody>
