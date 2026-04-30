@@ -2,6 +2,10 @@
 output/report.py — All terminal printing functions
 """
 
+import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 # ── ANSI colours ───────────────────────────────────────────────────────────────
 R  = '\033[91m'; G = '\033[92m'; Y = '\033[93m'; B = '\033[94m'
 M  = '\033[95m'; C = '\033[96m'; W = '\033[97m'; DIM = '\033[2m'; RST = '\033[0m'
