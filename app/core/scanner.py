@@ -15,6 +15,7 @@ warnings.filterwarnings('ignore')
 def fetch_tv_stocks(cfg: dict) -> list[dict]:
     """Return list of dicts {ticker, desc, sector, price} that pass the pre-screen."""
     min_turnover = cfg['min_turnover']
+    min_price    = float(cfg.get('min_price', 0.50))
     print('  Fetching SET stocks from TradingView...')
     url     = 'https://scanner.tradingview.com/thailand/scan'
     payload = {
@@ -36,6 +37,8 @@ def fetch_tv_stocks(cfg: dict) -> list[dict]:
         ticker  = d[0]; desc = d[1]; sector = d[2] or 'Unknown'
         price   = d[3] or 0; avg_vol = d[4] or 0; sma50 = d[5]
         if any(x in ticker for x in ['.F', '.R', '-W', '-R']):
+            continue
+        if price < min_price:
             continue
         if price * avg_vol < min_turnover:
             continue

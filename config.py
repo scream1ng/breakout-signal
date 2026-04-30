@@ -24,6 +24,9 @@ CFG = {
     # Minimum daily turnover in THB to include a stock
     "min_turnover": 5_000_000,
 
+    # Minimum price filter (฿0.50 keeps legit low-price stocks, filters true junk)
+    "min_price": 0.50,
+
     # RS filter thresholds
     "rs_rating_min":   80,
     "rs_momentum_min": 80,
