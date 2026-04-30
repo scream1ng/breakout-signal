@@ -304,10 +304,13 @@ def close_positions(signals: list, now, cfg: dict, reason: str = 'FALSE_BREAKOUT
             keep_positions.append(pos)
             continue
 
-        gross_exit = pos['shares'] * exit_price
+        shares_to_close = int(pos.get('shares_remaining', pos['shares']))
+        entry = float(pos.get('entry_price', exit_price))
+        gross_exit = shares_to_close * exit_price
         net_exit = gross_exit * (1.0 - commission)
-        pnl = net_exit - float(pos.get('net_cost', 0))
-        ret_pct = (exit_price - float(pos.get('entry_price', exit_price))) / float(pos.get('entry_price', 1)) * 100
+        cost_basis = shares_to_close * entry * (1.0 + commission)
+        pnl = net_exit - cost_basis
+        ret_pct = (exit_price - entry) / entry * 100 if entry else 0
 
         state['cash'] += net_exit
         state['realized_pnl'] += pnl
@@ -315,6 +318,7 @@ def close_positions(signals: list, now, cfg: dict, reason: str = 'FALSE_BREAKOUT
         closed_pos = dict(pos)
         closed_pos.update(
             status='CLOSED',
+            shares=shares_to_close,
             closed_at=_now_iso(now),
             exit_price=round(exit_price, 4),
             net_exit=round(net_exit, 2),
@@ -330,7 +334,7 @@ def close_positions(signals: list, now, cfg: dict, reason: str = 'FALSE_BREAKOUT
             ticker_full=pos['ticker_full'],
             at=closed_pos['closed_at'],
             price=round(exit_price, 4),
-            shares=pos['shares'],
+            shares=shares_to_close,
             cash_after=round(state['cash'], 2),
             pnl=round(pnl, 2),
             ret_pct=round(ret_pct, 2),
@@ -491,7 +495,7 @@ def get_summary(cfg: dict) -> dict:
         * float(p.get('shares_remaining', p.get('shares', 0)))
         for p in open_positions
     ), 2)
-    equity = round(cash + realized + open_value, 2)
+    equity = round(cash + open_value, 2)
 
     wins = [p for p in closed_positions if float(p.get('pnl', 0)) > 0]
     win_rate = round(len(wins) / len(closed_positions) * 100, 1) if closed_positions else 0.0

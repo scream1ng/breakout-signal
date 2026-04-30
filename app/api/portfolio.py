@@ -34,7 +34,7 @@ def get_portfolio():
         float(p.get('last_price', p.get('entry_price', 0))) * float(p.get('shares_remaining', p.get('shares', 0)))
         for p in open_pos
     )
-    equity    = cash + realized + open_value
+    equity    = cash + open_value
     ret_pct   = (equity - capital) / capital * 100 if capital > 0 else 0.0
 
     # Win/loss stats from closed positions
