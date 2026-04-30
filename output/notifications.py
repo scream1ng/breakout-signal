@@ -240,12 +240,12 @@ def _build_intraday_embed(signals: list, time_str: str, cfg: dict) -> dict:
         stretch  = float(s.get('stretch', 0) or 0)
 
         iv = _icon_rvol(rvol, rvol_min)
-        ir = _icon_rsm(rsm, rsm_min)
+        ir = _icon_rsm(round(rsm), rsm_min)
         is_ = _icon_str(stretch)
 
         lines.append(
             f'`{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<10}` `{crit:<8}` '
-            f'{iv}`{rvol:.1f}x` {ir}`{rsm:.0f}` {is_}`{stretch:.1f}x`'
+            f'{iv}`{rvol:.1f}x` {ir}`{round(rsm)}` {is_}`{stretch:.1f}x`'
         )
 
     chart_url = get_chart_url()
@@ -309,12 +309,12 @@ def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
         stretch  = float(s.get('stretch', 0) or 0)
 
         iv = _icon_rvol(rvol, rvol_min)
-        ir = _icon_rsm(rsm, rsm_min)
+        ir = _icon_rsm(round(rsm), rsm_min)
         is_ = _icon_str(stretch)
 
         lines.append(
             f'`{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<11}` `{crit:<6}` '
-            f'{iv}`{rvol:.1f}x` {ir}`{rsm:.0f}` {is_}`{stretch:.1f}x`'
+            f'{iv}`{rvol:.1f}x` {ir}`{round(rsm)}` {is_}`{stretch:.1f}x`'
         )
 
     header    = '`TICKER  ` `  LEVEL` `  PRICE` `TYPE       ` `CRIT  ` `RVOL ` `RSM` `STR `'
@@ -424,7 +424,7 @@ def _build_line_trade_open(event: dict, cfg: dict) -> dict:
         _lrow('Value',    f'฿{value:,.0f}'),
         _lsep(),
         _lrow('RVol',  f'{rvol:.1f}×', _metric_color(rvol,    rvol_min)),
-        _lrow('RSM',   f'{rsm:.0f}',   _metric_color(rsm,     rsm_min)),
+        _lrow('RSM',   f'{round(rsm)}', _metric_color(round(rsm), rsm_min)),
         _lrow('STR',   f'{stretch:.1f}x', _metric_color(stretch, MAX_STR, invert=True)),
     ]
 

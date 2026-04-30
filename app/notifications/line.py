@@ -438,7 +438,7 @@ def _build_trade_open_bubble(event: dict, cfg: dict) -> dict:
                     _lrow('Value',  f'฿{value:,.0f}'),
                     _lsep(),
                     _lrow('RVol', f'{rvol:.1f}×', _metric_color(rvol,    rvol_min)),
-                    _lrow('RSM',  f'{rsm:.0f}',   _metric_color(rsm,     rsm_min)),
+                    _lrow('RSM',  f'{round(rsm)}', _metric_color(round(rsm), rsm_min)),
                     _lrow('STR',  f'{stretch:.1f}x', _metric_color(stretch, MAX_STR, invert=True)),
                 ],
             },

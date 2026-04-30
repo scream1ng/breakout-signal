@@ -58,10 +58,15 @@ def delete_trade(
     state = pt.load_state(TRADE_CFG)
 
     if kind == 'open':
-        before = len(state['positions'])
-        state['positions'] = [p for p in state['positions'] if p.get('id') != trade_id]
-        if len(state['positions']) == before:
+        deleted_pos = next((p for p in state['positions'] if p.get('id') == trade_id), None)
+        if deleted_pos is None:
             raise HTTPException(status_code=404, detail=f'Open position id={trade_id} not found')
+        # Return locked capital (remaining shares) to cash
+        commission = float(TRADE_CFG.get('commission', 0.0015))
+        shares_remaining = float(deleted_pos.get('shares_remaining', deleted_pos.get('shares', 0)))
+        entry_price = float(deleted_pos.get('entry_price', 0))
+        state['cash'] = round(state['cash'] + shares_remaining * entry_price * (1.0 + commission), 2)
+        state['positions'] = [p for p in state['positions'] if p.get('id') != trade_id]
     else:
         before = len(state['closed_positions'])
         state['closed_positions'] = [p for p in state['closed_positions'] if p.get('id') != trade_id]
