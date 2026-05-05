@@ -36,6 +36,7 @@ from app.core.entry              import detect_pivots
 from app.core.exit               import simulate
 from app.core.paper_trade        import get_summary as get_paper_trade_summary
 from app.core.portfolio          import simulate_portfolio
+from app.core.watchlist          import build_pending_info
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
 
@@ -325,12 +326,6 @@ def process_ticker(stock: dict, bench: pd.Series):
     last_atr    = float(df['ATR'].iloc[-1]) if not pd.isna(df['ATR'].iloc[-1]) else 0
     rsm_last    = float(df['RSM'].iloc[-1]) if not pd.isna(df['RSM'].iloc[-1]) else 0.0
     rvol_last   = round(float(rvol_arr[-1]), 2)
-    # Only suppress pending if a strong signal fired today (regime + RVOL or RSM)
-    # Weak signals (SMA50 only) should not hide a stock from the watchlist
-    today_fired = any(
-        b['bar'] == last_bar and (b.get('rvol_ok') or b.get('rsm_ok'))
-        for b in all_breaks
-    )
     last_ema10  = float(df['EMA10'].iloc[-1]) if not pd.isna(df['EMA10'].iloc[-1]) else 0
     last_ema20  = float(df['EMA20'].iloc[-1]) if not pd.isna(df['EMA20'].iloc[-1]) else 0
     last_sma50  = float(df['SMA50'].iloc[-1]) if not pd.isna(df['SMA50'].iloc[-1]) else 0
@@ -341,18 +336,23 @@ def process_ticker(stock: dict, bench: pd.Series):
     above_ema20 = last_close > last_ema20
     above_sma50 = last_close > last_sma50
 
-    # Watchlist: active line, in regime, no breakout today
-    pending_info = None
-    if pending_levels and not today_fired and last_regime:
-        last_avg_vol = float(avg_vol[-1]) if len(avg_vol) > 0 else 0
-        pending_info = dict(
-            ticker=ticker, desc=stock['desc'], sector=stock['sector'],
-            close=last_close, atr=round(last_atr, 4),
-            rsm=round(rsm_last, 1), rvol=rvol_last,
-            avg_volume=round(last_avg_vol),
-            sma50=round(last_sma50, 4),
-            levels=pending_levels,
-        )
+    # Watchlist: keep any line that is still active into the close.
+    # `detect_pivots()` already removes lines that actually broke today,
+    # so a same-day signal on one line must not hide other surviving levels.
+    last_avg_vol = float(avg_vol[-1]) if len(avg_vol) > 0 else 0
+    pending_info = build_pending_info(
+        ticker=ticker,
+        desc=stock['desc'],
+        sector=stock['sector'],
+        pending_levels=pending_levels,
+        last_regime=last_regime,
+        last_close=last_close,
+        last_atr=last_atr,
+        rsm_last=rsm_last,
+        rvol_last=rvol_last,
+        last_avg_vol=last_avg_vol,
+        last_sma50=last_sma50,
+    )
 
     # Today's signal: Full first, then any regime signal
     today_info = None

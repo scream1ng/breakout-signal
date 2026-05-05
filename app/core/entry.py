@@ -54,6 +54,7 @@ def detect_pivots(
     ph0_v = np.nan; ph0_i = -1
     ph1_v = np.nan; ph1_i = -1
     tl_slope = np.nan; tl_base = np.nan; tl_base_i = -1
+    hz_confirm_i = -1; tl_confirm_i = -1
     in_regime  = False
     bars_below = 0
 
@@ -86,6 +87,7 @@ def detect_pivots(
             ph0_v = np.nan; ph0_i = -1
             ph1_v = np.nan; ph1_i = -1
             tl_slope = np.nan; tl_base = np.nan; tl_base_i = -1
+            hz_confirm_i = -1; tl_confirm_i = -1
 
         # ── Pivot high confirmation ────────────────────────────────────────
         if i >= 2 * psth_val:
@@ -98,6 +100,7 @@ def detect_pivots(
                 if not np.isnan(ph_sma) and ph_hi > ph_sma:
                     save_hz()
                     hz_xs = [ph_bar]; hz_ys = [ph_hi]; hz_active = True
+                    hz_confirm_i = i
                     ph1_v = ph0_v; ph1_i = ph0_i
                     ph0_v = ph_hi; ph0_i = ph_bar
 
@@ -118,6 +121,7 @@ def detect_pivots(
                             tl_xs     = [ph1_i, ph0_i]
                             tl_ys     = [ph1_v, ph0_v]
                             tl_active = True
+                            tl_confirm_i = i
 
         # ── Current level values ──────────────────────────────────────────
         tl_val   = (tl_base + tl_slope * (i - tl_base_i)
@@ -131,11 +135,16 @@ def detect_pivots(
         # the signal check would never fire.
         prev_cl = float(df['Close'].iloc[i - 1]) if i > 0 else np.nan
 
+        # A pivot is only knowable after the current bar closes. If a newly
+        # confirmed level is also broken by that same close, EOD must not emit
+        # a signal that intraday could never have seen in yesterday's watchlist.
         hz_break = (hz_active and not np.isnan(hz_level)
+                    and i > hz_confirm_i
                     and cl_i > hz_level       # close strictly above
                     and prev_cl <= hz_level)   # was at or below yesterday
 
         tl_break = (tl_active and not np.isnan(tl_level)
+                    and i > tl_confirm_i
                     and cl_i > tl_level
                     and prev_cl <= tl_level)
 
@@ -185,18 +194,22 @@ def detect_pivots(
         if hz_closed_above:
             hz_xs.append(i); hz_ys.append(hz_level)
             save_hz(); hz_xs = []; hz_ys = []; hz_active = False
+            hz_confirm_i = -1
         elif hz_active and not np.isnan(sma_i) and cl_i < sma_i:
             hz_xs.append(i); hz_ys.append(hz_level)
             save_hz(); hz_xs = []; hz_ys = []; hz_active = False
+            hz_confirm_i = -1
         elif hz_active:
             hz_xs.append(i); hz_ys.append(hz_level)
 
         if tl_closed_above:
             tl_xs.append(i); tl_ys.append(tl_level)
             save_tl(); tl_xs = []; tl_ys = []; tl_active = False
+            tl_confirm_i = -1
         elif tl_active and not np.isnan(sma_i) and cl_i < sma_i:
             tl_xs.append(i); tl_ys.append(tl_level)
             save_tl(); tl_xs = []; tl_ys = []; tl_active = False
+            tl_confirm_i = -1
         elif tl_active and not np.isnan(tl_val):
             tl_xs.append(i); tl_ys.append(tl_val)
 
