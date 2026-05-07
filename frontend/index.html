@@ -118,9 +118,12 @@
               </template>
               <template x-for="(s, i) in dashboardIntradayRows" :key="i">
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2 font-semibold"
-                    :class="critTextClass(s.criteria)"
-                    x-text="(s.ticker||s).replace ? (s.ticker||s).replace('.BK','') : s"></td>
+                  <td class="px-4 py-2">
+                    <button type="button" @click="openChart(s)"
+                      class="font-semibold hover:underline"
+                      :class="critTextClass(s.criteria)"
+                      x-text="tickerText(s)"></button>
+                  </td>
                   <td class="px-4 py-2 text-gray-500 truncate" x-text="s.sector || '—'"></td>
                   <td class="px-4 py-2 text-right"
                     x-text="s.level ? '฿'+fmt2(s.level) : '—'"></td>
@@ -173,8 +176,11 @@
               </template>
               <template x-for="(f, i) in dashboardFakeoutRows" :key="i">
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2 font-semibold text-red-600"
-                    x-text="(f.ticker||'').replace('.BK','')"></td>
+                  <td class="px-4 py-2">
+                    <button type="button" @click="openChart(f)"
+                      class="font-semibold text-red-600 hover:underline"
+                      x-text="tickerText(f)"></button>
+                  </td>
                   <td class="px-4 py-2 text-right" x-text="f.level ? '฿'+fmt2(f.level) : '—'"></td>
                   <td class="px-4 py-2 text-right" x-text="f.close ? '฿'+fmt2(f.close) : '—'"></td>
                   <td class="px-4 py-2 text-gray-500 whitespace-nowrap" x-text="kindLabel(f)"></td>
@@ -214,9 +220,12 @@
               </template>
               <template x-for="(s, i) in dashboardEodRows" :key="i">
                 <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2 font-semibold"
-                    :class="critTextClass(s.filter_type || s.criteria)"
-                    x-text="(s.ticker||'').replace('.BK','')"></td>
+                  <td class="px-4 py-2">
+                    <button type="button" @click="openChart(s)"
+                      class="font-semibold hover:underline"
+                      :class="critTextClass(s.filter_type || s.criteria)"
+                      x-text="tickerText(s)"></button>
+                  </td>
                   <td class="px-4 py-2 text-gray-500 truncate"
                     x-text="s.sector||'—'"></td>
                   <td class="px-4 py-2 text-right font-medium text-indigo-600"
@@ -573,8 +582,11 @@
               </template>
               <template x-for="pos in portfolio.open_positions" :key="pos.id">
                 <tr class="hover:bg-gray-50">
-                  <td class="px-2 py-2 font-medium truncate"
-                    x-text="(pos.ticker_full || pos.ticker || '').replace('.BK','')"></td>
+                  <td class="px-2 py-2 truncate">
+                    <button type="button" @click="openChart(pos)"
+                      class="font-medium hover:underline"
+                      x-text="tickerText(pos)"></button>
+                  </td>
                   <td class="px-2 py-2 text-center" x-text="'฿' + fmt2(pos.entry_price)"></td>
                   <td class="px-2 py-2 text-center" x-text="pos.shares_remaining ?? pos.shares"></td>
                   <td class="px-2 py-2 text-center"
@@ -667,8 +679,11 @@
                       return 0;
                     }
                   }">
-                  <td class="px-4 py-2 font-medium"
-                    x-text="(pos.ticker_full || pos.ticker || '').replace('.BK','')"></td>
+                  <td class="px-4 py-2">
+                    <button type="button" @click="openChart(pos)"
+                      class="font-medium hover:underline"
+                      x-text="tickerText(pos)"></button>
+                  </td>
                   <td class="px-4 py-2 text-center" x-text="pos.entry_price ? '฿' + fmt2(pos.entry_price) : '—'"></td>
                   <td class="px-4 py-2 text-center text-gray-600"
                     x-text="pos.shares != null ? fmt0(pos.shares) : '—'"></td>
@@ -730,8 +745,11 @@
             </template>
             <template x-for="(s, i) in signals.alerted_today" :key="i">
               <tr class="hover:bg-gray-50">
-                <td class="px-4 py-2 font-medium"
-                  x-text="(s.ticker || s).replace ? (s.ticker || s).replace('.BK','') : s"></td>
+                <td class="px-4 py-2">
+                  <button type="button" @click="openChart(s)"
+                    class="font-medium hover:underline"
+                    x-text="tickerText(s)"></button>
+                </td>
                 <td class="px-4 py-2 text-right"
                   x-text="s.level ? '฿' + fmt2(s.level) : '—'"></td>
                 <td class="px-4 py-2 text-right"
@@ -777,9 +795,12 @@
             </template>
             <template x-for="(s, i) in signals.watchlist" :key="i">
               <tr :class="s.broke ? 'bg-green-50' : 'hover:bg-gray-50'">
-                <td class="px-4 py-2 font-medium"
-                  :class="s.broke ? 'text-green-700' : ''"
-                  x-text="(s.ticker || '').replace('.BK','')"></td>
+                <td class="px-4 py-2">
+                  <button type="button" @click="openChart(s)"
+                    class="font-medium hover:underline"
+                    :class="s.broke ? 'text-green-700' : ''"
+                    x-text="tickerText(s)"></button>
+                </td>
                 <td class="px-4 py-2 text-right"
                   x-text="s.bp || s.level ? '฿' + fmt2(s.bp || s.level) : '—'"></td>
                 <td class="px-4 py-2 text-center text-gray-500"
@@ -891,7 +912,11 @@
                 </template>
                 <template x-for="(r, i) in btSortedRows" :key="i">
                   <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-2 font-medium" x-text="r.ticker"></td>
+                    <td class="px-4 py-2">
+                      <button type="button" @click="openChart(r)"
+                        class="font-medium hover:underline"
+                        x-text="tickerText(r)"></button>
+                    </td>
                     <template x-if="btCriteria === 'Prime'">
                       <td class="px-4 py-2 text-right" x-text="r.trades"></td>
                     </template>
@@ -1019,9 +1044,12 @@
                   <tbody class="divide-y divide-gray-100">
                     <template x-for="(s, i) in wlSortedGroup(grp.items)" :key="i">
                       <tr :class="s.broke ? 'bg-green-50' : 'hover:bg-gray-50'">
-                        <td class="px-4 py-2 font-medium"
-                          :class="s.broke ? 'text-green-700' : ''"
-                          x-text="s.ticker"></td>
+                        <td class="px-4 py-2">
+                          <button type="button" @click="openChart(s)"
+                            class="font-medium hover:underline"
+                            :class="s.broke ? 'text-green-700' : ''"
+                            x-text="tickerText(s)"></button>
+                        </td>
                         <td class="px-4 py-2 text-right text-gray-700"
                           x-text="(s.levels && s.levels.length) ? '฿' + fmt2(s.levels[0].level) : '—'"></td>
                         <td class="px-4 py-2 text-right"

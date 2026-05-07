@@ -14,6 +14,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from output.notifications import (
+    _build_fakeout_embed,
     send_eod_alert,
     send_intraday_alert,
     send_paper_trade_summary,
@@ -294,6 +295,12 @@ def build_summary():
             }
         ],
     }
+
+
+def test_fakeout_embed_prefixes_ticker_with_red_circle():
+    embed = _build_fakeout_embed(build_review_signals(), '16:25')
+
+    assert '🔴 **AAA**' in embed['description']
 
 
 def main():

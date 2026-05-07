@@ -105,10 +105,36 @@ function app() {
     refreshAll() {
       this.loadSystem();
       this.loadScanLatest();
+      if (this.tab === 'dashboard' || this.tab === 'signals') this.loadSignals();
       if (this.tab === 'portfolio') this.loadPortfolio();
-      if (this.tab === 'signals')   this.loadSignals();
       if (this.tab === 'backtest')  this.loadBacktest();
       if (this.tab === 'watchlist') this.loadWatchlistDetail();
+    },
+
+    tickerText(item) {
+      const raw = typeof item === 'string'
+        ? item
+        : (item?.ticker_full || item?.ticker || item?.symbol || '');
+      return String(raw || '')
+        .toUpperCase()
+        .replace(/^SET:/, '')
+        .replace(/\.BK$/, '');
+    },
+
+    tickerFull(item) {
+      const t = this.tickerText(item).replace(/\s+/g, '');
+      if (!t) return '';
+      if (t.startsWith('^') || t.endsWith('.BK') || t.endsWith('.AX')) return t;
+      return `${t}.BK`;
+    },
+
+    chartUrl(item) {
+      const t = this.tickerFull(item);
+      return t ? `/chart?ticker=${encodeURIComponent(t)}` : '/chart';
+    },
+
+    openChart(item) {
+      window.location.href = this.chartUrl(item);
     },
 
     _consoleLog(msg) {

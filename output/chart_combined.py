@@ -438,6 +438,71 @@ const TICKER_SUFFIX = TV_PREFIX === 'SET' ? '.BK' : '.AX';
 let D = null;
 let currentStockIdx = null;
 let selectedSigIdx  = null;
+let LIVE_PRICE_MAP  = {{}};
+
+function normTicker(t) {{
+  return String(t || '')
+    .toUpperCase()
+    .replace(/^SET:/, '')
+    .replace(/\\.(BK|AX)$/, '')
+    .trim();
+}}
+
+function stockTickerKey(stock) {{
+  return normTicker(stock?.ticker_full || stock?.ticker || stock?.symbol || '');
+}}
+
+const TICKER_LOOKUP = new Map();
+ALL_STOCKS.forEach((stock, idx) => {{
+  const key = stockTickerKey(stock);
+  if (key && !TICKER_LOOKUP.has(key)) TICKER_LOOKUP.set(key, idx);
+}});
+
+function indexForTicker(ticker) {{
+  const key = normTicker(ticker);
+  return TICKER_LOOKUP.has(key) ? TICKER_LOOKUP.get(key) : -1;
+}}
+
+function updateChartUrl(stock) {{
+  try {{
+    const ticker = stock?.ticker_full || stock?.ticker;
+    if (!ticker) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('ticker', ticker);
+    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+  }} catch(e) {{ /* ignore file:// or old browsers */ }}
+}}
+
+function liveNum(v) {{
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}}
+
+function rememberLivePrice(item) {{
+  const key = normTicker(item?.ticker || item?.ticker_full || item?.symbol || '');
+  const close = liveNum(item?.close || item?.price || item?.last_price);
+  if (!key || close == null) return;
+  LIVE_PRICE_MAP[key] = {{
+    close,
+    rvol: liveNum(item?.rvol || item?.proj_rvol || item?.cur_rvol),
+    broke: !!item?.broke,
+    updated_at: item?.updated_at || item?.detected_at || null,
+  }};
+}}
+
+function applyLiveToStock(stock) {{
+  const live = LIVE_PRICE_MAP[stockTickerKey(stock)];
+  if (!live || !stock?.candles?.length) return false;
+  const c = stock.candles[stock.candles.length - 1];
+  c.c = live.close;
+  c.h = Math.max(Number(c.h || live.close), live.close);
+  c.l = Math.min(Number(c.l || live.close), live.close);
+  if (live.rvol != null) c.rv = live.rvol;
+  stock.live_close = live.close;
+  stock.live_rvol = live.rvol;
+  stock.live_broke = live.broke;
+  return true;
+}}
 
 // ── LWC state ────────────────────────────────────────────────────────────────
 let _chart = null;
@@ -455,6 +520,8 @@ function loadStock(idx) {{
     document.getElementById('sb-'+currentStockIdx)?.classList.remove('active');
   currentStockIdx = idx;
   D = ALL_STOCKS[idx];
+  applyLiveToStock(D);
+  updateChartUrl(D);
   document.getElementById('sb-'+idx)?.classList.add('active');
   document.getElementById('sb-'+idx)?.scrollIntoView({{block:'nearest'}});
   document.getElementById('no-stock').style.display = 'none';
@@ -845,28 +912,34 @@ function buildTradeSummary() {{
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 const firstSignal = ALL_STOCKS.findIndex(d => d.signals.some(s => s.col === '#ff6ec7'));
+const requestedTicker = new URLSearchParams(window.location.search).get('ticker');
+const requestedIdx = indexForTicker(requestedTicker);
 (function _boot() {{
   const el = document.getElementById('chart-container');
-  if (el && el.clientWidth > 0) {{ loadStock(firstSignal >= 0 ? firstSignal : 0); }}
+  if (el && el.clientWidth > 0) {{ loadStock(requestedIdx >= 0 ? requestedIdx : (firstSignal >= 0 ? firstSignal : 0)); }}
   else {{ setTimeout(_boot, 50); }}
 }})();
 
 // ── Intraday signals sidebar section ──────────────────────────────────────────
-(async function loadIntraday() {{
+async function loadIntraday() {{
   try {{
     const data = await fetch('/api/signals').then(r => r.json());
+    [...(data.watchlist || []), ...(data.alerted_today || [])].forEach(rememberLivePrice);
+    if (D && applyLiveToStock(D)) renderChart(D);
     const alerts = (data.alerted_today || []).filter(s => s && (s.ticker || s));
     if (!alerts.length) return;
     const CRIT_COL = {{
       Prime:'#a21caf', STR:'#b91c1c', RVOL:'#1d4ed8', RSM:'#15803d', SMA50:'#b45309',
     }};
     const rows = alerts.map(s => {{
-      const ticker = ((s.ticker || s).replace ? (s.ticker || s) : String(s)).replace('.BK','');
+      const ticker = normTicker(s.ticker || s);
+      const idx = indexForTicker(ticker);
+      const clickAttr = idx >= 0 ? ` onclick="loadStock(${{idx}})"` : '';
       const crit   = s.criteria || '';
       const col    = CRIT_COL[crit] || '#6366f1';
       const close  = s.close  ? `฿${{parseFloat(s.close).toFixed(2)}}`  : '—';
       const level  = s.level  ? `฿${{parseFloat(s.level).toFixed(2)}}`  : '—';
-      return `<div class="sb-item sb-intra" title="${{ticker}} | ${{crit}} | Level ${{level}} | Price ${{close}}">
+      return `<div class="sb-item sb-intra"${{clickAttr}} title="${{ticker}} | ${{crit}} | Level ${{level}} | Price ${{close}}">
         <div class="sb-top">
           <span class="sb-ticker">${{ticker}}</span>
           <span class="sb-rsm" style="color:${{col}}">${{crit || '—'}}</span>
@@ -882,7 +955,9 @@ const firstSignal = ALL_STOCKS.findIndex(d => d.signals.some(s => s.col === '#ff
       section.innerHTML = `<div class="sb-section-hdr sb-hdr-intra">⚡ INTRADAY (${{alerts.length}})</div>${{rows}}`;
     }}
   }} catch(e) {{ /* silent */ }}
-}})();
+}}
+loadIntraday();
+setInterval(loadIntraday, 60_000);
 </script>
 </body>
 </html>"""
