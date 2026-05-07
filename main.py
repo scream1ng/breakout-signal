@@ -36,7 +36,7 @@ from app.core.entry              import detect_pivots
 from app.core.exit               import simulate
 from app.core.paper_trade        import get_summary as get_paper_trade_summary
 from app.core.portfolio          import simulate_portfolio
-from app.core.watchlist          import build_pending_info
+from app.core.watchlist          import build_pending_info, merge_pending_levels
 from output.chart_interactive import get_chart_data
 from output.chart_combined    import generate_combined_html
 
@@ -220,6 +220,7 @@ CFG = dict(
 PERIOD      = args.period
 WEB_DIR     = os.path.join(SCRIPT_DIR, 'frontend')
 ALERT_STATE_PATH = os.path.join(SCRIPT_DIR, 'data', 'alert_state.json')
+EOD_ALERT_STATE_PATH = os.path.join(SCRIPT_DIR, 'data', 'eod_alert_state.json')
 DATE_STR    = datetime.today().strftime('%Y_%m_%d')
 os.makedirs(WEB_DIR, exist_ok=True)
 
@@ -246,12 +247,17 @@ def build_intraday_recap(today_signals, date_str):
         signal_keys.add(f"{sig.get('ticker')}|{kind_part}|{level:.4f}")
 
     failed_map = {item.get('key'): item for item in state.get('failed', []) if item.get('key')}
+    alerted_keys = {item.get('key') for item in state.get('alerted', []) if item.get('key')}
     recap = []
     for item in state.get('alerted', []):
         key = item.get('key')
         status = 'INTRADAY ONLY'
         note = 'Did not qualify in close scan.'
-        if key in failed_map:
+        if key in failed_map and key in signal_keys:
+            status = 'RECOVERED INTO CLOSE'
+            close_px = failed_map[key].get('close')
+            note = f'Failed review at {close_px:.2f}, then qualified by EOD close.' if close_px is not None else 'Failed review, then qualified by EOD close.'
+        elif key in failed_map:
             status = 'FAILED'
             close_px = failed_map[key].get('close')
             note = f'Closed back below level. Last review close {close_px:.2f}.' if close_px is not None else 'Closed back below level.'
@@ -266,7 +272,65 @@ def build_intraday_recap(today_signals, date_str):
             status=status,
             note=note,
         ))
+
+    for sig in today_signals:
+        criteria = sig.get('criteria') or sig.get('filter_type')
+        if criteria != 'Prime':
+            continue
+        kind_part = str(sig.get('kind', '')).lower()
+        level = float(sig.get('bp', 0) or 0)
+        key = f"{sig.get('ticker')}|{kind_part}|{level:.4f}"
+        if key in alerted_keys or key in failed_map:
+            continue
+        recap.append(dict(
+            ticker=str(sig.get('ticker', '')).replace('.BK', ''),
+            level=level,
+            alerted_at='',
+            status='MISSED INTRADAY',
+            note='No intraday alert record. Likely not in previous watchlist, became Prime after last scan, or intraday data was unavailable.',
+        ))
     return recap
+
+
+def _eod_alert_sent(date_str: str) -> bool:
+    date_key = date_str.replace('_', '-')
+    try:
+        from app.storage.state import load_state
+        if load_state(f'eod_alert:{date_key}'):
+            return True
+    except Exception:
+        pass
+
+    if not os.path.exists(EOD_ALERT_STATE_PATH):
+        return False
+    try:
+        with open(EOD_ALERT_STATE_PATH, encoding='utf-8') as f:
+            state = json.load(f)
+        return bool(state.get(date_key, {}).get('sent_at'))
+    except Exception:
+        return False
+
+
+def _mark_eod_alert_sent(date_str: str) -> None:
+    date_key = date_str.replace('_', '-')
+    payload = {'date': date_key, 'sent_at': datetime.utcnow().isoformat(timespec='seconds')}
+    try:
+        from app.storage.state import save_state
+        save_state(f'eod_alert:{date_key}', payload)
+    except Exception:
+        pass
+
+    state = {}
+    if os.path.exists(EOD_ALERT_STATE_PATH):
+        try:
+            with open(EOD_ALERT_STATE_PATH, encoding='utf-8') as f:
+                state = json.load(f)
+        except Exception:
+            state = {}
+    state[date_key] = payload
+    os.makedirs(os.path.dirname(EOD_ALERT_STATE_PATH), exist_ok=True)
+    with open(EOD_ALERT_STATE_PATH, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=2)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -316,10 +380,7 @@ def process_ticker(stock: dict, bench: pd.Series):
     hz_lines = ('dual', hz3, hz7)
     tl_lines = ('dual', tl3, tl7)
 
-    pend_map = {}
-    for p in pend3: pend_map[p['kind']] = p
-    for p in pend7: pend_map[p['kind']] = p
-    pending_levels = list(pend_map.values())
+    pending_levels = merge_pending_levels(pend3, pend7)
 
     last_bar    = len(df) - 1
     last_close  = round(float(df['Close'].iloc[-1]), 4)
@@ -610,6 +671,7 @@ def main():
                 avg_volume = p.get('avg_volume', 0),
                 stretch    = _stretch,
                 tl_angle   = lv.get('tl_angle'),
+                source     = lv.get('source'),
                 date_added = DATE_STR.replace('_', '-'),
             ))
     wl_dir = os.path.join(SCRIPT_DIR, 'data')
@@ -635,9 +697,17 @@ def main():
         print(f'  Chart updated → python main.py --view\n')
 
     if args.discord:
-        send_eod_alert(today_signals, pending_list, results, DATE_STR, CFG, intraday_recap=build_intraday_recap(today_signals, DATE_STR))
-        pt_summary = get_paper_trade_summary(CFG)
-        send_paper_trade_summary(pt_summary, DATE_STR.replace('_', '-'))
+        if _eod_alert_sent(DATE_STR):
+            print(f'  EOD alert already sent for {DATE_STR.replace("_", "-")} — skipping notifications')
+        else:
+            sent = send_eod_alert(
+                today_signals, pending_list, results, DATE_STR, CFG,
+                intraday_recap=build_intraday_recap(today_signals, DATE_STR),
+            )
+            pt_summary = get_paper_trade_summary(CFG)
+            send_paper_trade_summary(pt_summary, DATE_STR.replace('_', '-'))
+            if sent:
+                _mark_eod_alert_sent(DATE_STR)
 
 
 if __name__ == '__main__':

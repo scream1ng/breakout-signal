@@ -287,7 +287,7 @@ def _build_fakeout_embed(signals: list, time_str: str) -> dict:
     }
 
 
-def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
+def _build_eod_embed(signals: list, cfg: dict, date_str: str, intraday_recap=None) -> dict:
     """Green embed with TICKER|LEVEL|PRICE|TYPE|CRITERIA|RVOL|RSM|STR table."""
     rvol_min = cfg.get('rvol_min', 1.5)
     rsm_min  = cfg.get('rs_momentum_min', cfg.get('rsm_min', 70))
@@ -320,7 +320,23 @@ def _build_eod_embed(signals: list, cfg: dict, date_str: str) -> dict:
     header    = '`TICKER  ` `  LEVEL` `  PRICE` `TYPE       ` `CRIT  ` `RVOL ` `RSM` `STR `'
     sep       = '\u2500' * 60
     chart_url = get_chart_url()
-    desc      = header + '\n' + sep + '\n' + '\n'.join(lines) + f'\n\n\U0001f517 [View chart]({chart_url})'
+    desc      = header + '\n' + sep + '\n' + '\n'.join(lines)
+
+    if intraday_recap:
+        recap_lines = []
+        for item in intraday_recap[:8]:
+            ticker = str(item.get('ticker', '')).replace('.BK', '')
+            status = str(item.get('status', ''))
+            level = item.get('level')
+            level_s = _fmt(level, 2) if level is not None else '--'
+            note = str(item.get('note', ''))[:90]
+            recap_lines.append(f'`{ticker:<8}` `{level_s:>7}` {status} - {note}')
+        extra = len(intraday_recap) - len(recap_lines)
+        if extra > 0:
+            recap_lines.append(f'... and {extra} more')
+        desc += '\n\n**Intraday recap**\n' + '\n'.join(recap_lines)
+
+    desc += f'\n\n\U0001f517 [View chart]({chart_url})'
 
     return {
         'color':  DISCORD_COLOR_EOD,
@@ -703,7 +719,7 @@ def send_eod_alert(today_signals: list, pending_list: list, results: list,
         print(f'  {"Discord sent" if ok else "Discord failed"} — no signals')
         return ok
 
-    embed = _build_eod_embed(today_signals, cfg, date_fmt)
+    embed = _build_eod_embed(today_signals, cfg, date_fmt, intraday_recap=intraday_recap)
     # Add watchlist count to footer
     embed['footer']['text'] = (
         f'EOD scanner · {len(pending_list)} on watchlist · {get_chart_url()}'

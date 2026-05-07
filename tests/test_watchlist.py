@@ -1,6 +1,25 @@
 from __future__ import annotations
 
-from app.core.watchlist import build_pending_info
+from app.core.watchlist import build_pending_info, merge_pending_levels
+
+
+def test_merge_pending_levels_keeps_fast_and_slow_same_kind_levels():
+    merged = merge_pending_levels(
+        fast_levels=[
+            {'kind': 'tl', 'level': 9.86, 'tl_angle': 27.5},
+            {'kind': 'hz', 'level': 10.0},
+        ],
+        slow_levels=[
+            {'kind': 'tl', 'level': 9.72, 'tl_angle': 18.0},
+            {'kind': 'hz', 'level': 10.0},
+        ],
+    )
+
+    assert merged == [
+        {'kind': 'tl', 'level': 9.86, 'tl_angle': 27.5, 'source': 'fast'},
+        {'kind': 'hz', 'level': 10.0, 'source': 'fast'},
+        {'kind': 'tl', 'level': 9.72, 'tl_angle': 18.0, 'source': 'slow'},
+    ]
 
 
 def test_build_pending_info_keeps_surviving_levels():

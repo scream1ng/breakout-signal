@@ -31,7 +31,11 @@ def _ensure_dir():
 
 
 def _db_enabled() -> bool:
-    return bool(DB_URL and psycopg2 is not None)
+    return bool(
+        DB_URL
+        and DB_URL.startswith(('postgres://', 'postgresql://'))
+        and psycopg2 is not None
+    )
 
 
 def _db_connect():
@@ -167,22 +171,36 @@ def _max_affordable_shares(cash: float, entry_price: float, commission: float) -
     return _floor_lot(max(0, int(cash // unit_cost)))
 
 
+def _partial_lot(shares_remaining: int, fraction: float) -> int:
+    """Return a board-lot partial size, or 0 when partial would be too small."""
+    shares = int(shares_remaining)
+    if shares <= _LOT:
+        return 0
+    partial = _floor_lot(int(shares * fraction))
+    if partial <= 0 or partial >= shares:
+        return 0
+    return partial
+
+
 def _position_shares(entry_price: float, atr: float, cash: float, cfg: dict) -> int:
     commission = float(cfg.get('commission', 0.0015))
     capital = float(cfg.get('capital', 100_000))
     risk_pct = float(cfg.get('risk_pct', 0.005))
     sl_mult = float(cfg.get('sl_mult', cfg.get('sl_atr_mult', 1)))
 
-    shares = 0
-    if entry_price > 0 and atr > 0 and sl_mult > 0:
-        risk_budget = capital * risk_pct
-        stop_distance = atr * sl_mult
-        if stop_distance > 0:
-            shares = _floor_lot(int(risk_budget / stop_distance))
+    if entry_price <= 0 or atr <= 0 or sl_mult <= 0:
+        return 0
+
+    risk_budget = capital * risk_pct
+    stop_distance = atr * sl_mult
+    if stop_distance <= 0:
+        return 0
+
+    shares = _floor_lot(int(risk_budget / stop_distance))
+    if shares < _LOT:
+        return 0
 
     max_affordable = _max_affordable_shares(cash, entry_price, commission)
-    if shares <= 0:
-        shares = max_affordable
     return min(shares, max_affordable)
 
 
@@ -442,15 +460,17 @@ def check_positions(prices: dict, ema10s: dict, cfg: dict, now) -> list:
 
         # TP1 — sell 30% at tp1 price
         if not pos['tp1_hit'] and tp1 and close >= tp1:
-            sh = _floor_lot(int(pos['shares_remaining'] * 0.30)) or int(pos['shares_remaining'])
-            _sell(sh, tp1, 'TP1', next_tp=tp2)
-            pos['tp1_hit'] = True
+            sh = _partial_lot(int(pos['shares_remaining']), 0.30)
+            if sh > 0:
+                _sell(sh, tp1, 'TP1', next_tp=tp2)
+                pos['tp1_hit'] = True
 
         # TP2 — sell 3/7 of remaining (≈30% of original) at tp2 price
         if pos['tp1_hit'] and not pos['tp2_hit'] and tp2 and close >= tp2:
-            sh = _floor_lot(int(pos['shares_remaining'] * (3 / 7))) or int(pos['shares_remaining'])
-            _sell(sh, tp2, 'TP2', next_tp=None)
-            pos['tp2_hit'] = True
+            sh = _partial_lot(int(pos['shares_remaining']), 3 / 7)
+            if sh > 0:
+                _sell(sh, tp2, 'TP2', next_tp=None)
+                pos['tp2_hit'] = True
 
         # Full exit: SL / breakeven / EMA10 trail
         sl_hit   = sl is not None and close <= sl
