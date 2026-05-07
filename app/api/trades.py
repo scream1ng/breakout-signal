@@ -40,7 +40,16 @@ def close_trade(body: CloseRequest):
     if not target:
         raise HTTPException(status_code=404, detail=f'No open position for {body.ticker}')
 
-    closed = pt.close_positions(now, TRADE_CFG)
+    exit_price = float(target.get('last_price') or target.get('entry_price') or 0)
+    if exit_price <= 0:
+        raise HTTPException(status_code=400, detail=f'No usable price for {body.ticker}')
+
+    closed = pt.close_positions(
+        [{'ticker_full': body.ticker, 'close': exit_price}],
+        now,
+        TRADE_CFG,
+        reason=body.reason,
+    )
     return {'closed': closed}
 
 

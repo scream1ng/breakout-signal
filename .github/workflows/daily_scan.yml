@@ -42,10 +42,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run EOD scan
-        run: python main.py --discord
+        run: python main.py
         env:
           CI: true
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 
       - name: Commit chart + watchlist
         run: |
