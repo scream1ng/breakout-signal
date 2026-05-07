@@ -272,7 +272,7 @@ def _build_fakeout_embed(signals: list, time_str: str) -> dict:
         gap     = _fmt(float(s.get('close', 0)) - float(s.get('level', 0)), 2)
         chg_pct = (float(s.get('close', 0)) - float(s.get('level', 0))) / float(s.get('level', 1)) * 100
         blocks.append(
-            f'**{ticker}** · {kind} fakeout\n'
+            f'🔴 **{ticker}** · {kind} fakeout\n'
             f'Level `{level}` | Close `{close}` ({chg_pct:+.1f}%) | Gap `{gap}`'
         )
 

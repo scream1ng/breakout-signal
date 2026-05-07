@@ -306,14 +306,14 @@ def _eod_alert_sent(date_str: str) -> bool:
     try:
         with open(EOD_ALERT_STATE_PATH, encoding='utf-8') as f:
             state = json.load(f)
-        return bool(state.get(date_key, {}).get('sent_at'))
+        row = state.get(date_key, {})
+        return bool(row.get('sent_at') or row.get('claimed_at'))
     except Exception:
         return False
 
 
-def _mark_eod_alert_sent(date_str: str) -> None:
+def _write_eod_alert_state(date_str: str, payload: dict) -> None:
     date_key = date_str.replace('_', '-')
-    payload = {'date': date_key, 'sent_at': datetime.utcnow().isoformat(timespec='seconds')}
     try:
         from app.storage.state import save_state
         save_state(f'eod_alert:{date_key}', payload)
@@ -331,6 +331,32 @@ def _mark_eod_alert_sent(date_str: str) -> None:
     os.makedirs(os.path.dirname(EOD_ALERT_STATE_PATH), exist_ok=True)
     with open(EOD_ALERT_STATE_PATH, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=2)
+
+
+def _claim_eod_alert(date_str: str) -> bool:
+    """Reserve today's EOD notification before slow Discord/LINE sends."""
+    if _eod_alert_sent(date_str):
+        return False
+    date_key = date_str.replace('_', '-')
+    payload = {
+        'date': date_key,
+        'status': 'sending',
+        'claimed_at': datetime.utcnow().isoformat(timespec='seconds'),
+    }
+    _write_eod_alert_state(date_str, payload)
+    return True
+
+
+def _mark_eod_alert_sent(date_str: str, discord_sent: bool | None = None) -> None:
+    date_key = date_str.replace('_', '-')
+    payload = {
+        'date': date_key,
+        'status': 'sent' if discord_sent is not False else 'sent_with_discord_error',
+        'claimed_at': datetime.utcnow().isoformat(timespec='seconds'),
+        'sent_at': datetime.utcnow().isoformat(timespec='seconds'),
+        'discord_sent': discord_sent,
+    }
+    _write_eod_alert_state(date_str, payload)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -697,7 +723,7 @@ def main():
         print(f'  Chart updated → python main.py --view\n')
 
     if args.discord:
-        if _eod_alert_sent(DATE_STR):
+        if not _claim_eod_alert(DATE_STR):
             print(f'  EOD alert already sent for {DATE_STR.replace("_", "-")} — skipping notifications')
         else:
             sent = send_eod_alert(
@@ -706,8 +732,7 @@ def main():
             )
             pt_summary = get_paper_trade_summary(CFG)
             send_paper_trade_summary(pt_summary, DATE_STR.replace('_', '-'))
-            if sent:
-                _mark_eod_alert_sent(DATE_STR)
+            _mark_eod_alert_sent(DATE_STR, discord_sent=sent)
 
 
 if __name__ == '__main__':
