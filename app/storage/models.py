@@ -10,6 +10,17 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Date, Uni
 from sqlalchemy.orm import DeclarativeBase
 
 
+def _utc_iso(dt: datetime | None) -> str | None:
+    """Serialize DB timestamps as explicit UTC so browsers do not assume local time."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -38,8 +49,8 @@ class JobRun(Base):
             'id':             self.id,
             'job_name':       self.job_name,
             'status':         self.status,
-            'started_at':     self.started_at.isoformat() if self.started_at else None,
-            'finished_at':    self.finished_at.isoformat() if self.finished_at else None,
+            'started_at':     _utc_iso(self.started_at),
+            'finished_at':    _utc_iso(self.finished_at),
             'duration_s':     self.duration_s,
             'stocks_scanned': self.stocks_scanned,
             'signals_found':  self.signals_found,
@@ -70,7 +81,7 @@ class ScanSnapshot(Base):
         return {
             'id':         self.id,
             'scan_date':  self.scan_date,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_at': _utc_iso(self.created_at),
             'n_stocks':   self.n_stocks,
             'n_signals':  self.n_signals,
             'n_watching': self.n_watching,

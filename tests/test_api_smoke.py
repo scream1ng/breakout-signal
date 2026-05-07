@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 import main_app
 from app.scheduler.runner import _as_utc
+from app.storage.models import JobRun, ScanSnapshot
 
 
 def test_as_utc_handles_naive_and_aware():
@@ -19,6 +20,16 @@ def test_as_utc_handles_naive_and_aware():
     assert a.tzinfo is not None
     assert n.utcoffset().total_seconds() == 0
     assert a.utcoffset().total_seconds() == 0
+
+
+def test_models_serialize_timestamps_as_explicit_utc():
+    naive = datetime(2026, 5, 7, 8, 45, 0)
+
+    run = JobRun(job_name='intraday_scan', status='completed', started_at=naive)
+    snapshot = ScanSnapshot(scan_date='2026-05-07', created_at=naive, data_json='{}')
+
+    assert run.to_dict()['started_at'].endswith('+00:00')
+    assert snapshot.to_dict()['created_at'].endswith('+00:00')
 
 
 def test_api_smoke_endpoints():
