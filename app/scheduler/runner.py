@@ -179,11 +179,14 @@ def register_jobs() -> None:
             id=f'intraday_{i}', replace_existing=True,
         )
 
-    # ── Fakeout review: Mon-Fri 09:25 UTC = 16:25 BKK ───────────────────────
+    # ── Fakeout review: Mon-Fri 09:35 UTC = 16:35 BKK ───────────────────────
+    # Runs 5 min AFTER market close (16:30) so yfinance returns the official
+    # closing price. Running at 16:25 (pre-close) caused stocks that dropped in
+    # the last 5 minutes to slip through: not flagged fakeout AND not in EOD.
     scheduler.add_job(
         _tracked, 'cron',
         args=['review_scan', run_review_scan_notify],
-        day_of_week='mon-fri', hour=9, minute=25,
+        day_of_week='mon-fri', hour=9, minute=35,
         id='review_scan', replace_existing=True,
     )
 

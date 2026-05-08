@@ -925,7 +925,19 @@ async function loadIntraday() {{
   try {{
     const data = await fetch('/api/signals').then(r => r.json());
     [...(data.watchlist || []), ...(data.alerted_today || [])].forEach(rememberLivePrice);
-    if (D && applyLiveToStock(D)) renderChart(D);
+    if (D && applyLiveToStock(D)) {{
+      // Update just the last candle — no full re-render (avoids flicker)
+      if (_candle) {{
+        const last = D.candles[D.candles.length - 1];
+        try {{
+          _candle.update({{ time: last.d, open: last.o, high: last.h, low: last.l, close: last.c }});
+        }} catch(e) {{
+          renderChart(D);  // fallback: series was destroyed, recreate
+        }}
+      }} else {{
+        renderChart(D);
+      }}
+    }}
     const alerts = (data.alerted_today || []).filter(s => s && (s.ticker || s));
     if (!alerts.length) return;
     const CRIT_COL = {{
@@ -958,6 +970,13 @@ async function loadIntraday() {{
 }}
 loadIntraday();
 setInterval(loadIntraday, 60_000);
+
+// ── Navigate to ticker from parent SPA (postMessage) ─────────────────────────
+window.addEventListener('message', (e) => {{
+  if (!e.data || e.data.type !== 'goto') return;
+  const idx = indexForTicker(e.data.ticker);
+  if (idx >= 0) loadStock(idx);
+}});
 </script>
 </body>
 </html>"""

@@ -134,7 +134,21 @@ function app() {
     },
 
     openChart(item) {
-      window.location.href = this.chartUrl(item);
+      const t = this.tickerFull(item);
+      if (!t) { this.tab = 'chart'; return; }
+      const iframe = document.getElementById('chart-iframe');
+      // Already on chart tab and iframe is loaded → postMessage (no reload)
+      if (this.tab === 'chart' && iframe?.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'goto', ticker: t }, '*');
+        return;
+      }
+      // Switch to chart tab and load the ticker via src change
+      if (iframe) {
+        iframe.style.opacity = '0';
+        iframe.addEventListener('load', () => { iframe.style.opacity = '1'; }, { once: true });
+        iframe.src = `/chart?ticker=${encodeURIComponent(t)}`;
+      }
+      this.tab = 'chart';
     },
 
     _consoleLog(msg) {

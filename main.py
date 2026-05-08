@@ -334,15 +334,48 @@ def _write_eod_alert_state(date_str: str, payload: dict) -> None:
 
 
 def _claim_eod_alert(date_str: str) -> bool:
-    """Reserve today's EOD notification before slow Discord/LINE sends."""
+    """Atomically reserve today's EOD notification slot.
+
+    Uses DB INSERT ON CONFLICT DO NOTHING for cross-instance safety on Railway
+    (each instance has its own ephemeral filesystem so file-only de-dup is not
+    safe when Railway scales out).  Falls back to file check for local dev.
+    """
+    date_key  = date_str.replace('_', '-')
+    state_key = f'eod_alert:{date_key}'
+    now_str   = datetime.utcnow().isoformat(timespec='seconds')
+    payload   = {'date': date_key, 'status': 'sending', 'claimed_at': now_str}
+
+    # ── Atomic DB claim ────────────────────────────────────────────────────
+    try:
+        from app.storage.db import SessionLocal, init_db
+        from sqlalchemy import text
+        init_db()
+        db = SessionLocal()
+        try:
+            result = db.execute(
+                text(
+                    "INSERT INTO daily_state (state_key, state_json, updated_at)"
+                    " VALUES (:k, :v, :ts)"
+                    " ON CONFLICT DO NOTHING RETURNING state_key"
+                ),
+                {'k': state_key,
+                 'v': json.dumps(payload, ensure_ascii=False),
+                 'ts': datetime.utcnow()},
+            )
+            db.commit()
+            if result.fetchone() is not None:
+                # This instance owns the slot — also write local file for observability
+                _write_eod_alert_state(date_str, payload)
+                return True
+            return False   # Row already exists — another instance claimed it
+        finally:
+            db.close()
+    except Exception as exc:
+        print(f'  [warn] DB EOD claim unavailable ({exc}) — using file fallback')
+
+    # ── File fallback (local dev, single-process only) ─────────────────────
     if _eod_alert_sent(date_str):
         return False
-    date_key = date_str.replace('_', '-')
-    payload = {
-        'date': date_key,
-        'status': 'sending',
-        'claimed_at': datetime.utcnow().isoformat(timespec='seconds'),
-    }
     _write_eod_alert_state(date_str, payload)
     return True
 

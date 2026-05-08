@@ -276,14 +276,14 @@ def _build_fakeout_embed(signals: list, time_str: str) -> dict:
             f'Level `{level}` | Close `{close}` ({chg_pct:+.1f}%) | Gap `{gap}`'
         )
 
-    desc = '\n\n'.join(blocks) + '\n\n⚡ Exit or tighten stop — market closes 16:30'
+    desc = '\n\n'.join(blocks) + '\n\n⚡ Closed below pivot — consider exiting open positions'
 
     return {
         'color':  DISCORD_COLOR_FAKEOUT,
-        'author': {'name': f'▼ Failed breakout summary · {len(signals)} stocks · {time_str} safety net'},
+        'author': {'name': f'▼ Failed breakout summary · {len(signals)} stocks · {time_str} close'},
         'title':  'Fakeout warning — reversed below pivot',
         'description': desc,
-        'footer': {'text': f'Safety net check · {time_str} BKK · market closes 16:30'},
+        'footer': {'text': f'Post-close review · {time_str} BKK · official close price'},
     }
 
 

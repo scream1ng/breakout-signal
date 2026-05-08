@@ -388,7 +388,7 @@ def _build_fakeout_bubble(signals: list, time_str: str) -> dict:
                 'type': 'box', 'layout': 'vertical', 'spacing': 'xs', 'paddingAll': '12px',
                 'contents': [header_row, _lsep()] + rows + [
                     _lsep(),
-                    _ltext('⚡ Market closes 16:30 BKK', color='#e03131', size='xs'),
+                    _ltext('⚡ Closed below pivot — post-close review', color='#e03131', size='xs'),
                 ],
             },
             'footer': _lbtn('View dashboard', f'{APP_BASE_URL}/'),
