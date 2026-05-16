@@ -17,8 +17,6 @@ from output.notifications import (
     _build_fakeout_embed,
     send_eod_alert,
     send_intraday_alert,
-    send_paper_trade_summary,
-    send_paper_trade_update,
     send_review_alert,
 )
 
@@ -310,24 +308,6 @@ def main():
     print('Sending dummy intraday alert...')
     send_intraday_alert(build_intraday_signals(), now, CFG)
 
-    print('Sending dummy paper trade entry update...')
-    send_paper_trade_update(build_entry_events(now), now, title='PAPER TRADE ENTRY')
-
-    print('Sending dummy TP1 exit...')
-    send_paper_trade_update(build_exit_events_tp1(now), now, title='PAPER TRADE TP1')
-
-    print('Sending dummy TP2 exit...')
-    send_paper_trade_update(build_exit_events_tp2(now), now, title='PAPER TRADE TP2')
-
-    print('Sending dummy MA10 trail stop exit...')
-    send_paper_trade_update(build_exit_events_ma10(now), now, title='PAPER TRADE MA10 CLOSE')
-
-    print('Sending dummy SL exit...')
-    send_paper_trade_update(build_exit_events_sl(now), now, title='PAPER TRADE SL HIT')
-
-    print('Sending dummy BE stop exit...')
-    send_paper_trade_update(build_exit_events_be(now), now, title='PAPER TRADE BE STOP')
-
     print('Sending dummy fakeout alert...')
     send_review_alert(build_review_signals(), now, CFG)
 
@@ -340,9 +320,6 @@ def main():
         cfg=CFG,
         intraday_recap=build_recap(now),
     )
-
-    print('Sending dummy paper trade summary...')
-    send_paper_trade_summary(build_summary(), now.strftime('%Y-%m-%d'))
 
     print('Dummy notification run complete.')
 

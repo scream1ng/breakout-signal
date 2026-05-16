@@ -30,6 +30,21 @@ def _cache_path(ticker: str) -> str:
     return os.path.join(CACHE_DIR, f'{safe}.pkl')
 
 
+def _cache_path_interval(ticker: str, interval: str) -> str:
+    safe = ticker.replace('.', '_').replace('^', 'IDX_')
+    iv = str(interval).replace('/', '_')
+    return os.path.join(CACHE_DIR, f'{safe}_{iv}.pkl')
+
+
+def _read_cache_if_exists(path: str) -> pd.DataFrame | None:
+    if not os.path.exists(path):
+        return None
+    try:
+        return pd.read_pickle(path)
+    except Exception:
+        return None
+
+
 def _cache_valid(path: str) -> bool:
     """Cache is valid only after market close and if saved after close.
     Before close: always re-download (intraday data changes every run).
@@ -60,11 +75,9 @@ def load_ticker(ticker: str, period: str = '2y', force: bool = False) -> pd.Data
     path = _cache_path(ticker)
 
     if not force and _cache_valid(path):
-        try:
-            df = pd.read_pickle(path)
+        df = _read_cache_if_exists(path)
+        if df is not None:
             return df
-        except Exception:
-            pass  # corrupt cache → re-download
 
     # Download fresh via Settrade, with a fallback to yfinance
     try:
@@ -88,24 +101,110 @@ def load_ticker(ticker: str, period: str = '2y', force: bool = False) -> pd.Data
             raw = yf.download(ticker, period='2y', interval='1d',
                               auto_adjust=True, progress=False)
             if raw is None or raw.empty:
-                return None
+                cached = _read_cache_if_exists(path)
+                return cached if cached is not None else None
             if isinstance(raw.columns, pd.MultiIndex):
                 raw.columns = raw.columns.get_level_values(0)
             if 'Close' not in raw.columns:
-                return None
+                cached = _read_cache_if_exists(path)
+                return cached if cached is not None else None
             df = raw[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
             df.index = pd.to_datetime(df.index)
         except Exception:
-            return None
+            cached = _read_cache_if_exists(path)
+            return cached if cached is not None else None
 
     if len(df) < 60:
-        return None
+        cached = _read_cache_if_exists(path)
+        return cached if cached is not None else None
 
     # Save to cache
     try:
         df.to_pickle(path)
     except Exception as e:
         print(f'  [cache] Could not save {ticker}: {e}')
+
+    return df
+
+
+def load_intraday_ticker(
+    ticker: str,
+    period: str = '60d',
+    interval: str = '5m',
+    force: bool = False,
+) -> pd.DataFrame | None:
+    """
+    Load intraday OHLCV for ticker.
+
+    Uses a per-interval cache so repeated intraday backtests do not re-download
+    the same historical bars every run.
+    """
+    path = _cache_path_interval(ticker, interval)
+
+    if not force and _cache_valid(path):
+        df = _read_cache_if_exists(path)
+        if df is not None:
+            return df
+
+    df = None
+
+    # Try Settrade first when available; fall back to yfinance.
+    try:
+        from app.core.settrade_client import get_market_data
+        market = get_market_data()
+        symbol = ticker.replace('.BK', '')
+        candles = market.get_candlestick(symbol=symbol, interval=interval, limit=5000)
+        df_new = pd.DataFrame(candles)
+        if not df_new.empty and 'time' in df_new.columns:
+            df_new['time'] = pd.to_datetime(df_new['time'], unit='s')
+            df_new.set_index('time', inplace=True)
+            df_new.rename(
+                columns={
+                    'open': 'Open',
+                    'high': 'High',
+                    'low': 'Low',
+                    'close': 'Close',
+                    'volume': 'Volume',
+                },
+                inplace=True,
+            )
+            df = df_new[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
+    except Exception:
+        df = None
+
+    if df is None or df.empty:
+        try:
+            raw = yf.download(
+                ticker,
+                period=period,
+                interval=interval,
+                auto_adjust=True,
+                progress=False,
+            )
+            if raw is None or raw.empty:
+                cached = _read_cache_if_exists(path)
+                return cached if cached is not None else None
+            if isinstance(raw.columns, pd.MultiIndex):
+                raw.columns = raw.columns.get_level_values(0)
+            if 'Close' not in raw.columns:
+                cached = _read_cache_if_exists(path)
+                return cached if cached is not None else None
+            df = raw[['Open', 'High', 'Low', 'Close', 'Volume']].dropna().copy()
+            df.index = pd.to_datetime(df.index)
+        except Exception:
+            cached = _read_cache_if_exists(path)
+            return cached if cached is not None else None
+
+    if df is None or df.empty:
+        cached = _read_cache_if_exists(path)
+        return cached if cached is not None else None
+
+    df = df.sort_index()
+
+    try:
+        df.to_pickle(path)
+    except Exception as e:
+        print(f'  [cache] Could not save {ticker} {interval}: {e}')
 
     return df
 

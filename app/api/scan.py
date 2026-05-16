@@ -91,11 +91,12 @@ def get_scan_latest():
 def get_backtest():
     data = _read_scan()
     if not data:
-        return {'date': None, 'overall_bt': None, 'rows': []}
+        return {'date': None, 'overall_bt': None, 'rows': [], 'intraday_bt': None}
     return {
         'date':       data.get('date'),
         'overall_bt': data.get('overall_bt'),
         'rows':       data.get('backtest_rows', []),
+        'intraday_bt': data.get('intraday_bt'),
     }
 
 

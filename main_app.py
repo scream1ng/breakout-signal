@@ -1,6 +1,6 @@
 """
-main_app.py — FastAPI entry point (replaces server.py)
-=======================================================
+main_app.py — FastAPI entry point
+==================================
 Run locally:   uvicorn main_app:app --reload --port 8080
 Deploy:        Procfile → web: uvicorn main_app:app --host 0.0.0.0 --port $PORT
 
@@ -9,9 +9,7 @@ Serves:
   /static/      → frontend/static/
   /docs/        → docs/  (generated charts, same as before)
   /api/system   → scheduler status + job history
-  /api/portfolio → paper-trade portfolio
   /api/signals  → watchlist + today's intraday breaks
-  /api/trades/close → manual close (paper only)
 """
 
 import logging

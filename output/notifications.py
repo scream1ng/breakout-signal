@@ -1,16 +1,11 @@
 """
-notifications.py — Discord embeds + LINE Flex Messages for SET Breakout Scanner
+notifications.py — Discord embeds for SET Breakout Scanner
 
-Discord alerts (send to Discord only):
   send_intraday_alert()  → yellow embed · TICKER/LEVEL/PRICE/TYPE/CRITERIA table
   send_review_alert()    → red embed    · fakeout cards per stock
   send_eod_alert()       → green embed  · TICKER/LEVEL/PRICE/TYPE/CRITERIA/RVOL/RSM/STR
                            RVOL/RSM: 🟢 ≥ threshold  🔴 below
                            STR:      🟢 ≤ 4.0         🔴 > 4.0
-
-LINE paper trading (send to LINE only):
-  send_paper_trade_update()   → Flex bubble per trade open/close
-  send_paper_trade_summary()  → Flex bubble portfolio snapshot
 """
 
 import os
@@ -56,16 +51,8 @@ def _load_env():
 
 def _notification_targets():
     _load_env()
-    discord_url  = os.environ.get('DISCORD_WEBHOOK', '').strip()
-    line_token   = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN', '').strip()
-    line_mode    = os.environ.get('LINE_MODE', 'push').strip().lower() or 'push'
-    raw_targets  = os.environ.get('LINE_TO', '').strip()
-    line_targets = [v.strip() for v in raw_targets.split(',') if v.strip()]
-    for key in ('LINE_USER_ID', 'LINE_GROUP_ID', 'LINE_ROOM_ID'):
-        v = os.environ.get(key, '').strip()
-        if v and v not in line_targets:
-            line_targets.append(v)
-    return discord_url, line_token, line_targets, line_mode
+    discord_url = os.environ.get('DISCORD_WEBHOOK', '').strip()
+    return discord_url
 
 
 def get_chart_url() -> str:
@@ -92,42 +79,6 @@ def _post_discord(url: str, payload: dict) -> bool:
         return False
 
 
-def _push_line(token: str, target: str, messages: list) -> bool:
-    """POST list of LINE message dicts (text or flex) to a single target."""
-    try:
-        r = requests.post(
-            'https://api.line.me/v2/bot/message/push',
-            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
-            json={'to': target, 'messages': messages},
-            timeout=10,
-        )
-        if r.status_code != 200:
-            print(f'  LINE push error: {r.status_code} {r.text[:120]}')
-            return False
-        return True
-    except Exception as e:
-        print(f'  LINE push error: {e}')
-        return False
-
-
-def _broadcast_line(token: str, messages: list) -> bool:
-    """Broadcast list of LINE message dicts to all followers."""
-    try:
-        r = requests.post(
-            'https://api.line.me/v2/bot/message/broadcast',
-            headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
-            json={'messages': messages},
-            timeout=10,
-        )
-        if r.status_code != 200:
-            print(f'  LINE broadcast error: {r.status_code} {r.text[:120]}')
-            return False
-        return True
-    except Exception as e:
-        print(f'  LINE broadcast error: {e}')
-        return False
-
-
 def _log_message(channel: str, target: str, header: str, payload):
     os.makedirs(DATA_DIR, exist_ok=True)
     entry = dict(
@@ -140,37 +91,13 @@ def _log_message(channel: str, target: str, header: str, payload):
 
 
 def _send_discord(header: str, embed: dict) -> bool:
-    discord_url, _, _, _ = _notification_targets()
+    discord_url = _notification_targets()
     if not discord_url:
         print('  Discord webhook not configured — skipping.')
         return False
     _log_message('discord', 'webhook', header, embed)
     ok = _post_discord(discord_url, {'embeds': [embed]})
     time.sleep(0.4)
-    return ok
-
-
-def _send_line(header: str, messages: list) -> bool:
-    """Send list of LINE message dicts (text/flex) to all configured targets."""
-    _, line_token, line_targets, line_mode = _notification_targets()
-    if not line_token:
-        print('  LINE: LINE_CHANNEL_ACCESS_TOKEN not configured — skipping.')
-        return False
-    if line_mode != 'broadcast' and not line_targets:
-        print('  LINE: no targets configured (set LINE_TO / LINE_USER_ID / LINE_GROUP_ID) — skipping.')
-        return False
-    ok = True
-    if line_mode == 'broadcast':
-        _log_message('line', 'broadcast', header, messages)
-        if not _broadcast_line(line_token, messages):
-            ok = False
-        time.sleep(0.4)
-    else:
-        for target in line_targets:
-            _log_message('line', target, header, messages)
-            if not _push_line(line_token, target, messages):
-                ok = False
-            time.sleep(0.4)
     return ok
 
 
@@ -729,57 +656,3 @@ def send_eod_alert(today_signals: list, pending_list: list, results: list,
     return ok
 
 
-def send_paper_trade_update(events: list, now, title: str = 'PAPER TRADE UPDATE') -> bool:
-    """LINE only — Flex bubble per BUY or SELL event."""
-    if not events:
-        return False
-
-    _load_env()
-    cfg_rvol = float(os.environ.get('RVOL_MIN', '1.5'))
-    cfg_rsm  = float(os.environ.get('RSM_MIN', '70'))
-    cfg = {'rvol_min': cfg_rvol, 'rs_momentum_min': cfg_rsm}
-
-    # Try to load config for thresholds
-    try:
-        import sys
-        sys.path.insert(0, ROOT)
-        from config import CFG as _CFG
-        cfg = _CFG
-    except Exception:
-        pass
-
-    flex_messages = []
-    for event in events:
-        action = event.get('action', '')
-        if action == 'BUY':
-            flex_messages.append(_build_line_trade_open(event, cfg))
-        elif action == 'SELL':
-            flex_messages.append(_build_line_trade_close(event))
-
-    if not flex_messages:
-        return False
-
-    ok = _send_line(title, flex_messages)
-    print(f'  {"LINE sent" if ok else "LINE failed"} — {len(flex_messages)} paper trade updates')
-    return ok
-
-
-def send_paper_trade_summary(summary: dict, date_label: str) -> bool:
-    """LINE only — portfolio snapshot Flex bubble."""
-    if not summary:
-        return False
-    flex_message = _build_line_portfolio(summary, date_label)
-    ok = _send_line(f'PORTFOLIO {date_label}', [flex_message])
-    print(f'  {"LINE sent" if ok else "LINE failed"} — portfolio summary')
-    return ok
-
-
-def send_line_history(closed_trades: list, n: int = 10) -> bool:
-    """LINE only — trade history table bubble, last N closed trades."""
-    recent = closed_trades[-n:] if len(closed_trades) > n else closed_trades
-    if not recent:
-        return False
-    flex_message = _build_line_history(recent)
-    ok = _send_line('TRADE HISTORY', [flex_message])
-    print(f'  {"LINE sent" if ok else "LINE failed"} — trade history ({len(recent)} trades)')
-    return ok

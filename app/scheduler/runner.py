@@ -166,7 +166,7 @@ def register_jobs() -> None:
         f'{h:02d}:{m:02d}'
         for h in range(10, 17)
         for m in (0, 15, 30, 45)
-        if (10 * 60 + 15) <= (h * 60 + m) <= (12 * 60 + 30)
+        if (10 * 60 + 30) <= (h * 60 + m) <= (12 * 60 + 30)
         or (14 * 60 + 0)  <= (h * 60 + m) <= (16 * 60 + 15)
     ]
     for i, t_bkk in enumerate(_intraday_bkk):

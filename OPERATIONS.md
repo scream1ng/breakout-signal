@@ -25,15 +25,15 @@ Complete guide to understanding what each script does, when they run, and how to
         ├─► Calculate RS Momentum + volume
         ├─► Filter & rank by criteria
         ├─► Generate chart HTML
-        ├─► Send Discord alerts + LINE paper-trade notifications
+        ├─► Send Discord alerts
         └─► Store results in watchlist.json
         
 ┌──────────────────────────────────────────────────────────┐
 │  FastAPI Web Server (main_app.py)                        │
 │  Serves dashboard + REST API                             │
-│  ├─ GET / → Dashboard tab (jobs, history)                │
-│  ├─ GET /portfolio → Portfolio tab (positions, P&L)      │
-│  ├─ GET /signals → Signals tab (watchlist, alerts)       │
+│  ├─ GET / → Dashboard tab (jobs, history, signals)       │
+│  ├─ GET /backtest → Backtest tab                         │
+│  ├─ GET /watchlist → Watchlist tab                       │
 │  └─ GET /chart → Interactive chart view                  │
 └──────────────────────────────────────────────────────────┘
 ```
@@ -55,13 +55,11 @@ Complete guide to understanding what each script does, when they run, and how to
 6. Save **watchlist.json** (tomorrow's opportunities)
 7. Generate **docs/index.html** (interactive chart)
 8. Send Discord notification: EOD summary table with all close-qualified signals
-9. Send LINE paper-trade summary: portfolio snapshot + recent trade history
 
 **Key outputs:**
 - `data/watchlist.json` — Tomorrow's scan list (grouped by criteria)
 - `docs/index.html` — Interactive chart with breakouts highlighted
 - Discord embed with full metrics table (ticker, level, price, criteria, RVOL, RSM, STR)
-- LINE portfolio snapshot and trade-history messages
 
 **Important behavior:**
 - EOD is a fresh full-market close scan.

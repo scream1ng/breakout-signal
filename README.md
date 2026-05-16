@@ -1,10 +1,8 @@
 # Breakout Signal — Swing Trading System for Thai SET
 
-Automated breakout scanner and paper trading system for the Thai SET market.
+Automated breakout scanner for the Thai SET market.
 
-Scans all SET stocks for horizontal and trendline breakouts, filters by RS Momentum and projected volume, simulates paper trades with risk-based sizing and partial TP exits, publishes alerts to **Discord**, paper-trade updates to **LINE**, and status to the **web dashboard**.
-
-Currently running in **paper trade mode** (simulated fills). Switch to live trading via `TRADE_MODE=live` once SETTRADE order API is wired up.
+Scans all SET stocks for horizontal and trendline breakouts, filters by RS Momentum and projected volume, publishes alerts to **Discord**, and status to the **web dashboard**. No paper trading. No LINE notifications.
 
 > 📖 **New to the system?** See [OPERATIONS.md](OPERATIONS.md) for a complete guide to how scripts work, when they run, and how to monitor the dashboard.
 

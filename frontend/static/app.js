@@ -15,6 +15,7 @@ function app() {
     signals:          { watchlist: [], alerted_today: [], failed_today: [], alert_date: null, watchlist_date: null },
     scanLatest:       null,   // { date, n_signals, n_watching, signals: [] }
     backtest:         null,   // { date, overall_bt, rows }
+    btMode:           'daily',
     watchlistDetail:  null,   // { date, items, groups }
     btSort:           'pnl_pct',
     btSortDir:        -1,
@@ -279,11 +280,39 @@ function app() {
         setTimeout(() => { this.toast = { msg: '', ok: true }; }, 3000);
       }
     },
+    get btCriteriaOptions() {
+      return this.btMode === 'intraday'
+        ? ['Prime', 'RVOL']
+        : ['Prime', 'STR', 'RVOL', 'RSM', 'SMA50'];
+    },
+
+    get btCurrentRows() {
+      if (!this.backtest) return [];
+      return this.btMode === 'intraday'
+        ? (this.backtest.intraday_bt?.rows || [])
+        : (this.backtest.rows || []);
+    },
+
+    get btCurrentOverall() {
+      if (!this.backtest) return null;
+      return this.btMode === 'intraday'
+        ? (this.backtest.intraday_bt?.overall_bt || null)
+        : (this.backtest.overall_bt || null);
+    },
+
+    get btCurrentNote() {
+      if (this.btMode !== 'intraday') return '';
+      if (!this.backtest?.intraday_bt) {
+        return 'Intraday backtest not in this snapshot yet. Run a fresh EOD scan to generate it.';
+      }
+      return this.backtest.intraday_bt?.overall_bt?.note || '';
+    },
+
     get btCriteriaStats() {
-      if (!this.backtest?.rows?.length) return this.backtest?.overall_bt || null;
+      if (!this.btCurrentRows.length) return this.btCurrentOverall || null;
       const c = this.btCriteria;
-      if (c === 'Prime') return this.backtest.overall_bt;
-      const typed = this.backtest.rows.map(r => r.by_type?.[c]).filter(Boolean);
+      if (c === 'Prime') return this.btCurrentOverall;
+      const typed = this.btCurrentRows.map(r => r.by_type?.[c]).filter(Boolean);
       if (!typed.length) return null;
       const nTrades = typed.reduce((s, x) => s + (x.n || 0), 0);
       const nWins   = typed.reduce((s, x) => s + Math.round((x.n || 0) * (x.wr || 0) / 100), 0);
@@ -299,11 +328,11 @@ function app() {
       };
     },
     get btSortedRows() {
-      if (!this.backtest?.rows) return [];
+      if (!this.btCurrentRows.length) return [];
       const c   = this.btCriteria;
       const key = this.btSort;
       const dir = this.btSortDir;
-      return [...this.backtest.rows].sort((a, b) => {
+      return [...this.btCurrentRows].sort((a, b) => {
         if (key === 'ticker') {
           return dir * (a.ticker < b.ticker ? -1 : a.ticker > b.ticker ? 1 : 0);
         }

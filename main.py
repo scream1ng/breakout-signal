@@ -34,7 +34,6 @@ from app.core.rsm                import calc_rsm_series
 from app.core.scanner            import fetch_tv_stocks
 from app.core.entry              import detect_pivots
 from app.core.exit               import simulate
-from app.core.paper_trade        import get_summary as get_paper_trade_summary
 from app.core.portfolio          import simulate_portfolio
 from app.core.watchlist          import build_pending_info, merge_pending_levels
 from output.chart_interactive import get_chart_data
@@ -43,7 +42,7 @@ from output.chart_combined    import generate_combined_html
 
 # ── Persist EOD scan results so the web API can serve them ───────────────────
 def save_scan_snapshot(results: list, today_signals: list,
-                       pending_list: list, date_str: str) -> None:
+                       pending_list: list, date_str: str, cfg: dict) -> None:
     """Write data/scan_results.json and upsert a ScanSnapshot DB row."""
     from datetime import timezone
 
@@ -94,6 +93,13 @@ def save_scan_snapshot(results: list, today_signals: list,
         n_stocks = len(results),
     )
 
+    intraday_bt = None
+    try:
+        from app.core.intraday_backtest import build_intraday_backtest
+        intraday_bt = build_intraday_backtest(results, cfg)
+    except Exception as e:
+        print(f'  [warn] Intraday backtest skipped: {e}')
+
     # ── Build detailed watchlist rows ─────────────────────────────────────
     wl_rows = []
     for r in results:
@@ -137,6 +143,7 @@ def save_scan_snapshot(results: list, today_signals: list,
         n_watching  = len(pending_list),
         overall_bt  = overall_bt,
         backtest_rows = bt_rows,
+        intraday_bt = intraday_bt,
         watchlist   = wl_rows,
         signals     = today_signals,
     )
@@ -176,7 +183,7 @@ def save_scan_snapshot(results: list, today_signals: list,
             db.close()
     except Exception as _e:
         print(f'  [warn] DB snapshot skipped: {_e}')
-from output.notifications     import send_eod_alert, send_paper_trade_summary
+from output.notifications     import send_eod_alert
 
 # ── Config ────────────────────────────────────────────────────────────────────
 try:
@@ -703,7 +710,7 @@ def main():
     print_scan_results(today_signals, pending_list, results, DATE_STR)
 
     # ── Persist scan snapshot (API + DB) ──────────────────────────────────
-    save_scan_snapshot(results, today_signals, pending_list, DATE_STR)
+    save_scan_snapshot(results, today_signals, pending_list, DATE_STR, CFG)
 
     # ── Save watchlist.json for intraday scanner ──────────────────────────
     watchlist = []
@@ -763,8 +770,6 @@ def main():
                 today_signals, pending_list, results, DATE_STR, CFG,
                 intraday_recap=build_intraday_recap(today_signals, DATE_STR),
             )
-            pt_summary = get_paper_trade_summary(CFG)
-            send_paper_trade_summary(pt_summary, DATE_STR.replace('_', '-'))
             _mark_eod_alert_sent(DATE_STR, discord_sent=sent)
 
 

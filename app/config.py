@@ -21,7 +21,6 @@ except ImportError:
     TRADE_CFG: dict = {}
 
 # ── App settings ──────────────────────────────────────────────────────────────
-TRADE_MODE: str = os.getenv('TRADE_MODE', 'paper').lower()   # 'paper' | 'live'
 PORT: int = int(os.getenv('PORT', '8080'))
 
 def _default_sqlite_url() -> str:
@@ -39,18 +38,7 @@ def _default_sqlite_url() -> str:
 DATABASE_URL: str = os.getenv('DATABASE_URL', _default_sqlite_url())
 
 # Notification channels
-DISCORD_WEBHOOK: str       = os.getenv('DISCORD_WEBHOOK', '').strip()
-LINE_TOKEN: str            = os.getenv('LINE_CHANNEL_ACCESS_TOKEN', '').strip()
-LINE_MODE: str             = os.getenv('LINE_MODE', 'push').strip().lower()
-LINE_TARGETS: list[str]    = [
-    t.strip()
-    for t in os.getenv('LINE_TO', '').split(',')
-    if t.strip()
-]
-for _key in ('LINE_USER_ID', 'LINE_GROUP_ID', 'LINE_ROOM_ID'):
-    _v = os.getenv(_key, '').strip()
-    if _v and _v not in LINE_TARGETS:
-        LINE_TARGETS.append(_v)
+DISCORD_WEBHOOK: str = os.getenv('DISCORD_WEBHOOK', '').strip()
 
 # Public URL used in notification links
 APP_BASE_URL: str = (

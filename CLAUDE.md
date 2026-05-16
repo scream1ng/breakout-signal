@@ -1,10 +1,8 @@
 # Breakout Signal — Swing Trading System for Thai SET
 
-Automated breakout scanner + paper trading system for Thai SET market.
+Automated breakout scanner for Thai SET market.
 
-Scans all SET stocks for horizontal/trendline breakouts, filters by RS Momentum + projected volume, simulates paper trades with risk-based sizing + partial TP exits, publishes alerts to **Discord**, paper-trade updates to **LINE**, and status to the **web dashboard**.
-
-Currently in **paper trade mode** (simulated fills). Switch to live: `TRADE_MODE=live` once SETTRADE order API wired up.
+Scans all SET stocks for horizontal/trendline breakouts, filters by RS Momentum + projected volume, publishes alerts to **Discord**, and status to the **web dashboard**. No paper trading. No LINE notifications.
 
 > See [OPERATIONS.md](OPERATIONS.md) for complete guide: scripts, schedule, monitoring.
 
@@ -30,10 +28,8 @@ main.py (EOD)           ← rank, filter, classify (Prime/RVOL/RSM/STR/SMA50)
 intraday.py (live)      ← check watchlist every 15 min against live prices
       │
        ├─► output/chart_combined.py  ← generate docs/index.html (interactive chart)
-       ├─► app/core/paper_trade.py   ← open/close/check positions (paper ledger)
-       └─► output/notifications.py   ← current scheduled notification path
-             ├─ Discord → intraday / fakeout / EOD alerts
-             └─ LINE    → paper-trade entry / exit / summary
+       └─► output/notifications.py   ← Discord alerts only
+             └─ Discord → intraday / fakeout / EOD alerts
       │
       ▼
 app/scheduler/runner.py ← APScheduler calls main.py + intraday.py on schedule
@@ -43,9 +39,9 @@ main_app.py             ← FastAPI serves web dashboard + REST API
       │
       ▼
 Browser: http://localhost:8080
-  ├── /              → Dashboard tab  (scheduler status, job history)
-  ├── /portfolio     → Portfolio tab  (positions, P&L, trade history)
-  ├── /signals       → Signals tab    (today's breaks, watchlist)
+  ├── /              → Dashboard tab  (scheduler status, job history, intraday/EOD signals)
+  ├── /backtest      → Backtest tab   (per-stock backtest stats)
+  ├── /watchlist     → Watchlist tab  (stocks near breakout level)
   └── /docs/         → Chart view     (generated HTML chart, unchanged)
 ```
 
@@ -72,18 +68,11 @@ breakout-signal/
 │   │   ├── settrade_client.py ← SETTRADE OpenAPI session
 │   │   ├── entry.py        ← Pivot detection (Hz + trendline)
 │   │   ├── exit.py         ← Backtest simulator (SL/TP/BE/EMA10)
-│   │   ├── paper_trade.py  ← Live paper trade ledger (Postgres or JSON)
 │   │   ├── portfolio.py    ← Cash-aware backtest portfolio
 │   │   ├── rsm.py          ← RS Momentum vs benchmark
 │   │   └── scanner.py      ← TradingView pre-screen
 │   │
-│   ├── trade_engine/       ← Abstraction layer (swap paper → live via env var)
-│   │   ├── base.py         ← Abstract TradeEngine interface
-│   │   ├── paper.py        ← PaperTradeEngine (wraps core/paper_trade.py)
-│   │   └── live.py         ← LiveTradeEngine stub (SETTRADE orders — Phase 5)
-│   │
 │   ├── notifications/
-│   │   ├── line.py         ← New LINE notifier module (not yet the scheduled path)
 │   │   └── discord.py      ← Job failure + system alert helpers
 │   │
 │   ├── scheduler/
@@ -161,23 +150,13 @@ Checked every intraday scan. Size formula: `capital × risk_pct / (ATR × sl_mul
 
 ## Notification Routing
 
-Current scheduled flow:
-
-- Discord sends alerting output: intraday breakouts, fakeout review, EOD summary.
-- LINE sends paper-trade output: trade opened, TP/SL exits, portfolio snapshot, trade history.
+Discord only. No LINE.
 
 | Notification | Trigger | Type |
 |---|---|---|
-| **Intraday breakout** | Live break during session | Discord table alert |
-| **Fakeout warning** | 16:15 review | Discord fakeout alert |
+| **Intraday breakout** | Live break during session (Prime/RVOL) | Discord table alert |
+| **Fakeout warning** | 16:35 review | Discord fakeout alert |
 | **EOD summary** | 16:45 scan | Discord summary table |
-| **Trade opened** | Prime signal → paper buy | LINE bubble: entry, shares, RVol/RSM/STR |
-| **TP1 / TP2** | Partial exit hit | LINE bubble: tranche P&L, shares left, next target |
-| **Trade closed** | SL / trail / false breakout | LINE bubble: final P&L |
-| **Portfolio snapshot** | EOD | LINE portfolio summary |
-| **Trade history** | EOD | LINE trade history table |
-
-Paper-trade entry records use **Proj RVol** first, fallback to current RVOL if unavailable.
 
 ---
 
@@ -264,19 +243,14 @@ Dashboard auto-refreshes every 60 seconds. All data from REST API:
 3. Set **Variables** in Railway dashboard:
 
 ```ini
-# Required
-LINE_CHANNEL_ACCESS_TOKEN=your_token
-LINE_TO=your_user_or_group_id         # comma-separated for multiple
-
 # Recommended
 DATABASE_URL=postgresql://...         # Postgres add-on in Railway
 APP_BASE_URL=https://your-app.up.railway.app
-TRADE_MODE=paper                      # paper | live
 
-# Optional ops alerts
+# Discord alerts
 DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
 
-# SETTRADE OpenAPI (live price data + future live trading)
+# SETTRADE OpenAPI (live price data)
 SETTRADE_APP_ID=...
 SETTRADE_APP_SECRET=...
 SETTRADE_BROKER_ID=...
@@ -302,39 +276,24 @@ py -m tests.test_settrade
 
 | Time (BKK) | UTC | Job |
 |---|---|---|
-| 10:30–16:00 every 15 min | 03:30–09:00 | `intraday_scan` |
-| 16:15 | 09:15 | `review_scan` (fakeout check) |
+| 10:30–12:30, 14:00–16:15 every 15 min | 03:30–05:30, 07:00–09:15 | `intraday_scan` |
+| 16:35 | 09:35 | `review_scan` (fakeout check) |
 | 16:45 | 09:45 | `eod_scan` |
 
 Every job writes `JobRun` row to DB — visible in real-time on Dashboard tab.
 
 ---
 
-## SWITCHING PAPER → LIVE TRADING
-
-Only one file needs to change when ready:
-
-1. Set `TRADE_MODE=live` in Railway variables
-2. Implement `app/trade_engine/live.py` using SETTRADE order API
-3. All other code (scanner, entry, notifications, dashboard) untouched
-
----
-
 ## .ENV FILE
 
 ```ini
-# LINE (primary notification channel)
-LINE_CHANNEL_ACCESS_TOKEN="your_token"
-LINE_TO="your_user_or_group_id"
-# LINE_MODE="broadcast"              # send to all followers instead
+# Discord alerts
+DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
 
 # Web app public URL (used in notification links)
 APP_BASE_URL="https://your-service.up.railway.app"
 
-# Trade mode
-TRADE_MODE=paper                     # paper | live
-
-# Postgres (Railway — persistent paper trades + job history)
+# Postgres (Railway — persistent job history)
 DATABASE_URL="postgresql://..."
 
 # SETTRADE OpenAPI
@@ -342,7 +301,4 @@ SETTRADE_APP_ID="your_app_id"
 SETTRADE_APP_SECRET="your_app_secret"
 SETTRADE_BROKER_ID="your_broker_id"
 SETTRADE_APP_CODE="your_app_code"
-
-# Optional — ops alerts only
-DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
 ```
