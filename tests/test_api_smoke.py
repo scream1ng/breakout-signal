@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 import main_app
 from app.scheduler.runner import _as_utc
-from app.storage.models import JobRun, ScanSnapshot
+from app.storage.models import JobRun, NotificationSend, ScanSnapshot
 
 
 def test_as_utc_handles_naive_and_aware():
@@ -32,6 +32,20 @@ def test_models_serialize_timestamps_as_explicit_utc():
     assert snapshot.to_dict()['created_at'].endswith('+00:00')
 
 
+def test_notification_send_serializes_timestamps_as_explicit_utc():
+    naive = datetime(2026, 5, 7, 8, 45, 0)
+
+    send = NotificationSend(
+        channel='discord',
+        target='webhook',
+        header='EOD 2026-05-07',
+        status='sent',
+        created_at=naive,
+    )
+
+    assert send.to_dict()['created_at'].endswith('+00:00')
+
+
 def test_api_smoke_endpoints():
     with TestClient(main_app.app) as client:
         r = client.get('/')
@@ -42,6 +56,7 @@ def test_api_smoke_endpoints():
         body = r.json()
         assert 'scheduler_running' in body
         assert 'recent_history' in body
+        assert 'recent_notifications' in body
 
         r = client.get('/api/signals')
         assert r.status_code == 200
@@ -52,8 +67,7 @@ def test_api_smoke_endpoints():
         r = client.get('/api/portfolio')
         assert r.status_code == 200
         body = r.json()
-        assert 'open_positions' in body
-        assert 'recent_closed' in body
+        assert 'message' in body
 
         r = client.get('/api/scan/latest')
         assert r.status_code == 200
@@ -74,5 +88,5 @@ def test_manual_close_endpoint_safe_response():
     with TestClient(main_app.app) as client:
         r = client.post('/api/trades/close', json={'ticker': 'NOTFOUND.BK', 'reason': 'MANUAL'})
         # In paper mode this should be 404 if not found.
-        # If runtime mode is changed to live, endpoint correctly returns 503.
-        assert r.status_code in (404, 503)
+        # If paper trading is removed, endpoint correctly returns 410.
+        assert r.status_code in (404, 410, 503)

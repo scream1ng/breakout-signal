@@ -91,7 +91,7 @@ Complete guide to understanding what each script does, when they run, and how to
 2. Check if any have closed above their breakout level
 3. Flag new breakouts, fakeouts (false breaks), and extended moves (STR > 4x)
 4. Send Discord alerts for live breakouts detected from yesterday's watchlist
-5. Send Discord alerts for fakeout review at 16:15
+5. Send Discord alerts for fakeout review at 16:25
 6. Send LINE notifications only when a paper-trade entry or exit is created
 
 **Key outputs:**
@@ -247,15 +247,15 @@ TEAM     3.48     3.48     Hz        STR
 
 ### **Market Open (09:30)**
 ```
-09:30 ← Intraday scanner starts (15-min intervals)
+10:30 ← Intraday scanner starts (15-min intervals)
        ├─ Fetch live prices for yesterday's watchlist
        ├─ Check for new breakouts or fakeouts
       └─ Send Discord alerts + open paper trades
 ```
 
-### **Throughout Day (09:30–16:30)**
+### **Throughout Day (10:30–12:30, 14:00–16:15)**
 ```
-09:45, 10:00, 10:15, ... 16:15, 16:30
+10:30, 10:45, 11:00, ... 12:30, 14:00, 14:15, ... 16:15
   ↓ Every 15 min
   ├─ Update watchlist vs live prices
   ├─ Close any positions on SL/TP/EMA10 exits
@@ -298,8 +298,8 @@ Before deploying to Railway, verify:
   - `py -m tests.test_notifications` (Discord alerts + LINE paper-trade sends OK)
 
 ✅ SETTRADE credentials in `.env` (not committed to git)
-✅ LINE token in `.env` (not committed to git)
-✅ Discord webhook in `.env` (if using ops alerts)
+✅ Discord webhook in `.env` (for Discord alerts)
+✅ Optional `OPS_API_TOKEN` in `.env` (to enable protected manual job/notify endpoints)
 
 ✅ PostgreSQL database configured (Railway: project → Add Plugin → PostgreSQL)
 ✅ Railway config in `.env`:

@@ -153,7 +153,7 @@ Checked every intraday scan. Size formula: `capital × risk_pct / (ATR × sl_mul
 | **TP2** | close ≥ entry + 4×ATR | Sell ~30% of remaining |
 | **EMA10 trail** | close < EMA10 | Exit remaining |
 | **SL** | close ≤ stop | Exit all |
-| **False breakout** | 16:15 review: close < pivot | Exit all |
+| **False breakout** | 16:25 review: close < pivot | Exit all |
 
 ---
 
@@ -167,7 +167,7 @@ Current scheduled flow:
 | Notification | Trigger | Type |
 |---|---|---|
 | **Intraday breakout** | Live break during session | Discord table alert |
-| **Fakeout warning** | 16:15 review | Discord fakeout alert |
+| **Fakeout warning** | 16:25 review | Discord fakeout alert |
 | **EOD summary** | 16:45 scan | Discord summary table |
 | **Trade opened** | Prime signal → paper buy | LINE bubble: entry, shares, RVol/RSM/STR |
 | **TP1 / TP2** | Partial exit hit | LINE bubble: tranche P&L, shares left, next target |
@@ -300,8 +300,8 @@ py -m tests.test_settrade
 
 | Time (BKK) | UTC | Job |
 |---|---|---|
-| 10:30–16:00 every 15 min | 03:30–09:00 | `intraday_scan` |
-| 16:15 | 09:15 | `review_scan` (fakeout check) |
+| 10:30–12:30, 14:00–16:15 every 15 min | 03:30–05:30, 07:00–09:15 | `intraday_scan` |
+| 16:25 | 09:25 | `review_scan` (fakeout check) |
 | 16:45 | 09:45 | `eod_scan` |
 
 Every job writes a `JobRun` row to the database — visible in real-time on the Dashboard tab.
@@ -321,18 +321,10 @@ When ready to go live, only one file needs to change:
 ## .ENV FILE
 
 ```ini
-# LINE (primary notification channel)
-LINE_CHANNEL_ACCESS_TOKEN="your_token"
-LINE_TO="your_user_or_group_id"
-# LINE_MODE="broadcast"              # send to all followers instead
-
 # Web app public URL (used in notification links)
 APP_BASE_URL="https://your-service.up.railway.app"
 
-# Trade mode
-TRADE_MODE=paper                     # paper | live
-
-# Postgres (Railway — persistent paper trades + job history)
+# Postgres (Railway — required for scheduler locking/history/audit)
 DATABASE_URL="postgresql://..."
 
 # SETTRADE OpenAPI
@@ -341,6 +333,14 @@ SETTRADE_APP_SECRET="your_app_secret"
 SETTRADE_BROKER_ID="your_broker_id"
 SETTRADE_APP_CODE="your_app_code"
 
-# Optional — ops alerts only
+# Discord alerts
 DISCORD_WEBHOOK="https://discord.com/api/webhooks/..."
+
+# Optional — protect manual ops endpoints in production
+OPS_API_TOKEN="long-random-token"
+
+# Legacy / unused in current runtime
+# LINE_CHANNEL_ACCESS_TOKEN="your_token"
+# LINE_TO="your_user_or_group_id"
+# LINE_MODE="broadcast"
 ```

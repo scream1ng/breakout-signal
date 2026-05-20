@@ -102,3 +102,36 @@ class DailyState(Base):
     state_json = Column(Text, nullable=False)
     updated_at = Column(DateTime, nullable=False,
                         default=lambda: datetime.now(timezone.utc))
+
+
+class NotificationSend(Base):
+    __tablename__ = 'notification_sends'
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    channel    = Column(String(20), nullable=False, index=True)
+    target     = Column(String(120), nullable=False)
+    header     = Column(String(120), nullable=False)
+    source     = Column(String(40), nullable=True, index=True)
+    job_name   = Column(String(60), nullable=True, index=True)
+    job_run_id = Column(Integer, nullable=True, index=True)
+    commit_sha = Column(String(40), nullable=True)
+    status     = Column(String(20), nullable=False, index=True)
+    error      = Column(Text, nullable=True)
+    payload_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False,
+                        default=lambda: datetime.now(timezone.utc), index=True)
+
+    def to_dict(self) -> dict:
+        return {
+            'id':         self.id,
+            'channel':    self.channel,
+            'target':     self.target,
+            'header':     self.header,
+            'source':     self.source,
+            'job_name':   self.job_name,
+            'job_run_id': self.job_run_id,
+            'commit_sha': self.commit_sha,
+            'status':     self.status,
+            'error':      self.error,
+            'created_at': _utc_iso(self.created_at),
+        }

@@ -16,22 +16,34 @@ from datetime import datetime
 import requests
 
 from app.config import DISCORD_WEBHOOK
+from output.notifications import _persist_notification_event, _provenance_text
 
 logger = logging.getLogger(__name__)
 
 
-def _post(payload: dict) -> bool:
+def _post(payload: dict) -> tuple[bool, str | None]:
     if not DISCORD_WEBHOOK:
-        return False
+        return False, 'Discord webhook not configured'
     try:
         r = requests.post(DISCORD_WEBHOOK, json=payload, timeout=10)
         if r.status_code not in (200, 204):
-            logger.warning('Discord error %s: %s', r.status_code, r.text[:120])
-            return False
-        return True
+            msg = f'{r.status_code} {r.text[:120]}'
+            logger.warning('Discord error %s', msg)
+            return False, msg
+        return True, None
     except Exception as exc:
         logger.warning('Discord post failed: %s', exc)
-        return False
+        return False, str(exc)
+
+
+def _with_provenance(embed: dict) -> dict:
+    embed = dict(embed)
+    footer = dict(embed.get('footer') or {})
+    footer_text = footer.get('text', '').strip()
+    provenance = _provenance_text()
+    footer['text'] = f'{footer_text} | {provenance}' if footer_text else provenance
+    embed['footer'] = footer
+    return embed
 
 
 def send_job_failure(job_name: str, error: str) -> bool:
@@ -42,7 +54,9 @@ def send_job_failure(job_name: str, error: str) -> bool:
         'title': 'Scheduled job error',
         'description': f'```\n{error[:1000]}\n```',
     }
-    ok = _post({'embeds': [embed]})
+    embed = _with_provenance(embed)
+    ok, err = _post({'embeds': [embed]})
+    _persist_notification_event('discord', 'webhook', f'JOB_FAILURE {job_name}', embed, ok, err)
     time.sleep(0.4)
     return ok
 
@@ -55,7 +69,9 @@ def send_system_alert(title: str, message: str) -> bool:
         'title': title,
         'description': message[:1800],
     }
-    ok = _post({'embeds': [embed]})
+    embed = _with_provenance(embed)
+    ok, err = _post({'embeds': [embed]})
+    _persist_notification_event('discord', 'webhook', title[:120], embed, ok, err)
     time.sleep(0.4)
     return ok
 

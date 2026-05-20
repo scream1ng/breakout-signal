@@ -71,23 +71,88 @@ def _post_discord(url: str, payload: dict) -> bool:
     try:
         r = requests.post(url, json=payload, timeout=10)
         if r.status_code not in (200, 204):
-            print(f'  Discord error: {r.status_code} {r.text[:120]}')
-            return False
-        return True
+            return False, f'{r.status_code} {r.text[:120]}'
+        return True, None
     except Exception as e:
-        print(f'  Discord error: {e}')
-        return False
+        return False, str(e)
+
+
+def _notification_meta() -> dict:
+    commit_sha = (
+        os.environ.get('RAILWAY_GIT_COMMIT_SHA', '').strip()
+        or os.environ.get('ALERT_COMMIT_SHA', '').strip()
+    )
+    return {
+        'source':     os.environ.get('ALERT_SOURCE', '').strip() or 'direct_script',
+        'job_name':   os.environ.get('ALERT_JOB_NAME', '').strip() or None,
+        'job_run_id': os.environ.get('ALERT_JOB_RUN_ID', '').strip() or None,
+        'commit_sha': commit_sha[:12] if commit_sha else None,
+    }
+
+
+def _provenance_text() -> str:
+    meta = _notification_meta()
+    parts = [f"src={meta['source']}"]
+    if meta['job_name']:
+        parts.append(f"job={meta['job_name']}")
+    if meta['job_run_id']:
+        parts.append(f"run={meta['job_run_id']}")
+    if meta['commit_sha']:
+        parts.append(f"rev={meta['commit_sha']}")
+    return ' | '.join(parts)
+
+
+def _attach_provenance(embed: dict) -> dict:
+    embed = dict(embed)
+    footer = dict(embed.get('footer') or {})
+    footer_text = footer.get('text', '').strip()
+    provenance = _provenance_text()
+    footer['text'] = f'{footer_text} | {provenance}' if footer_text else provenance
+    embed['footer'] = footer
+    return embed
 
 
 def _log_message(channel: str, target: str, header: str, payload):
     os.makedirs(DATA_DIR, exist_ok=True)
+    meta = _notification_meta()
     entry = dict(
         at=datetime.utcnow().isoformat(timespec='seconds'),
         channel=channel, target=target, header=header,
+        source=meta['source'], job_name=meta['job_name'],
+        job_run_id=meta['job_run_id'], commit_sha=meta['commit_sha'],
         message=payload if isinstance(payload, str) else json.dumps(payload),
     )
     with open(OUTBOX_LOG_PATH, 'a', encoding='utf-8') as f:
         f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+
+
+def _persist_notification_event(channel: str, target: str, header: str,
+                                payload: dict, ok: bool, error: str | None) -> None:
+    try:
+        from app.storage.db import SessionLocal, init_db
+        from app.storage.models import NotificationSend
+        init_db()
+        db = SessionLocal()
+        try:
+            meta = _notification_meta()
+            job_run_id = meta['job_run_id']
+            db.add(NotificationSend(
+                channel=channel,
+                target=target,
+                header=header,
+                source=meta['source'],
+                job_name=meta['job_name'],
+                job_run_id=int(job_run_id) if job_run_id else None,
+                commit_sha=meta['commit_sha'],
+                status='sent' if ok else 'failed',
+                error=(error or '')[:800] or None,
+                payload_json=json.dumps(payload, ensure_ascii=False),
+            ))
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
 
 
 def _send_discord(header: str, embed: dict) -> bool:
@@ -95,8 +160,12 @@ def _send_discord(header: str, embed: dict) -> bool:
     if not discord_url:
         print('  Discord webhook not configured — skipping.')
         return False
+    embed = _attach_provenance(embed)
     _log_message('discord', 'webhook', header, embed)
-    ok = _post_discord(discord_url, {'embeds': [embed]})
+    ok, error = _post_discord(discord_url, {'embeds': [embed]})
+    if not ok and error:
+        print(f'  Discord error: {error}')
+    _persist_notification_event('discord', 'webhook', header, embed, ok, error)
     time.sleep(0.4)
     return ok
 

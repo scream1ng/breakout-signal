@@ -7,13 +7,13 @@ Powers the "Dashboard" page on the web frontend.
 
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.config import DISCORD_WEBHOOK
+from app.config import DISCORD_WEBHOOK, OPS_API_TOKEN, is_railway_runtime
 from app.notifications.discord import send_test_alert as send_discord_test_alert
 from app.storage.db import get_db
-from app.storage.models import JobRun
+from app.storage.models import JobRun, NotificationSend
 from app.scheduler.runner import get_scheduler
 
 _STALE_THRESHOLD = timedelta(minutes=15)
@@ -33,6 +33,18 @@ def _mark_stale(row: dict) -> dict:
     return row
 
 router = APIRouter()
+
+
+def _require_ops_access(x_ops_token: str | None = Header(default=None)) -> None:
+    if OPS_API_TOKEN:
+        if x_ops_token != OPS_API_TOKEN:
+            raise HTTPException(status_code=401, detail='Invalid or missing x-ops-token')
+        return
+    if is_railway_runtime():
+        raise HTTPException(
+            status_code=503,
+            detail='Production ops endpoints are disabled until OPS_API_TOKEN is configured',
+        )
 
 
 @router.get('/system')
@@ -66,11 +78,19 @@ def get_system_status(
         if run.job_name not in last_by_job:
             last_by_job[run.job_name] = _mark_stale(run.to_dict())
 
+    notifications = (
+        db.query(NotificationSend)
+        .order_by(NotificationSend.created_at.desc())
+        .limit(min(limit, 20))
+        .all()
+    )
+
     return {
         'scheduler_running': scheduler.running,
         'next_runs':         next_runs,
         'last_runs':         last_by_job,
         'recent_history':    [_mark_stale(r.to_dict()) for r in runs],
+        'recent_notifications': [n.to_dict() for n in notifications],
     }
 
 
@@ -91,7 +111,11 @@ def _get_job_map() -> dict:
 
 
 @router.post('/jobs/run/{job_name}')
-def trigger_job(job_name: str, background_tasks: BackgroundTasks):
+def trigger_job(
+    job_name: str,
+    background_tasks: BackgroundTasks,
+    _: None = Depends(_require_ops_access),
+):
     """Trigger a job immediately in the background. Returns straight away."""
     job_map = _get_job_map()
     if job_name not in job_map:
@@ -100,12 +124,12 @@ def trigger_job(job_name: str, background_tasks: BackgroundTasks):
             detail=f"Unknown job '{job_name}'. Valid: {list(job_map)}",
         )
     from app.scheduler.runner import _tracked
-    background_tasks.add_task(_tracked, job_name, job_map[job_name])
+    background_tasks.add_task(_tracked, job_name, job_map[job_name], trigger_source='api_manual')
     return {'status': 'triggered', 'job': job_name}
 
 
 @router.post('/notify/test/{channel}')
-def trigger_notification_test(channel: str):
+def trigger_notification_test(channel: str, _: None = Depends(_require_ops_access)):
     channel_name = channel.strip().lower()
 
     if channel_name != 'discord':

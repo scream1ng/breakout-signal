@@ -144,7 +144,7 @@ Checked every intraday scan. Size formula: `capital × risk_pct / (ATR × sl_mul
 | **TP2** | close ≥ entry + 4×ATR | Sell ~30% of remaining |
 | **EMA10 trail** | close < EMA10 | Exit remaining |
 | **SL** | close ≤ stop | Exit all |
-| **False breakout** | 16:15 review: close < pivot | Exit all |
+| **False breakout** | 16:25 review: close < pivot | Exit all |
 
 ---
 
@@ -155,7 +155,7 @@ Discord only. No LINE.
 | Notification | Trigger | Type |
 |---|---|---|
 | **Intraday breakout** | Live break during session (Prime/RVOL) | Discord table alert |
-| **Fakeout warning** | 16:35 review | Discord fakeout alert |
+| **Fakeout warning** | 16:25 review | Discord fakeout alert |
 | **EOD summary** | 16:45 scan | Discord summary table |
 
 ---
@@ -277,7 +277,7 @@ py -m tests.test_settrade
 | Time (BKK) | UTC | Job |
 |---|---|---|
 | 10:30–12:30, 14:00–16:15 every 15 min | 03:30–05:30, 07:00–09:15 | `intraday_scan` |
-| 16:35 | 09:35 | `review_scan` (fakeout check) |
+| 16:25 | 09:25 | `review_scan` (fakeout check) |
 | 16:45 | 09:45 | `eod_scan` |
 
 Every job writes `JobRun` row to DB — visible in real-time on Dashboard tab.

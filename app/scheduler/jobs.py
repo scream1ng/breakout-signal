@@ -23,10 +23,13 @@ def _strip_ansi(text: str) -> str:
     return ANSI_RE.sub('', text)
 
 
-def _run(script: str, *extra_args: str) -> dict:
+def _run(script: str, *extra_args: str, env_extra: dict | None = None) -> dict:
     """Run a project script as a subprocess; raise on non-zero exit."""
     cmd = [sys.executable, os.path.join(ROOT, script), *extra_args]
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    env = os.environ.copy()
+    if env_extra:
+        env.update({k: str(v) for k, v in env_extra.items() if v is not None})
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT, env=env)
     stdout_tail = _strip_ansi((result.stdout or ''))[-4000:]
     stderr_tail = _strip_ansi((result.stderr or ''))[-4000:]
     if result.returncode != 0:
@@ -43,31 +46,41 @@ def _run(script: str, *extra_args: str) -> dict:
     }
 
 
-def run_eod_scan() -> dict:
+def _job_env(job_context: dict | None, source_fallback: str) -> dict:
+    meta = dict(job_context or {})
+    return {
+        'ALERT_SOURCE': meta.get('source') or source_fallback,
+        'ALERT_JOB_NAME': meta.get('job_name'),
+        'ALERT_JOB_RUN_ID': meta.get('job_run_id'),
+        'ALERT_COMMIT_SHA': os.environ.get('RAILWAY_GIT_COMMIT_SHA', '').strip(),
+    }
+
+
+def run_eod_scan(job_context: dict | None = None) -> dict:
     """EOD watchlist scan — Mon-Fri 16:45 BKK (09:45 UTC)."""
-    return _run('main.py')
+    return _run('main.py', env_extra=_job_env(job_context, 'manual_job'))
 
 
-def run_intraday_scan() -> dict:
+def run_intraday_scan(job_context: dict | None = None) -> dict:
     """15-min intraday breakout check — market hours."""
-    return _run('intraday.py')
+    return _run('intraday.py', env_extra=_job_env(job_context, 'manual_job'))
 
 
-def run_review_scan() -> dict:
-    """16:15 BKK fakeout review — checks for failed breaks."""
-    return _run('intraday.py', '--review')
+def run_review_scan(job_context: dict | None = None) -> dict:
+    """16:25 BKK fakeout review — checks for failed breaks."""
+    return _run('intraday.py', '--review', env_extra=_job_env(job_context, 'manual_job'))
 
 
-def run_eod_scan_notify() -> dict:
+def run_eod_scan_notify(job_context: dict | None = None) -> dict:
     """Scheduled EOD scan with notifications enabled."""
-    return _run('main.py', '--discord')
+    return _run('main.py', '--discord', env_extra=_job_env(job_context, 'scheduler'))
 
 
-def run_intraday_scan_notify() -> dict:
+def run_intraday_scan_notify(job_context: dict | None = None) -> dict:
     """Scheduled intraday scan with notifications enabled."""
-    return _run('intraday.py', '--discord')
+    return _run('intraday.py', '--discord', env_extra=_job_env(job_context, 'scheduler'))
 
 
-def run_review_scan_notify() -> dict:
+def run_review_scan_notify(job_context: dict | None = None) -> dict:
     """Scheduled fakeout review with notifications enabled."""
-    return _run('intraday.py', '--review', '--discord')
+    return _run('intraday.py', '--review', '--discord', env_extra=_job_env(job_context, 'scheduler'))

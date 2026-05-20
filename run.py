@@ -40,7 +40,10 @@ def _ask_yn(prompt, default='n'):
 def _run(cmd: list):
     """Run a command in the same terminal, inherit stdin/stdout."""
     try:
-        subprocess.run([PYTHON] + cmd, cwd=SCRIPT_DIR)
+        env = os.environ.copy()
+        env.setdefault('ALERT_SOURCE', 'cli_menu')
+        env.setdefault('ALERT_COMMIT_SHA', os.environ.get('RAILWAY_GIT_COMMIT_SHA', '').strip())
+        subprocess.run([PYTHON] + cmd, cwd=SCRIPT_DIR, env=env)
     except KeyboardInterrupt:
         print('\n  Interrupted.')
     input('\n  Press Enter to return to menu...')

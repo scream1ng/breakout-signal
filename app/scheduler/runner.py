@@ -93,7 +93,7 @@ def get_scheduler() -> BackgroundScheduler:
     return _scheduler
 
 
-def _tracked(job_name: str, fn: Callable, *args, **kwargs) -> None:
+def _tracked(job_name: str, fn: Callable, *args, trigger_source: str = 'scheduler', **kwargs) -> None:
     """Wrap a job function: create JobRun before, update it after."""
     db = SessionLocal()
     _ensure_lock_table(db)
@@ -115,7 +115,15 @@ def _tracked(job_name: str, fn: Callable, *args, **kwargs) -> None:
 
         result: dict = {}
         try:
-            result = fn(*args, **kwargs) or {}
+            result = fn(
+                *args,
+                job_context={
+                    'source': trigger_source,
+                    'job_name': job_name,
+                    'job_run_id': run.id,
+                },
+                **kwargs,
+            ) or {}
             run.status = 'completed'
             started_utc = _as_utc(run.started_at)
             logger.info('Job %s completed in %.1fs', job_name,
@@ -161,7 +169,7 @@ def register_jobs() -> None:
         id='eod_scan', replace_existing=True,
     )
 
-    # ── Intraday scans: every 15 min 10:15–12:30 + 14:00–16:15 BKK ────────────
+    # ── Intraday scans: every 15 min 10:30–12:30 + 14:00–16:15 BKK ────────────
     _intraday_bkk = [
         f'{h:02d}:{m:02d}'
         for h in range(10, 17)
@@ -179,14 +187,11 @@ def register_jobs() -> None:
             id=f'intraday_{i}', replace_existing=True,
         )
 
-    # ── Fakeout review: Mon-Fri 09:35 UTC = 16:35 BKK ───────────────────────
-    # Runs 5 min AFTER market close (16:30) so yfinance returns the official
-    # closing price. Running at 16:25 (pre-close) caused stocks that dropped in
-    # the last 5 minutes to slip through: not flagged fakeout AND not in EOD.
+    # ── Fakeout review: Mon-Fri 09:25 UTC = 16:25 BKK ───────────────────────
     scheduler.add_job(
         _tracked, 'cron',
         args=['review_scan', run_review_scan_notify],
-        day_of_week='mon-fri', hour=9, minute=35,
+        day_of_week='mon-fri', hour=9, minute=25,
         id='review_scan', replace_existing=True,
     )
 
