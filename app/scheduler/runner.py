@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 from app.storage.db import SessionLocal
 from app.storage.models import JobRun
+from app.scheduler.windows import EOD_BKK_SLOT, INTRADAY_BKK_SLOTS, REVIEW_BKK_SLOTS
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +65,9 @@ def _acquire_lock(db, job_name: str) -> bool:
             ),
             {'name': job_name},
         )
+        claimed = result.fetchone() is not None
         db.commit()
-        return result.fetchone() is not None
+        return claimed
     except Exception as exc:
         logger.warning('Lock table unavailable (%s) — running without dedup', exc)
         try:
@@ -162,24 +164,18 @@ def register_jobs() -> None:
     scheduler = get_scheduler()
 
     # ── EOD scan: Mon-Fri 09:45 UTC = 16:45 BKK ─────────────────────────────
+    eod_hour_bkk, eod_minute_bkk = map(int, EOD_BKK_SLOT.split(':'))
     scheduler.add_job(
         _tracked, 'cron',
         args=['eod_scan', run_eod_scan_notify],
-        day_of_week='mon-fri', hour=9, minute=45,
+        day_of_week='mon-fri', hour=(eod_hour_bkk - 7) % 24, minute=eod_minute_bkk,
         id='eod_scan', replace_existing=True,
     )
 
     # ── Intraday scans: every 15 min 10:30–12:30 + 14:00–16:15 BKK ────────────
-    _intraday_bkk = [
-        f'{h:02d}:{m:02d}'
-        for h in range(10, 17)
-        for m in (0, 15, 30, 45)
-        if (10 * 60 + 30) <= (h * 60 + m) <= (12 * 60 + 30)
-        or (14 * 60 + 0)  <= (h * 60 + m) <= (16 * 60 + 15)
-    ]
-    for i, t_bkk in enumerate(_intraday_bkk):
+    for i, t_bkk in enumerate(INTRADAY_BKK_SLOTS):
         h, m = map(int, t_bkk.split(':'))
-        h_utc = h - 7
+        h_utc = (h - 7) % 24
         scheduler.add_job(
             _tracked, 'cron',
             args=['intraday_scan', run_intraday_scan_notify],
@@ -188,11 +184,13 @@ def register_jobs() -> None:
         )
 
     # ── Fakeout review: Mon-Fri 09:25 UTC = 16:25 BKK ───────────────────────
-    scheduler.add_job(
-        _tracked, 'cron',
-        args=['review_scan', run_review_scan_notify],
-        day_of_week='mon-fri', hour=9, minute=25,
-        id='review_scan', replace_existing=True,
-    )
+    for i, t_bkk in enumerate(REVIEW_BKK_SLOTS):
+        h, m = map(int, t_bkk.split(':'))
+        scheduler.add_job(
+            _tracked, 'cron',
+            args=['review_scan', run_review_scan_notify],
+            day_of_week='mon-fri', hour=(h - 7) % 24, minute=m,
+            id='review_scan' if i == 0 else f'review_scan_{i}', replace_existing=True,
+        )
 
     logger.info('Registered %d jobs', len(scheduler.get_jobs()))

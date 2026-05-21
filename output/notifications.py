@@ -112,6 +112,55 @@ def _attach_provenance(embed: dict) -> dict:
     return embed
 
 
+def _claim_notification_slot(slot_key: str, *, payload: dict | None = None) -> bool:
+    payload = dict(payload or {})
+    payload.setdefault('slot_key', slot_key)
+    payload.setdefault('claimed_at', datetime.utcnow().isoformat(timespec='seconds'))
+    try:
+        from app.storage.db import SessionLocal, init_db
+        from sqlalchemy import text
+
+        init_db()
+        db = SessionLocal()
+        try:
+            result = db.execute(
+                text(
+                    "INSERT INTO daily_state (state_key, state_json, updated_at)"
+                    " VALUES (:k, :v, :ts)"
+                    " ON CONFLICT DO NOTHING RETURNING state_key"
+                ),
+                {
+                    'k': f'notification_slot:{slot_key}',
+                    'v': json.dumps(payload, ensure_ascii=False),
+                    'ts': datetime.utcnow(),
+                },
+            )
+            claimed = result.fetchone() is not None
+            db.commit()
+            return claimed
+        finally:
+            db.close()
+    except Exception:
+        return True
+
+
+def _claim_scheduler_signal_slot(kind: str, bucket: str) -> bool:
+    meta = _notification_meta()
+    if meta.get('source') != 'scheduler':
+        return True
+    return _claim_notification_slot(
+        f'{kind}:{bucket}',
+        payload={
+            'kind': kind,
+            'bucket': bucket,
+            'source': meta.get('source'),
+            'job_name': meta.get('job_name'),
+            'job_run_id': meta.get('job_run_id'),
+            'commit_sha': meta.get('commit_sha'),
+        },
+    )
+
+
 def _log_message(channel: str, target: str, header: str, payload):
     os.makedirs(DATA_DIR, exist_ok=True)
     meta = _notification_meta()
@@ -681,6 +730,9 @@ def send_intraday_alert(signals: list, now, cfg: dict) -> bool:
     if not signals:
         return False
     time_str = now.strftime('%H:%M')
+    if not _claim_scheduler_signal_slot('intraday', now.strftime('%Y-%m-%d %H:%M')):
+        print(f'  Duplicate scheduler intraday slot {time_str} — skipping Discord')
+        return False
     embed = _build_intraday_embed(signals, time_str, cfg)
     ok = _send_discord(f'INTRADAY {time_str}', embed)
     print(f'  {"Discord sent" if ok else "Discord failed"} — {len(signals)} intraday signals')
@@ -692,6 +744,9 @@ def send_review_alert(signals: list, now, cfg: dict) -> bool:
     if not signals:
         return False
     time_str = now.strftime('%H:%M')
+    if not _claim_scheduler_signal_slot('review', now.strftime('%Y-%m-%d %H:%M')):
+        print(f'  Duplicate scheduler review slot {time_str} — skipping Discord')
+        return False
     embed = _build_fakeout_embed(signals, time_str)
     ok = _send_discord(f'FAKEOUT {time_str}', embed)
     print(f'  {"Discord sent" if ok else "Discord failed"} — {len(signals)} fakeouts')

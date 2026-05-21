@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 import main_app
 from app.scheduler.runner import _as_utc
+from app.scheduler.windows import INTRADAY_BKK_SLOTS, REVIEW_BKK_SLOTS
 from app.storage.models import JobRun, NotificationSend, ScanSnapshot
 
 
@@ -44,6 +45,15 @@ def test_notification_send_serializes_timestamps_as_explicit_utc():
     )
 
     assert send.to_dict()['created_at'].endswith('+00:00')
+
+
+def test_scheduler_windows_match_expected_bkk_slots():
+    assert INTRADAY_BKK_SLOTS[0] == '10:30'
+    assert INTRADAY_BKK_SLOTS[-1] == '16:15'
+    assert '10:15' not in INTRADAY_BKK_SLOTS
+    assert '12:45' not in INTRADAY_BKK_SLOTS
+    assert '14:00' in INTRADAY_BKK_SLOTS
+    assert REVIEW_BKK_SLOTS == ('16:25',)
 
 
 def test_api_smoke_endpoints():

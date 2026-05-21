@@ -369,8 +369,9 @@ def _claim_eod_alert(date_str: str) -> bool:
                  'v': json.dumps(payload, ensure_ascii=False),
                  'ts': datetime.utcnow()},
             )
+            claimed = result.fetchone() is not None
             db.commit()
-            if result.fetchone() is not None:
+            if claimed:
                 # This instance owns the slot — also write local file for observability
                 _write_eod_alert_state(date_str, payload)
                 return True

@@ -19,6 +19,7 @@ import pandas as pd
 ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
+from app.scheduler.windows import is_allowed_intraday_scheduler_slot, scheduler_slot_label
 from output.report import print_intraday
 from output.notifications import send_intraday_alert, send_review_alert
 
@@ -184,6 +185,13 @@ def criteria_label(rsm, rvol, stretch=0):
 def run():
     now = datetime.now(BKK)
     date_str = now.strftime('%Y-%m-%d')
+
+    if os.environ.get('ALERT_SOURCE', '').strip() == 'scheduler':
+        if not is_allowed_intraday_scheduler_slot(now, review=args.review):
+            slot = scheduler_slot_label(now)
+            scan_kind = 'review' if args.review else 'intraday'
+            _log(f'Scheduler {scan_kind} slot {slot} BKK is not allowed — skipping')
+            return
 
     alert_state = _load_alert_state(date_str)
     alerted_keys = {item.get('key') for item in alert_state['alerted']}
