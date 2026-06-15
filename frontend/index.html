@@ -4,869 +4,253 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Breakout Signal</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/style.css" />
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    [x-cloak] { display: none !important; }
-    .tab-active  {
-      border-bottom-width: 2px;
-      border-bottom-color: #6366f1;
-      color: #4f46e5;
-      font-weight: 600;
+    :root {
+      --page:#edf0f5; --card:#fff; --bd:#d8dfe8; --bd-soft:#e6eaf0; --row:#f0f3f7;
+      --head:#f7f9fb; --navy:#101e30; --ink:#1d2b3e;
+      --mut:#6a7a8c; --mut2:#9aaabb; --mut3:#b0bcc8;
+      --blue:#1848c8; --blue-soft:rgba(24,72,200,0.06);
+      --green:#166534; --red:#9b1c1c; --amber:#b45309;
     }
-    .status-dot  { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .dot-green   { background: #22c55e; }
-    .dot-red     { background: #ef4444; }
-    .dot-yellow  { background: #f59e0b; }
-    .dot-grey    { background: #9ca3af; }
+    * , *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: 'DM Sans', sans-serif; background: var(--page); color: var(--navy);
+      -webkit-font-smoothing: antialiased; overflow: hidden;
+    }
+    #root { height: 100vh; }
+    .mono { font-family: 'DM Mono', monospace; font-variant-numeric: tabular-nums; }
+
+    /* ── App shell ──────────────────────────────────────────── */
+    .app { height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar {
+      height: 54px; flex-shrink: 0; background: var(--card); border-bottom: 1px solid var(--bd);
+      display: flex; align-items: center; padding: 0 22px; gap: 16px; z-index: 20;
+    }
+    .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.025em; color: var(--navy); display: flex; align-items: center; gap: 7px; }
+    .logo .mark { color: var(--blue); font-size: 17px; }
+    .topbar .set { font-size: 11.5px; color: var(--mut2); border-left: 1px solid var(--bd); padding-left: 16px; }
+    .top-r { margin-left: auto; display: flex; align-items: center; gap: 11px; font-size: 11.5px; color: var(--mut); }
+    .top-r .dot { width: 7px; height: 7px; border-radius: 50%; background: #198754; box-shadow: 0 0 0 3px rgba(25,135,84,0.12); }
+    .top-r .dot.off { background: #9ca3af; box-shadow: 0 0 0 3px rgba(156,163,175,0.12); }
+    .top-r .sep { color: var(--bd); }
+    .ref-btn {
+      display: flex; align-items: center; gap: 5px; padding: 5px 12px; font-size: 11.5px; font-weight: 500;
+      border: 1px solid var(--bd); background: var(--card); color: var(--mut); cursor: pointer;
+      border-radius: 4px; font-family: inherit; transition: all .12s;
+    }
+    .ref-btn:hover { background: var(--head); color: var(--ink); }
+    .ref-btn.spin .ri { animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .main-row { flex: 1; display: flex; min-height: 0; }
+
+    /* ── Sidebar ────────────────────────────────────────────── */
+    .sidebar { width: 202px; flex-shrink: 0; background: var(--card); border-right: 1px solid var(--bd); display: flex; flex-direction: column; padding: 14px 0; }
+    .nav-sec { padding: 0 16px 7px; font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--mut3); font-weight: 600; }
+    .nav-i {
+      display: flex; align-items: center; gap: 11px; padding: 9px 18px; font-size: 12.5px; font-weight: 500;
+      color: var(--mut); cursor: pointer; border-left: 2px solid transparent; transition: all .1s; user-select: none;
+    }
+    .nav-i:hover { color: var(--ink); background: var(--head); }
+    .nav-i.act { color: var(--blue); background: var(--blue-soft); border-left-color: var(--blue); font-weight: 600; }
+    .nav-ic { width: 17px; text-align: center; font-size: 14px; opacity: 0.85; }
+    .nav-i.act .nav-ic { opacity: 1; }
+    .nav-spacer { flex: 1; }
+    .nav-foot { padding: 12px 18px 2px; border-top: 1px solid var(--bd-soft); margin-top: 8px; }
+    .nav-foot .lbl { font-size: 9px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--mut3); font-weight: 600; margin-bottom: 9px; }
+    .mini-job { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .mini-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .mini-dot.ok { background: #198754; }
+    .mini-dot.rn { background: #d97706; animation: pulse 1.4s ease-in-out infinite; }
+    .mini-dot.fl { background: #b91c1c; }
+    .mini-dot.ny { background: #9ca3af; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+    .mini-lbl { flex: 1; font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mini-t { font-size: 10px; color: var(--mut3); }
+
+    /* ── Content area ───────────────────────────────────────── */
+    .content { flex: 1; min-width: 0; overflow: auto; }
+    .content.dash { display: grid; grid-template-columns: 1fr 300px; }
+    .col-main { padding: 16px 16px 28px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .rail { background: var(--card); border-left: 1px solid var(--bd); display: flex; flex-direction: column; overflow: auto; }
+    .pad { padding: 18px 22px 32px; max-width: 1080px; width: 100%; margin: 0 auto; }
+
+    /* ── Section headers ────────────────────────────────────── */
+    .sec-h { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mut); display: flex; align-items: baseline; gap: 7px; margin: 0 0 10px; }
+    .sec-h .dim { font-size: 11px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--mut2); }
+
+    /* ── Card ───────────────────────────────────────────────── */
+    .card { background: var(--card); border: 1px solid var(--bd); border-radius: 4px; overflow: hidden; }
+    .card-h { padding: 10px 16px; border-bottom: 1px solid var(--bd-soft); display: flex; align-items: center; justify-content: space-between; background: var(--head); }
+    .card-t { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mut); }
+    .card-t.red { color: var(--red); }
+    .card-d { font-size: 10.5px; color: var(--mut2); }
+
+    /* ── Table ──────────────────────────────────────────────── */
+    table.t { width: 100%; border-collapse: collapse; }
+    .t th { text-align: left; padding: 7px 14px; color: var(--mut2); font-size: 9.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; border-bottom: 1px solid var(--bd-soft); background: var(--head); white-space: nowrap; }
+    .t th.r { text-align: right; }
+    .t th.c { text-align: center; }
+    .t th.sort { cursor: pointer; user-select: none; }
+    .t th.sort:hover { color: var(--blue); }
+    .t td { padding: 8px 14px; border-bottom: 1px solid var(--row); font-size: 12px; white-space: nowrap; }
+    .t tbody tr:last-child td { border-bottom: none; }
+    .t td.r { text-align: right; }
+    .t td.c { text-align: center; }
+    .t td.num { text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .t tbody tr:hover td { background: var(--head); }
+    .t tr.broke td { background: #f0fdf4; }
+    .t tr.broke:hover td { background: #e3fbe9; }
+    .t tr.fk td { background: #fff8f8; }
+    .empty { text-align: center; padding: 22px; color: var(--mut3); font-size: 12px; }
+
+    .tk { font-weight: 700; color: var(--navy); cursor: pointer; font-size: 12.5px; background: none; border: none; padding: 0; font-family: inherit; }
+    .tk:hover { color: var(--blue); text-decoration: underline; }
+    .tk.red { color: var(--red); }
+    .tk.green { color: var(--green); }
+    .dm { color: var(--mut2); }
+    .g { color: var(--green); font-weight: 600; }
+    .r { color: var(--red); font-weight: 600; }
+    .b { color: var(--blue); font-weight: 700; }
+
+    /* criteria badges */
+    .bg { display: inline-block; padding: 2px 7px; font-size: 9.5px; font-weight: 700; border-radius: 2px; letter-spacing: 0.02em; }
+    .bg.P  { background: #fef3c7; color: #78350f; border: 1px solid #fcd34d; }
+    .bg.RV { background: #dcfce7; color: #14532d; border: 1px solid #86efac; }
+    .bg.RS { background: #dbeafe; color: #1e3a8a; border: 1px solid #93c5fd; }
+    .bg.ST { background: #fee2e2; color: #7f1d1d; border: 1px solid #fca5a5; }
+    .bg.S5 { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+    /* status badges */
+    .st { display: inline-block; padding: 2px 8px; font-size: 9.5px; font-weight: 700; border-radius: 999px; letter-spacing: 0.03em; }
+    .st.ok { background: #dcfce7; color: #14532d; }
+    .st.fl { background: #fee2e2; color: #7f1d1d; }
+    .st.rn { background: #fef3c7; color: #78350f; }
+    .st.never { background: #f1f5f9; color: #64748b; }
+
+    /* ── Right rail (dashboard) ─────────────────────────────── */
+    .jcard { padding: 13px 18px; border-bottom: 1px solid var(--bd-soft); }
+    .jcard-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .jcard-nm { font-size: 13px; font-weight: 600; color: var(--navy); }
+    .jcard-meta { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--mut); }
+    .jcard-dur { margin-left: auto; color: var(--mut2); }
+    .rail-h { padding: 11px 18px; background: var(--head); border-bottom: 1px solid var(--bd-soft); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; }
+    .rail-h .t { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--mut); }
+    .rail-h .c { font-size: 10px; color: var(--mut2); }
+    .run-row { padding: 9px 18px; border-bottom: 1px solid var(--row); cursor: pointer; transition: background .1s; }
+    .run-row:hover { background: var(--head); }
+    .run-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+    .run-job { font-size: 11.5px; font-weight: 600; color: var(--navy); }
+    .run-meta { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--mut2); }
+    .run-meta .mono { font-size: 10px; }
+
+    /* ── Backtest ───────────────────────────────────────────── */
+    .bt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .bt-lbl { font-size: 11px; color: var(--mut2); font-weight: 600; }
+    .pill { padding: 5px 13px; border-radius: 999px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--bd); background: var(--card); color: var(--mut); cursor: pointer; font-family: inherit; transition: all .12s; }
+    .pill:hover { background: var(--head); }
+    .pill.on-d { background: var(--blue); color: #fff; border-color: var(--blue); }
+    .pill.on-i { background: #ea580c; color: #fff; border-color: #ea580c; }
+    .pill.cP.on { background: #7c3aed; color: #fff; border-color: #7c3aed; }
+    .pill.cST.on { background: #dc2626; color: #fff; border-color: #dc2626; }
+    .pill.cRVOL.on { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .pill.cRSM.on { background: #16a34a; color: #fff; border-color: #16a34a; }
+    .pill.cSMA50.on { background: #d97706; color: #fff; border-color: #d97706; }
+    .bt-asof { margin-left: auto; font-size: 11px; color: var(--mut2); }
+    .bt-note { font-size: 11.5px; color: var(--mut); margin-bottom: 14px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 8px 12px; }
+    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
+    .stat { background: var(--card); border: 1px solid var(--bd); border-radius: 4px; padding: 16px 14px; text-align: center; }
+    .stat-v { font-size: 25px; font-weight: 700; font-family: 'DM Mono', monospace; letter-spacing: -0.02em; }
+    .stat-l { font-size: 10.5px; color: var(--mut2); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+
+    /* ── Tools ──────────────────────────────────────────────── */
+    .tools-btns { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
+    .btn-dark { padding: 9px 16px; border-radius: 5px; background: #0f172a; color: #fff; font-size: 12px; font-weight: 600; border: none; cursor: pointer; font-family: inherit; transition: all .12s; }
+    .btn-dark:hover:not(:disabled) { background: #1e293b; }
+    .btn-dark:disabled { opacity: 0.45; cursor: default; }
+    .jobs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+    .console { background: #f1f5f9; border: 1px solid var(--bd); border-radius: 6px; padding: 14px 16px; font-family: 'DM Mono', monospace; font-size: 11.5px; line-height: 1.7; height: 320px; overflow-y: auto; }
+    .console .ln { color: #334155; white-space: pre-wrap; }
+    .console .ln.err { color: #b91c1c; }
+    .console .ln.muted { color: #94a3b8; }
+
+    /* ── FAQ ────────────────────────────────────────────────── */
+    .faq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    .faq-card { background: var(--card); border: 1px solid var(--bd); border-radius: 4px; padding: 16px 18px; }
+    .faq-q { font-size: 13.5px; font-weight: 700; color: var(--navy); margin: 0 0 9px; }
+    .faq-b { font-size: 12px; color: var(--mut); line-height: 1.65; }
+    .faq-b .sub { font-weight: 600; color: var(--ink); margin-top: 6px; }
+    .faq-b .ghost { color: var(--mut2); }
+    .faq-b code { font-family: 'DM Mono', monospace; font-size: 11px; background: var(--head); padding: 1px 5px; border-radius: 3px; color: var(--ink); }
+
+    /* ── Chart ──────────────────────────────────────────────── */
+    .chart-wrap { height: 100%; width: 100%; }
+    .chart-wrap iframe { width: 100%; height: 100%; border: none; display: block; }
+    .chart-placeholder { height: 100%; display: flex; align-items: center; justify-content: center; background: #0f172a; color: #64748b; flex-direction: column; gap: 14px; }
+    .chart-glyph { font-size: 46px; opacity: 0.4; }
+    .chart-msg { font-size: 13px; }
+    .chart-tk { color: #cbd5e1; font-weight: 700; }
+
+    /* ── Copy box (watchlist) ───────────────────────────────── */
+    .copy-box { background: #f5f8ff; border: 1px solid #dce8f8; border-radius: 5px; padding: 12px 14px; margin-bottom: 18px; }
+    .copy-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+    .copy-lbl { font-size: 10.5px; font-weight: 700; color: var(--blue); text-transform: uppercase; letter-spacing: 0.06em; }
+    .copy-btn { font-size: 11px; font-weight: 600; padding: 3px 11px; border-radius: 4px; background: var(--blue); color: #fff; border: none; cursor: pointer; font-family: inherit; transition: background .12s; }
+    .copy-btn:hover { background: #1340b0; }
+    .copy-str { font-family: 'DM Mono', monospace; font-size: 11px; color: #1e3a8a; word-break: break-all; line-height: 1.6; user-select: all; }
+    .grp-h { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mut); display: flex; align-items: center; gap: 9px; margin: 0 0 9px; }
+    .grp-tag { padding: 2px 9px; border-radius: 3px; font-size: 10.5px; font-weight: 700; }
+    .grp-tag.g10 { background: #dcfce7; color: #14532d; }
+    .grp-tag.g20 { background: #dbeafe; color: #1e3a8a; }
+    .grp-tag.g50 { background: #fef3c7; color: #78350f; }
+    .grp-tag.go  { background: #f1f5f9; color: #475569; }
+    .grp-c { font-weight: 400; color: var(--mut2); text-transform: none; letter-spacing: 0; }
+
+    /* ── Modal ──────────────────────────────────────────────── */
+    .modal-bg { position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.45); display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .modal { background: var(--card); border-radius: 8px; box-shadow: 0 24px 60px rgba(0,0,0,0.3); width: 100%; max-width: 620px; overflow: hidden; }
+    .modal-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--bd); }
+    .modal-h .nm { font-weight: 700; font-size: 14px; color: var(--navy); }
+    .modal-x { background: none; border: none; font-size: 22px; line-height: 1; color: var(--mut2); cursor: pointer; }
+    .modal-x:hover { color: var(--ink); }
+    .modal-b { padding: 18px 20px; }
+    .kv { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12.5px; border-bottom: 1px solid var(--row); }
+    .kv .k { color: var(--mut); }
+    .kv .v { color: var(--navy); font-weight: 500; }
+    .term-lbl { font-size: 11px; color: var(--mut); margin: 14px 0 6px; font-weight: 600; }
+    .term { background: #0f172a; border-radius: 5px; padding: 12px 14px; font-family: 'DM Mono', monospace; font-size: 11px; line-height: 1.65; color: #cbd5e1; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; }
+    .term.err { color: #fca5a5; }
+
+    /* ── Toast ──────────────────────────────────────────────── */
+    .toast { position: fixed; top: 66px; right: 22px; z-index: 60; padding: 10px 16px; border-radius: 6px; font-size: 12px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.14); animation: toastIn .2s ease; }
+    .toast.ok { background: #f0fdf4; border: 1px solid #86efac; color: #14532d; }
+    .toast.err { background: #fef2f2; border: 1px solid #fca5a5; color: #7f1d1d; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(-6px); } }
+
+    .pager { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--mut); }
+    .pager button { padding: 3px 9px; border: 1px solid var(--bd); background: var(--card); border-radius: 4px; cursor: pointer; color: var(--mut); font-family: inherit; }
+    .pager button:hover:not(:disabled) { background: var(--head); }
+    .pager button:disabled { opacity: 0.3; cursor: default; }
+
+    /* ── Loading ──────────────────────────────────────────────── */
+    .loading { text-align: center; padding: 48px; color: var(--mut3); font-size: 13px; }
+
+    .jcard-run { margin-top: 9px; width: 100%; padding: 5px; font-size: 11px; font-weight: 600; border: 1px solid var(--bd); background: var(--card); color: var(--blue); border-radius: 4px; cursor: pointer; font-family: inherit; transition: all .1s; }
+    .jcard-run:hover:not(:disabled) { background: var(--blue-soft); border-color: var(--blue); }
+    .jcard-run:disabled { opacity: 0.5; cursor: default; }
   </style>
 </head>
-<body class="bg-gray-50 text-gray-800 min-h-screen" x-data="app()" x-init="init()" x-cloak>
-
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <header class="bg-white border-b border-gray-200 sticky top-0 z-10">
-    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-      <div class="flex items-center gap-2">
-        <span class="text-xl font-bold text-indigo-600">📈 Breakout Signal</span>
-        <span class="text-xs text-gray-400 ml-2" x-text="'SET · ' + today"></span>
-      </div>
-      <div class="flex items-center gap-3 text-xs text-gray-500">
-        <span :class="schedulerRunning ? 'dot-green' : 'dot-red'" class="status-dot"></span>
-        <span x-text="schedulerRunning ? 'Scheduler running' : 'Scheduler stopped'"></span>
-        <button @click="refreshAll()"
-          class="ml-2 px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition">
-          ↻ Refresh
-        </button>
-      </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="max-w-5xl mx-auto px-4 flex gap-6 text-sm text-gray-500">
-      <button @click="tab='dashboard'"
-        :class="tab === 'dashboard' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition">Dashboard</button>
-      <button @click="tab='signals'; loadSignals()"
-        :class="tab === 'signals' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition" style="display:none">Signals</button>
-      <button @click="tab='backtest'; loadBacktest()"
-        :class="tab === 'backtest' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition">Backtest</button>
-      <button @click="tab='watchlist'; loadWatchlistDetail()"
-        :class="tab === 'watchlist' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition">Watchlist</button>
-      <button @click="tab='chart'"
-        :class="tab === 'chart' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition">Chart</button>
-      <button @click="tab='faq'"
-        :class="tab === 'faq' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition ml-auto">FAQ</button>
-      <button @click="tab='tools'"
-        :class="tab === 'tools' ? 'tab-active' : 'hover:text-gray-700'"
-        class="pb-2 pt-1 transition">Tools</button>
-    </div>
-  </header>
-
-  <!-- ── Chart tab (full-bleed, outside main container) ─────────────────── -->
-  <div x-show="tab === 'chart'" style="height: calc(100vh - 88px)">
-    <iframe id="chart-iframe" src="/chart" class="w-full h-full border-0 block"
-      x-on:load="$el.style.opacity=1" style="opacity:0; transition: opacity .2s">
-    </iframe>
-  </div>
-
-  <!-- ── Main ───────────────────────────────────────────────────────────── -->
-  <main x-show="tab !== 'chart'" class="max-w-5xl mx-auto px-4 py-6">
-
-    <!-- Toast ──────────────────────────────────────────────────────────── -->
-    <div x-show="toast.msg"
-      :class="toast.ok ? 'bg-green-50 border-green-300 text-green-700' : 'bg-red-50 border-red-300 text-red-700'"
-      class="fixed top-16 right-4 z-50 px-4 py-2 rounded border text-xs shadow transition"
-      x-text="toast.msg"></div>
-
-    <!-- ── DASHBOARD TAB ────────────────────────────────────────────────── -->
-    <div x-show="tab === 'dashboard'">
-
-      <!-- ── Intraday alerts (fixed table) ─────────────────────────────── -->
-      <div class="mt-6">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Intraday alerts
-          <span class="ml-1 text-gray-400 font-normal normal-case"
-            x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
-        </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
-          <table class="w-full text-xs table-fixed">
-            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-              <tr>
-                <th class="px-4 py-2 text-left w-24">Ticker</th>
-                <th class="px-4 py-2 text-left w-40">Sector</th>
-                <th class="px-4 py-2 text-right w-24">Level</th>
-                <th class="px-4 py-2 text-right w-24">Price</th>
-                <th class="px-4 py-2 text-left w-24">Type</th>
-                <th class="px-4 py-2 text-center">Criteria</th>
-                <th class="px-4 py-2 text-right w-24">Proj RVol</th>
-                <th class="px-4 py-2 text-right w-20">RSM</th>
-                <th class="px-4 py-2 text-right w-20">STR</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <template x-if="dashboardIntradayRows.length === 0">
-                <tr><td colspan="9" class="px-4 py-4 text-center text-gray-400">No intraday alerts</td></tr>
-              </template>
-              <template x-for="(s, i) in dashboardIntradayRows" :key="i">
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2">
-                    <button type="button" @click="openChart(s)"
-                      class="font-semibold hover:underline"
-                      :class="critTextClass(s.criteria)"
-                      x-text="tickerText(s)"></button>
-                  </td>
-                  <td class="px-4 py-2 text-gray-500 truncate" x-text="s.sector || '—'"></td>
-                  <td class="px-4 py-2 text-right"
-                    x-text="s.level ? '฿'+fmt2(s.level) : '—'"></td>
-                  <td class="px-4 py-2 text-right"
-                    x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
-                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap"
-                    x-text="kindLabel(s)"></td>
-                  <td class="px-4 py-2 text-center">
-                    <span class="text-xs font-medium"
-                      :class="critTextClass(s.criteria)"
-                      x-text="s.criteria||'—'"></span>
-                  </td>
-                  <td class="px-4 py-2 text-right"
-                    :class="(s.proj_rvol || s.cur_rvol || 0) >= 2 ? 'text-green-600 font-semibold' : 'text-red-500'"
-                    x-text="(s.proj_rvol || s.cur_rvol) ? fmt1(s.proj_rvol || s.cur_rvol)+'×' : '—'"></td>
-                  <td class="px-4 py-2 text-right"
-                    :class="(s.rsm || 0) >= 80 ? 'text-green-600 font-semibold' : 'text-red-500'"
-                    x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
-                  <td class="px-4 py-2 text-right"
-                    :class="(s.stretch || 0) <= 4 ? 'text-green-600 font-semibold' : 'text-red-500'"
-                    x-text="s.stretch ? fmt1(s.stretch)+'×' : '—'"></td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- ── Fakeout review (fixed table) ──────────────────────────────── -->
-      <div class="mt-6">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Fakeout review
-          <span class="ml-1 text-gray-400 font-normal normal-case"
-            x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
-        </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
-          <table class="w-full text-xs table-fixed">
-            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-              <tr>
-                <th class="px-4 py-2 text-left w-24">Ticker</th>
-                <th class="px-4 py-2 text-right w-24">Level</th>
-                <th class="px-4 py-2 text-right w-24">Close</th>
-                <th class="px-4 py-2 text-left w-32">Pattern</th>
-                <th class="px-4 py-2 text-left w-40">Detected at</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <template x-if="dashboardFakeoutRows.length === 0">
-                <tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">No fakeouts</td></tr>
-              </template>
-              <template x-for="(f, i) in dashboardFakeoutRows" :key="i">
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2">
-                    <button type="button" @click="openChart(f)"
-                      class="font-semibold text-red-600 hover:underline"
-                      x-text="tickerText(f)"></button>
-                  </td>
-                  <td class="px-4 py-2 text-right" x-text="f.level ? '฿'+fmt2(f.level) : '—'"></td>
-                  <td class="px-4 py-2 text-right" x-text="f.close ? '฿'+fmt2(f.close) : '—'"></td>
-                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap" x-text="kindLabel(f)"></td>
-                  <td class="px-4 py-2 text-gray-500" x-text="f.failed_at ? fmtDatetime(f.failed_at) : '—'"></td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- ── EOD Breakout signals (fixed table) ────────────────────────── -->
-      <div class="mt-6">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          EOD Breakout signals
-          <span class="ml-1 text-gray-400 font-normal normal-case"
-            x-text="scanLatest && scanLatest.date ? '(' + scanLatest.date + ')' : ''"></span>
-        </h2>
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
-          <table class="w-full text-xs table-fixed">
-            <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-              <tr>
-                <th class="px-4 py-2 text-left w-24">Ticker</th>
-                <th class="px-4 py-2 text-left w-40">Sector</th>
-                <th class="px-4 py-2 text-right w-24">Level</th>
-                <th class="px-4 py-2 text-right w-24">Price</th>
-                <th class="px-4 py-2 text-left w-24">Type</th>
-                <th class="px-4 py-2 text-center">Criteria</th>
-                <th class="px-4 py-2 text-right w-24">RVol</th>
-                <th class="px-4 py-2 text-right w-20">RSM</th>
-                <th class="px-4 py-2 text-right w-20">STR</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <template x-if="dashboardEodRows.length === 0">
-                <tr><td colspan="9" class="px-4 py-4 text-center text-gray-400">No EOD signals</td></tr>
-              </template>
-              <template x-for="(s, i) in dashboardEodRows" :key="i">
-                <tr class="hover:bg-gray-50">
-                  <td class="px-4 py-2">
-                    <button type="button" @click="openChart(s)"
-                      class="font-semibold hover:underline"
-                      :class="critTextClass(s.filter_type || s.criteria)"
-                      x-text="tickerText(s)"></button>
-                  </td>
-                  <td class="px-4 py-2 text-gray-500 truncate"
-                    x-text="s.sector||'—'"></td>
-                  <td class="px-4 py-2 text-right font-medium text-indigo-600"
-                    x-text="(s.bp || s.level) ? '฿'+fmt2(s.bp || s.level) : '—'"></td>
-                  <td class="px-4 py-2 text-right"
-                    x-text="s.close ? '฿'+fmt2(s.close) : '—'"></td>
-                  <td class="px-4 py-2 text-gray-500 whitespace-nowrap" x-text="kindLabel(s)"></td>
-                  <td class="px-4 py-2 text-center">
-                    <span class="text-xs font-medium"
-                      :class="critTextClass(s.filter_type || s.criteria)"
-                      x-text="s.filter_type || s.criteria || '—'"></span>
-                  </td>
-                  <td class="px-4 py-2 text-right"
-                    :class="(s.rvol || 0) >= 2 ? 'text-green-600 font-semibold' : 'text-red-500'"
-                    x-text="s.rvol ? fmt1(s.rvol)+'×' : '—'"></td>
-                  <td class="px-4 py-2 text-right"
-                    :class="(s.rsm || 0) >= 80 ? 'text-green-600 font-semibold' : 'text-red-500'"
-                    x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
-                  <td class="px-4 py-2 text-right"
-                    :class="(s.stretch || 0) <= 4 ? 'text-green-600 font-semibold' : 'text-red-500'"
-                    x-text="s.stretch ? fmt1(s.stretch)+'×' : '—'"></td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Recent job history table -->
-      <div class="flex items-center justify-between mt-6 mb-3">
-        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-          Recent runs
-          <span class="text-gray-400 font-normal normal-case ml-1"
-            x-text="recentRuns.length ? '(' + recentRuns.length + ' total)' : ''"></span>
-        </h2>
-        <div class="flex items-center gap-2 text-xs text-gray-500" x-show="runsTotalPages > 1">
-          <button @click="runsPage = Math.max(1, runsPage - 1)"
-            :disabled="runsPage === 1"
-            class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition">‹</button>
-          <span x-text="runsPage + ' / ' + runsTotalPages"></span>
-          <button @click="runsPage = Math.min(runsTotalPages, runsPage + 1)"
-            :disabled="runsPage === runsTotalPages"
-            class="px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition">›</button>
-        </div>
-      </div>
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <table class="w-full text-xs">
-          <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-            <tr>
-              <th class="px-4 py-2 text-left">Job</th>
-              <th class="px-4 py-2 text-left">Started (BKK)</th>
-              <th class="px-4 py-2 text-center">Status</th>
-              <th class="px-4 py-2 text-right">Duration</th>
-              <th class="px-4 py-2 text-right">Signals</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <template x-if="recentRuns.length === 0">
-              <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">
-                No runs recorded yet
-              </td></tr>
-            </template>
-            <template x-for="run in paginatedRuns" :key="run.id">
-              <tr class="hover:bg-gray-50 transition cursor-pointer" @click="runDetailModal = run">
-                <td class="px-4 py-2 font-medium" x-text="run.job_name"></td>
-                <td class="px-4 py-2 text-gray-500" x-text="fmtDatetime(run.started_at)"></td>
-                <td class="px-4 py-2 text-center">
-                  <span :class="statusBadge(run.status)"
-                    class="px-2 py-0.5 rounded-full text-xs font-medium"
-                    x-text="run.status"></span>
-                </td>
-                <td class="px-4 py-2 text-right text-gray-500"
-                  x-text="run.duration_s != null ? run.duration_s.toFixed(1) + 's' : '—'"></td>
-                <td class="px-4 py-2 text-right text-gray-500"
-                  x-text="run.signals_found != null ? run.signals_found : '—'"></td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-
-    </div>
-    <!-- ── end DASHBOARD ──-->
-
-    <!-- ── TOOLS TAB ─────────────────────────────────────────────────────── -->
-    <div x-show="tab === 'tools'">
-
-      <!-- Notify buttons -->
-      <div class="mb-6 flex flex-wrap gap-3">
-        <button @click="testNotify('discord')"
-          :disabled="notifyTesting.discord === true"
-          class="px-3 py-2 rounded bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition"
-          x-text="notifyTesting.discord ? 'Sending Discord…' : 'Discord Notify Test'"></button>
-      </div>
-
-      <!-- Scheduled job cards -->
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Scheduled jobs</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <template x-for="job in jobSummary" :key="job.name">
-          <div class="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-            <div class="flex items-center justify-between mb-1">
-              <span class="font-medium text-sm" x-text="job.label"></span>
-              <span :class="job.statusClass" class="status-dot ml-1"></span>
-            </div>
-            <div class="text-xs text-gray-500 space-y-0.5">
-              <div>Last: <span class="text-gray-700" x-text="job.lastRun"></span></div>
-              <div>Duration: <span class="text-gray-700" x-text="job.duration"></span></div>
-              <div>Next: <span class="text-gray-700" x-text="job.nextRun"></span></div>
-            </div>
-            <div x-show="job.error"
-              class="mt-2 text-xs text-red-600 bg-red-50 rounded p-1 truncate"
-              x-text="job.error"></div>
-            <button @click="runJob(job.name)"
-              :disabled="job.running"
-              class="mt-3 w-full text-xs px-2 py-1 rounded bg-indigo-50 hover:bg-indigo-100 text-indigo-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
-              x-text="job.running ? 'Running…' : 'Run now'"></button>
-          </div>
-        </template>
-      </div>
-
-      <!-- Console -->
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Console</h2>
-      <div class="bg-gray-50 rounded-lg border border-gray-200 p-3 font-mono text-xs space-y-0.5 overflow-y-auto" style="height:320px">
-        <template x-if="toolsLog.length === 0">
-          <div class="text-gray-400">No activity yet…</div>
-        </template>
-        <template x-for="(line, i) in toolsLog" :key="i">
-          <div :class="line.includes('ERROR') ? 'text-red-600' : 'text-gray-700'"
-            x-text="line"></div>
-        </template>
-      </div>
-
-    </div>
-    <!-- ── end TOOLS ──-->
-
-    <!-- ── FAQ TAB ─────────────────────────────────────────────────────── -->
-    <div x-show="tab === 'faq'">
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Frequently asked questions
-      </h2>
-
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <h3 class="font-semibold text-sm mb-2">How often do scripts run?</h3>
-          <div class="text-xs text-gray-600 space-y-1">
-            <div class="font-medium text-gray-700">Market session</div>
-            <div>10:30–12:30, 14:00–16:15 — Intraday scan every 15 min</div>
-            <div class="font-medium text-gray-700 pt-1">End of day</div>
-            <div>16:25 — Fakeout review</div>
-            <div>16:45 — EOD scan</div>
-            <div class="text-gray-400 pt-1">All times BKK (UTC+7), Mon–Fri</div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <h3 class="font-semibold text-sm mb-2">What happens when I click Run now?</h3>
-          <div class="text-xs text-gray-600 space-y-1">
-            <div>It triggers the selected job immediately in background.</div>
-            <div>Manual web-triggered run does not send notification messages.</div>
-            <div>Scheduled Railway runs do send notifications.</div>
-          </div>
-        </div>
-
-        <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
-          <h3 class="font-semibold text-sm mb-2">Signal criteria labels</h3>
-          <div class="text-xs text-gray-600 space-y-1">
-            <div>Prime: Proj RVol >= 2.0x and RSM >= 80 and STR <= 4.0x</div>
-            <div>RVOL: volume strong but momentum below threshold</div>
-            <div>RSM: momentum strong but projected volume below threshold</div>
-            <div>STR: overextended (stretch &gt; 4.0x)</div>
-            <div>SMA50: baseline filter, no high-conviction trigger</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
-        <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
-          <h3 class="font-semibold text-sm">Money management plan</h3>
-        </div>
-        <table class="w-full text-xs">
-          <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-            <tr>
-              <th class="px-4 py-2 text-left">Rule</th>
-              <th class="px-4 py-2 text-left">Behavior</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <tr><td class="px-4 py-2 font-medium">SL</td><td class="px-4 py-2 text-gray-600">1 x ATR below entry</td></tr>
-            <tr><td class="px-4 py-2 font-medium">TP1</td><td class="px-4 py-2 text-gray-600">Entry + 2 x ATR, sell 30%</td></tr>
-            <tr><td class="px-4 py-2 font-medium">TP2</td><td class="px-4 py-2 text-gray-600">Entry + 4 x ATR, sell 30%</td></tr>
-            <tr><td class="px-4 py-2 font-medium">Breakeven</td><td class="px-4 py-2 text-gray-600">After 3 bars, SL moves to entry</td></tr>
-            <tr><td class="px-4 py-2 font-medium">MA10 trail</td><td class="px-4 py-2 text-gray-600">Exit remaining when close drops below MA10/EMA10 trail logic</td></tr>
-            <tr><td class="px-4 py-2 font-medium">Max risk</td><td class="px-4 py-2 text-gray-600">Default risk_pct = 0.5% of capital per position</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-xs text-gray-600">
-        <h3 class="font-semibold text-sm mb-2">How to read dashboard tables</h3>
-        <div class="space-y-1">
-          <div>Intraday Alerts: accumulates unique triggers during the day.</div>
-          <div>EOD Breakout Signals: latest end-of-day shortlist from EOD scan.</div>
-          <div>Fakeout Review: symbols that failed after trigger and dropped below level.</div>
-          <div>Recent Runs: click any row to inspect terminal output and errors.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Run detail modal ───────────────────────────────────────────────── -->
-    <template x-if="runDetailModal">
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-        @click.self="runDetailModal = null">
-        <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl mx-4 overflow-hidden">
-          <div class="flex items-center justify-between px-5 py-3 border-b border-gray-200">
-            <span class="font-semibold text-sm" x-text="runDetailModal.job_name"></span>
-            <button @click="runDetailModal = null"
-              class="text-gray-400 hover:text-gray-700 text-lg leading-none">&times;</button>
-          </div>
-          <div class="px-5 py-4 text-xs space-y-2">
-            <div class="flex justify-between">
-              <span class="text-gray-500">Status</span>
-              <span :class="statusBadge(runDetailModal.status)"
-                class="px-2 py-0.5 rounded-full font-medium"
-                x-text="runDetailModal.status"></span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Started</span>
-              <span x-text="fmtDatetime(runDetailModal.started_at)"></span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Finished</span>
-              <span x-text="runDetailModal.finished_at ? fmtDatetime(runDetailModal.finished_at) : '—'"></span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Duration</span>
-              <span x-text="runDetailModal.duration_s != null ? runDetailModal.duration_s.toFixed(1) + 's' : '—'"></span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Stocks scanned</span>
-              <span x-text="runDetailModal.stocks_scanned ?? '—'"></span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Signals found</span>
-              <span x-text="runDetailModal.signals_found ?? '—'"></span>
-            </div>
-            <template x-if="runLogText(runDetailModal)">
-              <div class="mt-3">
-                <div class="text-gray-500 mb-1">Job output (terminal)</div>
-                <pre class="bg-gray-50 border border-gray-200 rounded p-3 text-gray-700 whitespace-pre-wrap break-all max-h-56 overflow-y-auto text-xs leading-relaxed"
-                  x-text="runLogText(runDetailModal)"></pre>
-              </div>
-            </template>
-            <template x-if="runDetailModal.error">
-              <div class="mt-3">
-                <div class="text-gray-500 mb-1">Error</div>
-                <pre class="bg-gray-50 border border-gray-200 rounded p-3 text-red-600 whitespace-pre-wrap break-all max-h-48 overflow-y-auto text-xs leading-relaxed"
-                  x-text="runDetailModal.error"></pre>
-              </div>
-            </template>
-            <template x-if="!runDetailModal.error && !runLogText(runDetailModal)">
-              <div class="text-gray-400 text-center py-2">No errors logged</div>
-            </template>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- ── SIGNALS TAB ──────────────────────────────────────────────────── -->
-    <div x-show="tab === 'signals'">
-
-      <!-- Alerted today -->
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Triggered today
-        <span class="ml-1 text-gray-400 font-normal normal-case"
-          x-text="signals.alert_date ? '(' + signals.alert_date + ')' : ''"></span>
-      </h2>
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden mb-6">
-        <table class="w-full text-xs">
-          <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-            <tr>
-              <th class="px-4 py-2 text-left">Ticker</th>
-              <th class="px-4 py-2 text-right">Level</th>
-              <th class="px-4 py-2 text-right">Price</th>
-              <th class="px-4 py-2 text-center">Type</th>
-              <th class="px-4 py-2 text-center">Criteria</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <template x-if="signals.alerted_today.length === 0">
-              <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">
-                No triggers today
-              </td></tr>
-            </template>
-            <template x-for="(s, i) in signals.alerted_today" :key="i">
-              <tr class="hover:bg-gray-50">
-                <td class="px-4 py-2">
-                  <button type="button" @click="openChart(s)"
-                    class="font-medium hover:underline"
-                    x-text="tickerText(s)"></button>
-                </td>
-                <td class="px-4 py-2 text-right"
-                  x-text="s.level ? '฿' + fmt2(s.level) : '—'"></td>
-                <td class="px-4 py-2 text-right"
-                  x-text="s.close ? '฿' + fmt2(s.close) : '—'"></td>
-                <td class="px-4 py-2 text-center text-gray-500"
-                  x-text="s.kind || '—'"></td>
-                <td class="px-4 py-2 text-center">
-                  <span :class="critBadge(s.criteria)"
-                    class="px-1.5 py-0.5 rounded text-xs font-medium"
-                    x-text="s.criteria || '—'"></span>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Watchlist -->
-      <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-        Watchlist
-        <span class="ml-1 text-gray-400 font-normal normal-case"
-          x-text="signals.watchlist_date ? '(as of ' + signals.watchlist_date + ')' : ''">
-        </span>
-      </h2>
-      <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <table class="w-full text-xs">
-          <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-            <tr>
-              <th class="px-4 py-2 text-left">Ticker</th>
-              <th class="px-4 py-2 text-right">Level</th>
-              <th class="px-4 py-2 text-center">Type</th>
-              <th class="px-4 py-2 text-center">Criteria</th>
-              <th class="px-4 py-2 text-right">RVol</th>
-              <th class="px-4 py-2 text-right">RSM</th>
-              <th class="px-4 py-2 text-right">STR</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <template x-if="signals.watchlist.length === 0">
-              <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">
-                Watchlist is empty — run EOD scan first
-              </td></tr>
-            </template>
-            <template x-for="(s, i) in signals.watchlist" :key="i">
-              <tr :class="s.broke ? 'bg-green-50' : 'hover:bg-gray-50'">
-                <td class="px-4 py-2">
-                  <button type="button" @click="openChart(s)"
-                    class="font-medium hover:underline"
-                    :class="s.broke ? 'text-green-700' : ''"
-                    x-text="tickerText(s)"></button>
-                </td>
-                <td class="px-4 py-2 text-right"
-                  x-text="s.bp || s.level ? '฿' + fmt2(s.bp || s.level) : '—'"></td>
-                <td class="px-4 py-2 text-center text-gray-500"
-                  x-text="s.kind || '—'"></td>
-                <td class="px-4 py-2 text-center">
-                  <span :class="critBadge(s.criteria)"
-                    class="px-1.5 py-0.5 rounded text-xs font-medium"
-                    x-text="s.criteria || '—'"></span>
-                </td>
-                <td class="px-4 py-2 text-right"
-                  :class="s.rvol >= 2 ? 'text-green-600 font-semibold' : 'text-gray-800'"
-                  x-text="s.rvol ? fmt1(s.rvol) + '×' : '—'"></td>
-                <td class="px-4 py-2 text-right"
-                  :class="s.rsm >= 80 ? 'text-green-600 font-semibold' : 'text-gray-800'"
-                  x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
-                <td class="px-4 py-2 text-right"
-                  :class="(s.stretch || 0) > 4 ? 'text-red-500 font-semibold' : (s.stretch ? 'text-gray-800' : 'text-gray-400')"
-                  x-text="s.stretch ? fmt1(s.stretch) + '×' : '—'"></td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ── BACKTEST TAB ─────────────────────────────────────────────────── -->
-    <div x-show="tab === 'backtest'">
-      <template x-if="!backtest">
-        <div class="text-center py-12 text-gray-400">Loading backtest data…</div>
-      </template>
-      <template x-if="backtest">
-        <div>
-          <!-- Criteria filter pills ----------------------------------------->
-          <div class="flex flex-wrap items-center gap-2 mb-4">
-            <span class="text-xs text-gray-400 font-medium">Mode:</span>
-            <button @click="btMode='daily'; btCriteria='Prime'"
-              :class="btMode === 'daily' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
-              class="px-3 py-1 rounded-full text-xs font-medium transition">Daily</button>
-            <button @click="btMode='intraday'; btCriteria='Prime'"
-              :class="btMode === 'intraday' ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
-              class="px-3 py-1 rounded-full text-xs font-medium transition">Intraday</button>
-            <span class="text-xs text-gray-400 font-medium">Criteria:</span>
-            <template x-for="crit in btCriteriaOptions" :key="crit">
-              <button @click="btCriteria = crit"
-                :class="btCriteria === crit
-                  ? {'Prime':'bg-purple-600 text-white','STR':'bg-red-500 text-white','RVOL':'bg-blue-500 text-white','RSM':'bg-green-500 text-white','SMA50':'bg-amber-500 text-white'}[crit]
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
-                class="px-3 py-1 rounded-full text-xs font-medium transition"
-                x-text="crit"></button>
-            </template>
-            <span class="ml-auto text-xs text-gray-400" x-text="backtest.date ? 'as of ' + backtest.date : ''"></span>
-          </div>
-          <template x-if="btCurrentNote">
-            <div class="mb-4 text-xs text-gray-500" x-text="btCurrentNote"></div>
-          </template>
-
-          <!-- Overall stats -------------------------------------------------->
-          <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-            <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
-              <div class="text-2xl font-bold text-gray-800"
-                x-text="btCriteriaStats ? btCriteriaStats.n_trades : '—'"></div>
-              <div class="text-xs text-gray-400 mt-1">Total trades</div>
-            </div>
-            <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
-              <div class="text-2xl font-bold"
-                :class="btCriteriaStats && btCriteriaStats.wr >= 55 ? 'text-green-600' : 'text-gray-800'"
-                x-text="btCriteriaStats ? fmt1(btCriteriaStats.wr) + '%' : '—'"></div>
-              <div class="text-xs text-gray-400 mt-1">Win rate</div>
-            </div>
-            <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
-              <div class="text-2xl font-bold"
-                :class="btCriteriaStats && btCriteriaStats.pnl_pct >= 0 ? 'text-green-600' : 'text-red-500'"
-                x-text="btCriteriaStats ? (btCriteriaStats.pnl_pct > 0 ? '+' : '') + fmt1(btCriteriaStats.pnl_pct) + '%' : '—'"></div>
-              <div class="text-xs text-gray-400 mt-1">Total PnL</div>
-            </div>
-            <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
-              <div class="text-2xl font-bold text-green-600"
-                x-text="btCriteriaStats ? '+' + fmt1(btCriteriaStats.avg_win) + '%' : '—'"></div>
-              <div class="text-xs text-gray-400 mt-1">Avg win</div>
-            </div>
-            <div class="bg-white rounded-lg border border-gray-200 shadow-sm p-4 text-center">
-              <div class="text-2xl font-bold text-red-500"
-                x-text="btCriteriaStats ? fmt1(btCriteriaStats.avg_loss) + '%' : '—'"></div>
-              <div class="text-xs text-gray-400 mt-1">Avg loss</div>
-            </div>
-          </div>
-
-          <!-- Table (click headers to sort) --------------------------------->
-          <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <table class="w-full text-xs">
-              <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-                <tr>
-                  <th class="px-4 py-2 text-left cursor-pointer select-none hover:text-indigo-600"
-                    @click="btSort === 'ticker' ? btSortDir *= -1 : (btSort='ticker', btSortDir=1)"
-                    x-text="'Ticker' + (btSort==='ticker' ? (btSortDir<0?' ▼':' ▲') : '')"></th>
-                  <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                    @click="btSort === 'trades' ? btSortDir *= -1 : (btSort='trades', btSortDir=-1)"
-                    x-text="'Trades' + (btSort==='trades' ? (btSortDir<0?' ▼':' ▲') : '')"></th>
-                  <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                    @click="btSort === 'wr' ? btSortDir *= -1 : (btSort='wr', btSortDir=-1)"
-                    x-text="'WR%' + (btSort==='wr' ? (btSortDir<0?' ▼':' ▲') : '')"></th>
-                  <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                    @click="btSort === 'pnl_pct' ? btSortDir *= -1 : (btSort='pnl_pct', btSortDir=-1)"
-                    x-text="'Avg Win'"></th>
-                  <th class="px-4 py-2 text-right">Avg Loss</th>
-                  <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                    @click="btSort === 'pnl_pct' ? btSortDir *= -1 : (btSort='pnl_pct', btSortDir=-1)"
-                    x-text="'PnL%' + (btSort==='pnl_pct' ? (btSortDir<0?' ▼':' ▲') : '')"></th>
-                  <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                    @click="btSort === 'rsm' ? btSortDir *= -1 : (btSort='rsm', btSortDir=-1)"
-                    x-text="'RSM' + (btSort==='rsm' ? (btSortDir<0?' ▼':' ▲') : '')"></th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <template x-if="btSortedRows.length === 0">
-                  <tr><td colspan="7" class="px-4 py-6 text-center text-gray-400">
-                    No backtest data — run EOD scan first
-                  </td></tr>
-                </template>
-                <template x-for="(r, i) in btSortedRows" :key="i">
-                  <tr class="hover:bg-gray-50">
-                    <td class="px-4 py-2">
-                      <button type="button" @click="openChart(r)"
-                        class="font-medium hover:underline"
-                        x-text="tickerText(r)"></button>
-                    </td>
-                    <template x-if="btCriteria === 'Prime'">
-                      <td class="px-4 py-2 text-right" x-text="r.trades"></td>
-                    </template>
-                    <template x-if="btCriteria !== 'Prime'">
-                      <td class="px-4 py-2 text-right" x-text="r.by_type?.[btCriteria]?.n ?? '—'"></td>
-                    </template>
-                    <template x-if="btCriteria === 'Prime'">
-                      <td class="px-4 py-2 text-right"
-                        :class="r.wr >= 55 ? 'text-green-600' : 'text-gray-600'"
-                        x-text="r.trades ? fmt1(r.wr) + '%' : '—'"></td>
-                    </template>
-                    <template x-if="btCriteria !== 'Prime'">
-                      <td class="px-4 py-2 text-right"
-                        :class="(r.by_type?.[btCriteria]?.wr ?? 0) >= 55 ? 'text-green-600' : 'text-gray-600'"
-                        x-text="r.by_type?.[btCriteria] ? fmt1(r.by_type[btCriteria].wr) + '%' : '—'"></td>
-                    </template>
-                    <template x-if="btCriteria === 'Prime'">
-                      <td class="px-4 py-2 text-right text-green-600"
-                        x-text="r.by_type?.Prime?.avg_win != null ? '+' + fmt2(r.by_type.Prime.avg_win) + '%' : '—'"></td>
-                    </template>
-                    <template x-if="btCriteria !== 'Prime'">
-                      <td class="px-4 py-2 text-right text-green-600"
-                        x-text="r.by_type?.[btCriteria]?.avg_win != null ? '+' + fmt2(r.by_type[btCriteria].avg_win) + '%' : '—'"></td>
-                    </template>
-                    <template x-if="btCriteria === 'Prime'">
-                      <td class="px-4 py-2 text-right text-red-500"
-                        x-text="r.by_type?.Prime?.avg_loss != null ? fmt2(r.by_type.Prime.avg_loss) + '%' : '—'"></td>
-                    </template>
-                    <template x-if="btCriteria !== 'Prime'">
-                      <td class="px-4 py-2 text-right text-red-500"
-                        x-text="r.by_type?.[btCriteria]?.avg_loss != null ? fmt2(r.by_type[btCriteria].avg_loss) + '%' : '—'"></td>
-                    </template>
-                    <template x-if="btCriteria === 'Prime'">
-                      <td class="px-4 py-2 text-right font-medium"
-                        :class="r.pnl_pct >= 0 ? 'text-green-600' : 'text-red-500'"
-                        x-text="(r.pnl_pct > 0 ? '+' : '') + fmt1(r.pnl_pct) + '%'"></td>
-                    </template>
-                    <template x-if="btCriteria !== 'Prime'">
-                      <td class="px-4 py-2 text-right font-medium"
-                        :class="(r.by_type?.[btCriteria]?.pnl_capital ?? 0) >= 0 ? 'text-green-600' : 'text-red-500'"
-                        x-text="r.by_type?.[btCriteria] ? ((r.by_type[btCriteria].pnl_capital > 0 ? '+' : '') + fmt1(r.by_type[btCriteria].pnl_capital) + '%') : '—'"></td>
-                    </template>
-                    <td class="px-4 py-2 text-right"
-                      :class="r.rsm >= 80 ? 'text-indigo-600' : 'text-gray-500'"
-                      x-text="fmt0(r.rsm)"></td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </template>
-    </div>
-
-    <!-- ── WATCHLIST TAB ────────────────────────────────────────────────── -->
-    <div x-show="tab === 'watchlist'">
-      <template x-if="!watchlistDetail">
-        <div class="text-center py-12 text-gray-400">Loading watchlist…</div>
-      </template>
-      <template x-if="watchlistDetail">
-        <div>
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              Watching <span class="text-gray-400 font-normal normal-case"
-                x-text="watchlistDetail.items.length + ' stocks'"></span>
-            </h2>
-            <span class="text-xs text-gray-400" x-text="watchlistDetail.date ? 'as of ' + watchlistDetail.date : ''"></span>
-          </div>
-
-          <!-- TradingView copy string ---------------------------------------->
-          <template x-if="watchlistDetail.copy_str">
-            <div class="mb-5 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-              <div class="flex items-center justify-between mb-1.5">
-                <span class="text-xs font-semibold text-indigo-600 uppercase tracking-wide">TradingView Watchlist</span>
-                <button @click="navigator.clipboard.writeText(watchlistDetail.copy_str).then(() => { $el.textContent = 'Copied!'; setTimeout(() => $el.textContent = 'Copy all', 1500); })"
-                  class="text-xs px-2 py-0.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white transition font-medium">
-                  Copy all
-                </button>
-              </div>
-              <div class="text-xs text-indigo-800 font-mono break-all leading-relaxed select-all"
-                x-text="watchlistDetail.copy_str"></div>
-            </div>
-          </template>
-
-          <template x-if="watchlistDetail.items.length === 0">
-            <div class="text-center py-12 text-gray-400">Watchlist is empty — run EOD scan first</div>
-          </template>
-
-          <!-- Groups by MA position ----------------------------------------->
-          <template x-for="grp in wlGroupList()" :key="grp.key">
-            <div class="mb-6">
-              <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded"
-                  :class="grp.key.includes('10') ? 'bg-green-100 text-green-700' : grp.key.includes('20') ? 'bg-blue-100 text-blue-700' : grp.key.includes('50') ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'"
-                  x-text="grp.key"></span>
-                <span x-text="grp.items.length + ' stocks'"></span>
-              </h3>
-              <div class="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                <table class="w-full text-xs">
-                  <thead class="bg-gray-50 border-b border-gray-200 text-gray-500 uppercase tracking-wide">
-                    <tr>
-                      <th class="px-4 py-2 text-left cursor-pointer select-none hover:text-indigo-600"
-                        @click="wlSort === 'ticker' ? wlSortDir *= -1 : (wlSort='ticker', wlSortDir=1)"
-                        x-text="'Ticker' + (wlSort==='ticker' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                        @click="wlSort === 'level' ? wlSortDir *= -1 : (wlSort='level', wlSortDir=-1)"
-                        x-text="'Level' + (wlSort==='level' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                        @click="wlSort === 'close' ? wlSortDir *= -1 : (wlSort='close', wlSortDir=-1)"
-                        x-text="'Close' + (wlSort==='close' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                        @click="wlSort === 'pct_to_level' ? wlSortDir *= -1 : (wlSort='pct_to_level', wlSortDir=1)"
-                        x-text="'% to Level' + (wlSort==='pct_to_level' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                        @click="wlSort === 'rvol' ? wlSortDir *= -1 : (wlSort='rvol', wlSortDir=-1)"
-                        x-text="'RVol' + (wlSort==='rvol' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                        @click="wlSort === 'rsm' ? wlSortDir *= -1 : (wlSort='rsm', wlSortDir=-1)"
-                        x-text="'RSM' + (wlSort==='rsm' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                      <th class="px-4 py-2 text-right cursor-pointer select-none hover:text-indigo-600"
-                        @click="wlSort === 'stretch' ? wlSortDir *= -1 : (wlSort='stretch', wlSortDir=1)"
-                        x-text="'STR' + (wlSort==='stretch' ? (wlSortDir<0?' ▼':' ▲') : '')"></th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <template x-for="(s, i) in wlSortedGroup(grp.items)" :key="i">
-                      <tr :class="s.broke ? 'bg-green-50' : 'hover:bg-gray-50'">
-                        <td class="px-4 py-2">
-                          <button type="button" @click="openChart(s)"
-                            class="font-medium hover:underline"
-                            :class="s.broke ? 'text-green-700' : ''"
-                            x-text="tickerText(s)"></button>
-                        </td>
-                        <td class="px-4 py-2 text-right text-gray-700"
-                          x-text="(s.levels && s.levels.length) ? '฿' + fmt2(s.levels[0].level) : '—'"></td>
-                        <td class="px-4 py-2 text-right"
-                          :class="s.broke ? 'text-green-700 font-semibold' : ''"
-                          x-text="s.close ? '฿' + fmt2(s.close) : '—'"></td>
-                        <td class="px-4 py-2 text-right"
-                          :class="(s.levels && s.levels.length && s.close) ? ((s.levels[0].level - s.close) / s.close * 100 <= 3 ? 'text-green-600 font-semibold' : 'text-gray-600') : 'text-gray-400'"
-                          x-text="(s.levels && s.levels.length && s.close) ? fmt1((s.levels[0].level - s.close) / s.close * 100) + '%' : '—'"></td>
-                        <td class="px-4 py-2 text-right"
-                          :class="(s.rvol || 0) >= 2 ? 'text-green-600 font-semibold' : 'text-gray-800'"
-                          x-text="s.rvol ? fmt1(s.rvol) + '×' : '—'"></td>
-                        <td class="px-4 py-2 text-right"
-                          :class="s.rsm >= 80 ? 'text-green-600 font-semibold' : 'text-gray-800'"
-                          x-text="s.rsm ? fmt0(s.rsm) : '—'"></td>
-                        <td class="px-4 py-2 text-right"
-                          :class="(s.stretch || 0) > 4 ? 'text-red-500 font-semibold' : (s.stretch ? 'text-gray-800' : 'text-gray-400')"
-                          x-text="s.stretch ? fmt1(s.stretch) + '×' : '—'"></td>
-                      </tr>
-                    </template>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </template>
-        </div>
-      </template>
-    </div>
-
-  </main>
-
-  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
-  <footer x-show="tab !== 'chart'" class="text-center text-xs text-gray-400 py-6">
-    Breakout Signal · SET Scanner
-  </footer>
-
+<body>
+  <div id="root"></div>
+  <script type="text/babel" src="/static/bs-data.jsx"></script>
+  <script type="text/babel" src="/static/bs-views.jsx"></script>
+  <script type="text/babel" src="/static/bs-app.jsx"></script>
 </body>
 </html>
