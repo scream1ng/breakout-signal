@@ -182,6 +182,66 @@ def criteria_label(rsm, rvol, stretch=0):
     return 'SMA50'
 
 
+def _run_paper_update(signals, data, now):
+    """Check paper exits for open positions; open new ones for Prime signals."""
+    try:
+        from app.core import paper_trader
+        pt = paper_trader.load_trades()
+        open_pos = list(pt.get('open', []))
+        newly_closed = []
+
+        if open_pos:
+            exit_data = paper_trader.fetch_exit_data(open_pos)
+            open_pos, newly_closed = paper_trader.check_exits(open_pos, exit_data, now, CFG)
+            pt['closed'] = pt.get('closed', []) + newly_closed
+            for p in newly_closed:
+                sign = '+' if (p.get('total_pnl') or 0) >= 0 else ''
+                _log(f'[paper] CLOSED {p["ticker"].replace(".BK","")} {p["exit_reason"]} '
+                     f'pnl={sign}฿{(p.get("total_pnl") or 0):.0f}')
+
+        prime = [s for s in (signals or []) if s.get('criteria') == 'Prime']
+        opened = 0
+        for sig in prime:
+            trade, err = paper_trader.open_position(sig, CFG, now, open_pos)
+            if trade:
+                open_pos.append(trade)
+                opened += 1
+                tk = sig.get('ticker_full', sig.get('ticker', '?')).replace('.BK', '')
+                _log(f'[paper] OPENED {tk} @ {trade["entry_price"]:.2f} × {trade["shares"]} '
+                     f'SL={trade["sl"]:.2f} TP1={trade["tp1"]:.2f}')
+            elif err:
+                _log(f'[paper] skip — {err}')
+
+        if newly_closed or opened:
+            pt['open'] = open_pos
+            paper_trader.save_trades(pt)
+    except Exception as e:
+        _log(f'[paper] error: {e}')
+
+
+def _run_paper_fakeout(signals, data, now):
+    """Exit paper positions that faked out (close < level at 16:25 review)."""
+    try:
+        from app.core import paper_trader
+        pt = paper_trader.load_trades()
+        open_pos = list(pt.get('open', []))
+        if not open_pos:
+            return
+        fakeout_tickers = {s.get('ticker_full', s.get('ticker', '')) for s in signals}
+        prices_map = {t: {'close': d['close']} for t, d in data.items()}
+        still_open, newly_closed = paper_trader.fakeout_exits(open_pos, fakeout_tickers, prices_map, now, CFG)
+        if newly_closed:
+            pt['open'] = still_open
+            pt['closed'] = pt.get('closed', []) + newly_closed
+            paper_trader.save_trades(pt)
+            for p in newly_closed:
+                sign = '+' if (p.get('total_pnl') or 0) >= 0 else ''
+                _log(f'[paper] FAKEOUT {p["ticker"].replace(".BK","")} '
+                     f'pnl={sign}฿{(p.get("total_pnl") or 0):.0f}')
+    except Exception as e:
+        _log(f'[paper] fakeout error: {e}')
+
+
 def run():
     now = datetime.now(BKK)
     date_str = now.strftime('%Y-%m-%d')
@@ -419,8 +479,11 @@ def run():
         if args.discord:
             _log(f'Sending Discord → fakeout review')
             send_review_alert(signals, now, CFG)
+        _run_paper_fakeout(signals, data, now)
         _log(f'Done. {len(signals)} fakeout(s)')
         return
+
+    _run_paper_update(signals, data, now)
 
     if not signals:
         _log(f'No breakouts. Done.')

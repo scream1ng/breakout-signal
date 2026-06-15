@@ -491,6 +491,119 @@ function FaqView() {
   );
 }
 
+/* ═══════════════════════ PORTFOLIO ═══════════════════════ */
+function PortfolioView({ openChart, portfolio }) {
+  if (!portfolio) return <div className="pad"><div className="loading">Loading…</div></div>;
+  if (portfolio === false) return <div className="pad"><div className="empty">Failed to load portfolio.</div></div>;
+
+  const { summary = {}, open = [], closed = [] } = portfolio;
+
+  const pnlClass = (v) => (v ?? 0) >= 0 ? 'g' : 'r';
+  const pnlSign  = (v) => (v ?? 0) >= 0 ? '+' : '';
+  const exitCls  = (r) => r === 'SL' || r === 'Fakeout' ? 'r' : r === 'EMA10' || r === 'BE' ? 'dm' : 'g';
+
+  return (
+    <div className="pad">
+
+      {/* ── KPI summary ── */}
+      <div className="stats" style={{ gridTemplateColumns: 'repeat(6,1fr)', marginBottom: 20 }}>
+        {[
+          { l: 'Capital',       v: `฿${fmt0(summary.capital)}`,  s: null },
+          { l: 'Available',     v: `฿${fmt0(summary.available)}`, s: `${summary.n_open ?? 0} open` },
+          { l: 'Deployed',      v: `฿${fmt0(summary.deployed)}`,  s: null },
+          { l: 'Realized P&L',  v: `${pnlSign(summary.realized_pnl)}฿${fmt0(summary.realized_pnl)}`,
+            c: pnlClass(summary.realized_pnl), s: `${pnlSign(summary.realized_pct)}${fmt2(summary.realized_pct)}%` },
+          { l: 'Unrealized P&L',v: `${pnlSign(summary.unrealized_pnl)}฿${fmt0(summary.unrealized_pnl)}`,
+            c: pnlClass(summary.unrealized_pnl), s: `${pnlSign(summary.unrealized_pct)}${fmt2(summary.unrealized_pct)}%` },
+          { l: 'Win Rate',      v: `${fmt1(summary.win_rate)}%`,
+            c: (summary.win_rate ?? 0) >= 50 ? 'g' : 'r', s: `${summary.n_closed ?? 0} closed` },
+        ].map(({ l, v, c, s }, i) => (
+          <div key={i} className="stat">
+            <div className={`stat-v ${c || ''}`} style={{ fontSize: 18 }}>{v ?? '—'}</div>
+            <div className="stat-l">{l}</div>
+            {s && <div style={{ fontSize: 10, color: 'var(--mut2)', marginTop: 2 }}>{s}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Open positions ── */}
+      <div className="card" style={{ marginBottom: 14 }}>
+        <div className="card-h">
+          <span className="card-t">Open Positions</span>
+          <span className="card-d">{open.length} position{open.length !== 1 ? 's' : ''}</span>
+        </div>
+        <table className="t">
+          <thead><tr>
+            <th>Ticker</th>
+            <th className="r">Entry</th>
+            <th className="r">Close</th>
+            <th className="r">Shares</th>
+            <th className="r">SL</th>
+            <th className="r">TP1</th>
+            <th>Status</th>
+            <th className="r">Unrealized P&L</th>
+          </tr></thead>
+          <tbody>
+            {open.length === 0 && <tr><td colSpan="8" className="empty">No open positions</td></tr>}
+            {open.map((p, i) => {
+              const up = (p.current_close ?? p.entry_price) >= p.entry_price;
+              const status = p.tp2_hit ? 'TP2 hit' : p.tp1_hit ? 'TP1 hit' : p.be_activated ? 'BE active' : '—';
+              const upnl = p.unrealized_pnl ?? 0;
+              return (
+                <tr key={i}>
+                  <td><button className="tk" onClick={() => openChart(p)}>{tickerText(p)}</button></td>
+                  <td className="num">{fmt2(p.entry_price)}</td>
+                  <td className={`num ${up ? 'g' : 'r'}`}>{fmt2(p.current_close)} {up ? '▲' : '▼'}</td>
+                  <td className="num">{p.shares_remaining}</td>
+                  <td className="num r">{fmt2(p.sl)}</td>
+                  <td className="num g">{fmt2(p.tp1)}</td>
+                  <td><span className="dm" style={{ fontSize: 11 }}>{status}</span></td>
+                  <td className={`num ${pnlClass(upnl)}`}>{pnlSign(upnl)}฿{fmt0(upnl)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Closed trades ── */}
+      <div className="card">
+        <div className="card-h">
+          <span className="card-t">Closed Trades</span>
+          <span className="card-d">{closed.length} trade{closed.length !== 1 ? 's' : ''}</span>
+        </div>
+        <table className="t">
+          <thead><tr>
+            <th>Ticker</th>
+            <th className="r">Entry</th>
+            <th className="r">Exit</th>
+            <th>Reason</th>
+            <th className="r">Bars</th>
+            <th className="r">Shares</th>
+            <th className="r">P&L (฿)</th>
+            <th className="r">Capital %</th>
+          </tr></thead>
+          <tbody>
+            {closed.length === 0 && <tr><td colSpan="8" className="empty">No closed trades yet</td></tr>}
+            {closed.map((t, i) => (
+              <tr key={i} className={(t.total_pnl ?? 0) >= 0 ? '' : 'fk'}>
+                <td><button className="tk" onClick={() => openChart(t)}>{tickerText(t)}</button></td>
+                <td className="num">{fmt2(t.entry_price)}</td>
+                <td className="num">{fmt2(t.exit_price)}</td>
+                <td><span className={exitCls(t.exit_reason)} style={{ fontSize: 11, fontWeight: 600 }}>{t.exit_reason ?? '—'}</span></td>
+                <td className="num">{t.bars_held ?? '—'}</td>
+                <td className="num">{t.shares}</td>
+                <td className={`num ${pnlClass(t.total_pnl)}`}>{pnlSign(t.total_pnl)}฿{fmt0(t.total_pnl)}</td>
+                <td className={`num ${pnlClass(t.pnl_pct)}`}>{pnlSign(t.pnl_pct)}{fmt2(t.pnl_pct)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════ CHART ═══════════════════════ */
 function ChartView({ ticker }) {
   if (!ticker) {
@@ -542,5 +655,5 @@ function RunModal({ run, onClose }) {
 }
 
 Object.assign(window, {
-  DashboardView, DashRail, BacktestView, WatchlistView, ToolsView, FaqView, ChartView, RunModal
+  DashboardView, DashRail, BacktestView, WatchlistView, PortfolioView, ToolsView, FaqView, ChartView, RunModal
 });

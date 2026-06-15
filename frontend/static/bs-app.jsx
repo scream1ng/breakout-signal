@@ -1,12 +1,13 @@
 /* bs-app.jsx — app shell with real API integration. */
-const { DashboardView, DashRail, BacktestView, WatchlistView, ToolsView, FaqView, ChartView, RunModal } = window;
+const { DashboardView, DashRail, BacktestView, WatchlistView, PortfolioView, ToolsView, FaqView, ChartView, RunModal } = window;
 const { fmtDatetime, bkkDateIso, isMarketOpenOrLater } = window.BS;
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: '▦' },
   { id: 'backtest',  label: 'Backtest',  icon: '◷' },
-  { id: 'watchlist', label: 'Watchlist', icon: '★' },
-  { id: 'chart',     label: 'Chart',     icon: '∿' },
+  { id: 'watchlist',  label: 'Watchlist',  icon: '★' },
+  { id: 'portfolio',  label: 'Portfolio',  icon: '฿' },
+  { id: 'chart',      label: 'Chart',      icon: '∿' },
   { id: 'tools',     label: 'Tools',     icon: '⚙' },
   { id: 'faq',       label: 'FAQ',       icon: '?' },
 ];
@@ -50,6 +51,7 @@ function App() {
   const [scanLatest, setScanLatest] = React.useState({ date: null, signals: [] });
   const [backtest, setBacktest] = React.useState(null);
   const [watchlist, setWatchlist] = React.useState(null);
+  const [portfolio, setPortfolio] = React.useState(null);
   const [running, setRunning] = React.useState({});
   const [notifying, setNotifying] = React.useState({});
   const [log, setLog] = React.useState([]);
@@ -160,6 +162,19 @@ function App() {
     }
   };
 
+  const loadPortfolio = async () => {
+    try {
+      const r = await fetch('/api/portfolio');
+      if (!r.ok) throw new Error(r.statusText);
+      setPortfolio(await r.json());
+      return true;
+    } catch (e) {
+      pushLog(`ERROR loadPortfolio: ${e.message}`);
+      setPortfolio(false);
+      return false;
+    }
+  };
+
   const loadCore = () => Promise.all([loadSystem(), loadSignals(), loadScanLatest()])
     .then(results => results.every(Boolean));
 
@@ -172,8 +187,9 @@ function App() {
 
   /* ── Lazy load backtest / watchlist on tab switch ────────── */
   React.useEffect(() => {
-    if (tab === 'backtest' && backtest === null) loadBacktest();
-    if (tab === 'watchlist' && watchlist === null) loadWatchlist();
+    if (tab === 'backtest'  && backtest   === null) loadBacktest();
+    if (tab === 'watchlist' && watchlist  === null) loadWatchlist();
+    if (tab === 'portfolio' && portfolio  === null) loadPortfolio();
   }, [tab]);
 
   /* ── Actions ─────────────────────────────────────────────── */
@@ -230,7 +246,8 @@ function App() {
     pushLog('Refreshing all data…');
     try {
       const results = [await loadCore()];
-      if (tab === 'backtest') results.push(await loadBacktest());
+      if (tab === 'backtest')  results.push(await loadBacktest());
+      if (tab === 'portfolio') results.push(await loadPortfolio());
       if (tab === 'watchlist') results.push(await loadWatchlist());
       const ok = results.every(Boolean);
       showToast(ok ? 'Data refreshed' : 'Some data failed to load', ok);
@@ -315,6 +332,7 @@ function App() {
           <div className="content">
             {tab === 'backtest'  && <BacktestView  openChart={openChart} backtest={backtest} />}
             {tab === 'watchlist' && <WatchlistView openChart={openChart} watchlist={watchlist} />}
+            {tab === 'portfolio' && <PortfolioView openChart={openChart} portfolio={portfolio} />}
             {tab === 'tools'     && <ToolsView jobs={jobs} running={running} onRun={runJob} log={log} onNotify={testNotify} notifying={notifying} />}
             {tab === 'faq'       && <FaqView />}
           </div>
