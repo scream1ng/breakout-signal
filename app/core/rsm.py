@@ -36,3 +36,33 @@ def calc_rsm_series(s_arr: np.ndarray, b_arr: np.ndarray) -> np.ndarray:
             continue
         rsm[i] = f_calc_final_rating((s_now / s_22) / (b_now / b_22) * 100)
     return rsm
+
+
+def calc_live_rsm(
+    closes: np.ndarray,
+    bench: np.ndarray,
+    live_close: float,
+    live_bench: float | None = None,
+) -> float:
+    """Current RS Momentum using the live intraday price as the latest bar.
+
+    `closes` / `bench` are aligned daily arrays of *completed* sessions only
+    (today's partial bar must already be excluded). The live close (and live
+    benchmark, when available) is appended as the newest bar so RSM compares
+    today's price against the close 21 sessions ago — matching the EOD formula.
+
+    Returns 0.0 when there is not enough history or inputs are invalid.
+    """
+    closes = np.asarray(closes, dtype=float)
+    bench  = np.asarray(bench,  dtype=float)
+    if len(closes) < 21 or len(bench) < 21:
+        return 0.0
+
+    s_now = float(live_close)
+    s_22  = float(closes[-21])
+    b_now = float(live_bench) if live_bench else float(bench[-1])
+    b_22  = float(bench[-21])
+
+    if 0 in (s_22, b_22, b_now) or any(np.isnan([s_now, s_22, b_now, b_22])):
+        return 0.0
+    return f_calc_final_rating((s_now / s_22) / (b_now / b_22) * 100)
