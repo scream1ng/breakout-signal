@@ -20,6 +20,8 @@ ROOT    = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 from config import CFG
 from app.scheduler.windows import is_allowed_intraday_scheduler_slot, scheduler_slot_label
+from app.core.data import load_ticker, load_benchmark
+from app.core.rsm import calc_live_rsm
 from output.report import print_intraday
 from output.notifications import send_intraday_alert, send_review_alert
 
@@ -242,6 +244,59 @@ def _run_paper_fakeout(signals, data, now):
         _log(f'[paper] fakeout error: {e}')
 
 
+def build_live_rsm_map(tickers, data, now):
+    """Recompute RS Momentum for each watchlist ticker using today's live price.
+
+    The watchlist stores RSM frozen at the previous EOD scan; during the session
+    a breakout stock's RSM can be materially different. We rebuild it from daily
+    history (completed sessions only) plus the live close so intraday criteria
+    match what the EOD scan would compute on the same move.
+
+    Returns {ticker: rsm_float}. Tickers that can't be computed are omitted so
+    callers fall back to the stored watchlist value.
+    """
+    rsm_map = {}
+    try:
+        bench = load_benchmark(CFG)
+    except Exception as e:
+        _log(f'[rsm] benchmark load failed ({e}) — using stored RSM')
+        return rsm_map
+    if bench is None or len(bench) < 21:
+        _log('[rsm] benchmark unavailable — using stored RSM')
+        return rsm_map
+
+    today = pd.Timestamp(now.date())
+    live_bench = float(bench.dropna().iloc[-1]) if len(bench.dropna()) else None
+
+    computed = 0
+    for ticker in tickers:
+        d = data.get(ticker)
+        if not d:
+            continue
+        try:
+            df = load_ticker(ticker)
+            if df is None or len(df) < 22:
+                continue
+            closes = df['Close']
+            b_aligned = bench.reindex(closes.index, method='ffill')
+            # Keep only completed sessions; the live close becomes the latest bar.
+            completed = closes.index.normalize() < today
+            closes = closes[completed]
+            b_aligned = b_aligned[completed]
+            if len(closes) < 21:
+                continue
+            rsm = calc_live_rsm(closes.values, b_aligned.values, d['close'], live_bench)
+            if rsm > 0:
+                rsm_map[ticker] = rsm
+                computed += 1
+        except Exception:
+            continue
+
+    if computed:
+        _log(f'[rsm] recomputed live RSM for {computed}/{len(tickers)} stocks')
+    return rsm_map
+
+
 def run():
     now = datetime.now(BKK)
     date_str = now.strftime('%Y-%m-%d')
@@ -331,6 +386,13 @@ def run():
             _log(f'Download error: {e}')
             return
 
+    # Recompute RSM live (watchlist value is frozen at the prior EOD scan).
+    live_rsm = build_live_rsm_map(tickers, data, now)
+
+    def rsm_for(ticker, w):
+        """Live RSM when available, else the watchlist's stored EOD value."""
+        return live_rsm.get(ticker, w.get('rsm', 0))
+
     no_data_tickers = []
     broke_tickers   = []
     live_data = {}
@@ -344,7 +406,7 @@ def run():
             continue
         avg_vol  = w_items[0].get('avg_volume', 0) if w_items else 0
         proj_rv  = proj_volume(d['volume'], avg_vol, now) if avg_vol > 0 else 0.0
-        rsm      = w_items[0].get('rsm', 0) if w_items else 0
+        rsm      = rsm_for(ticker, w_items[0]) if w_items else 0
         stretch  = w_items[0].get('stretch', 0) if w_items else 0
         broke    = any(d['close'] > lv for lv in levels)
         if broke:
@@ -388,7 +450,7 @@ def run():
                 avg_vol  = w.get('avg_volume', 0)
                 cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
                 proj_rv  = proj_volume(d['volume'], avg_vol, now)
-                rsm      = w.get('rsm', 0)
+                rsm      = rsm_for(ticker, w)
                 stretch  = w.get('stretch', 0)
                 crit     = criteria_label(rsm, proj_rv, stretch)
                 signals.append(dict(
@@ -429,7 +491,8 @@ def run():
         avg_vol  = w.get('avg_volume', 0)
         cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
         proj_rv  = proj_volume(d['volume'], avg_vol, now)
-        crit     = criteria_label(w.get('rsm', 0), proj_rv, w.get('stretch', 0))
+        rsm      = rsm_for(ticker, w)
+        crit     = criteria_label(rsm, proj_rv, w.get('stretch', 0))
 
         if crit not in ('Prime', 'RVOL'):
             continue
@@ -448,7 +511,7 @@ def run():
             close=round(float(d['close']), 4),
             cur_rvol=cur_rvol,
             proj_rvol=proj_rv,
-            rsm=w.get('rsm', 0),
+            rsm=rsm,
             stretch=w.get('stretch', 0),
             key=key_id,
             alerted_at=now.isoformat(timespec='seconds'),
@@ -463,7 +526,7 @@ def run():
             cur_rvol  = cur_rvol,
             proj_rvol = proj_rv,
             kind      = 'Hz' if w.get('kind') == 'hz' else 'TL',
-            rsm       = w.get('rsm', 0),
+            rsm       = rsm,
             stretch   = w.get('stretch', 0),
             atr       = w.get('atr', 0),
             criteria  = crit,
