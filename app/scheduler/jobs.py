@@ -14,6 +14,7 @@ import sys
 import json
 import re
 import subprocess
+import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ANSI_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
@@ -46,13 +47,19 @@ def _run(script: str, *extra_args: str, env_extra: dict | None = None) -> dict:
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, cwd=ROOT, env=env, bufsize=1,
         )
-        for line in proc.stdout:
-            clean = _strip_ansi(line)
-            stdout_lines.append(clean)
-            if log_f:
-                log_f.write(clean)
-                log_f.flush()
-        proc.wait()
+
+        def _reader():
+            for line in proc.stdout:
+                clean = _strip_ansi(line)
+                stdout_lines.append(clean)
+                if log_f:
+                    log_f.write(clean)
+                    log_f.flush()
+
+        reader = threading.Thread(target=_reader, daemon=True)
+        reader.start()
+        proc.wait()          # returns as soon as main process exits
+        reader.join(timeout=10)  # drain any buffered output
     finally:
         if log_f:
             log_f.close()
