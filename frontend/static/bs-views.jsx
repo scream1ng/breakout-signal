@@ -606,13 +606,43 @@ function PortfolioView({ openChart, portfolio }) {
 
 /* ═══════════════════════ CHART ═══════════════════════ */
 function ChartView({ ticker }) {
-  const src = ticker
-    ? `/chart?ticker=${encodeURIComponent(tickerFull(ticker))}`
-    : '/chart';
+  const containerRef = React.useRef(null);
+  const sym = ticker ? `SET:${tickerText(ticker)}` : 'SET:SET';
+
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.innerHTML = '';
+
+    const widget = document.createElement('div');
+    widget.style.cssText = 'height:100%;width:100%';
+    el.appendChild(widget);
+
+    const script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      autosize: true,
+      symbol: sym,
+      interval: 'D',
+      timezone: 'Asia/Bangkok',
+      theme: 'light',
+      style: '1',
+      locale: 'en',
+      allow_symbol_change: true,
+      calendar: false,
+      support_host: 'https://www.tradingview.com',
+    });
+    el.appendChild(script);
+
+    return () => { el.innerHTML = ''; };
+  }, [sym]);
+
   return (
     <div className="chart-wrap">
       {ticker && <div className="chart-tk-bar"><span className="chart-tk-lbl">{tickerText(ticker)}</span></div>}
-      <iframe src={src} title={ticker ? `Chart: ${tickerText(ticker)}` : 'Combined Chart'} />
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0 }} />
     </div>
   );
 }

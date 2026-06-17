@@ -60,6 +60,7 @@ function App() {
   const [refreshing, setRefreshing] = React.useState(false);
   const [chartTicker, setChartTicker] = React.useState(null);
   const toastTimer = React.useRef(null);
+  const pollRef    = React.useRef(null);
 
   React.useEffect(() => { localStorage.setItem('bs_tab', tab); }, [tab]);
 
@@ -185,6 +186,16 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
+  /* ── Poll every 5s while any job is running ──────────────── */
+  React.useEffect(() => {
+    clearTimeout(pollRef.current);
+    const anyRunning = Object.values(lastRuns).some(r => r.status === 'running');
+    if (anyRunning) {
+      pollRef.current = setTimeout(loadSystem, 5000);
+    }
+    return () => clearTimeout(pollRef.current);
+  }, [lastRuns]);
+
   /* ── Lazy load backtest / watchlist on tab switch ────────── */
   React.useEffect(() => {
     if (tab === 'backtest'  && backtest   === null) loadBacktest();
@@ -206,7 +217,7 @@ function App() {
       if (r.ok) {
         showToast(`${label} triggered`);
         pushLog(`${name} triggered OK`);
-        setTimeout(loadSystem, 3000);
+        setTimeout(loadSystem, 2000);
       } else {
         showToast(d.detail || 'Job failed', false);
         pushLog(`ERROR ${name}: ${d.detail || r.statusText}`);
