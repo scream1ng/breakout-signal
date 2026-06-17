@@ -5,6 +5,7 @@ Returns scheduler status, recent job run history, and API health.
 Powers the "Dashboard" page on the web frontend.
 """
 
+import os
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
@@ -119,6 +120,25 @@ def trigger_job(
     from app.scheduler.runner import _tracked
     background_tasks.add_task(_tracked, job_name, job_map[job_name], trigger_source='api_manual')
     return {'status': 'triggered', 'job': job_name}
+
+
+@router.get('/jobs/log/{job_name}')
+def get_job_log(job_name: str, offset: int = Query(default=0)):
+    """Return log lines from the running/last job subprocess output."""
+    _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    log_path = os.path.join(_ROOT, 'data', 'job_logs', f'{job_name}.log')
+    if not os.path.exists(log_path):
+        return {'lines': [], 'total': 0, 'offset': 0}
+    try:
+        with open(log_path, encoding='utf-8') as f:
+            all_lines = f.readlines()
+        return {
+            'lines': [ln.rstrip('\n') for ln in all_lines[offset:]],
+            'total': len(all_lines),
+            'offset': offset,
+        }
+    except Exception:
+        return {'lines': [], 'total': 0, 'offset': 0}
 
 
 @router.post('/notify/test/{channel}')

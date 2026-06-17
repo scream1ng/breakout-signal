@@ -12,7 +12,8 @@ import os
 from datetime import datetime
 import pytz
 
-from fastapi import APIRouter
+import pandas as pd
+from fastapi import APIRouter, Query
 
 router = APIRouter()
 
@@ -165,3 +166,31 @@ def get_watchlist_detail():
                     parts.append(tf)
     copy_str = ','.join(parts)
     return {'date': data.get('date'), 'items': items, 'groups': groups, 'copy_str': copy_str}
+
+
+# ── GET /api/chart/{ticker} ───────────────────────────────────────────────────
+@router.get('/chart/{ticker}')
+def get_chart_ohlcv(ticker: str, period: str = Query(default='1y')):
+    """Return daily OHLCV bars for a SET ticker (lightweight-charts format)."""
+    from app.core.data import load_ticker
+    raw = ticker.upper().replace('SET:', '').replace('.BK', '') + '.BK'
+    try:
+        df = load_ticker(raw, period=period)
+    except Exception:
+        df = None
+    if df is None or df.empty:
+        return {'ticker': ticker, 'data': []}
+    df.index = pd.to_datetime(df.index)
+    data = [
+        {
+            'time': str(d.date()),
+            'open': round(float(r.Open), 4),
+            'high': round(float(r.High), 4),
+            'low':  round(float(r.Low), 4),
+            'close': round(float(r.Close), 4),
+            'volume': int(r.Volume),
+        }
+        for d, r in df.iterrows()
+        if not (pd.isna(r.Open) or pd.isna(r.Close))
+    ]
+    return {'ticker': ticker, 'data': data}

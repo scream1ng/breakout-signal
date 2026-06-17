@@ -607,45 +607,69 @@ function PortfolioView({ openChart, portfolio }) {
 /* ═══════════════════════ CHART ═══════════════════════ */
 function ChartView({ ticker }) {
   const containerRef = React.useRef(null);
-  const sym = ticker ? `SET:${tickerText(ticker)}` : 'SET:SET';
+  const tkText = tickerText(ticker);
+  const level = (ticker && typeof ticker === 'object') ? (ticker.level || null) : null;
 
   React.useEffect(() => {
+    if (!tkText || !containerRef.current) return;
     const el = containerRef.current;
-    if (!el) return;
-    el.innerHTML = '';
 
-    el.className = 'tradingview-widget-container';
-    el.style.cssText = 'height:100%;width:100%';
-
-    const inner = document.createElement('div');
-    inner.className = 'tradingview-widget-container__widget';
-    inner.style.cssText = 'height:calc(100% - 32px);width:100%';
-    el.appendChild(inner);
-
-    const script = document.createElement('script');
-    script.type = 'text/javascript';
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    script.textContent = JSON.stringify({
-      autosize: true,
-      symbol: sym,
-      interval: 'D',
-      timezone: 'Asia/Bangkok',
-      theme: 'light',
-      style: '1',
-      locale: 'en',
-      allow_symbol_change: true,
-      calendar: false,
-      support_host: 'https://www.tradingview.com',
+    const chart = LightweightCharts.createChart(el, {
+      width: el.clientWidth,
+      height: el.clientHeight,
+      layout: { background: { color: '#fff' }, textColor: '#1d2b3e' },
+      grid: { vertLines: { color: '#e6eaf0' }, horzLines: { color: '#e6eaf0' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#d8dfe8' },
+      timeScale: { borderColor: '#d8dfe8', timeVisible: false },
+      handleScroll: true,
+      handleScale: true,
     });
-    el.appendChild(script);
 
-    return () => { el.innerHTML = ''; el.className = ''; el.style.cssText = ''; };
-  }, [sym]);
+    const candles = chart.addCandlestickSeries({
+      upColor: '#166534', downColor: '#9b1c1c',
+      borderUpColor: '#166534', borderDownColor: '#9b1c1c',
+      wickUpColor: '#166534', wickDownColor: '#9b1c1c',
+    });
+
+    if (level) {
+      candles.createPriceLine({
+        price: level,
+        color: '#1848c8',
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: 'Level',
+      });
+    }
+
+    let cancelled = false;
+    fetch(`/api/chart/${encodeURIComponent(tkText)}`)
+      .then(r => r.json())
+      .then(d => { if (!cancelled && d.data?.length) { candles.setData(d.data); chart.timeScale().fitContent(); } })
+      .catch(() => {});
+
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth && el.clientHeight)
+        chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
+    });
+    ro.observe(el);
+
+    return () => { cancelled = true; ro.disconnect(); chart.remove(); };
+  }, [tkText]);
+
+  if (!ticker) return (
+    <div className="chart-wrap" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <span style={{ color: 'var(--mut2)', fontSize: 13 }}>Select a ticker from Dashboard, Backtest, or Watchlist to view chart</span>
+    </div>
+  );
 
   return (
     <div className="chart-wrap">
-      {ticker && <div className="chart-tk-bar"><span className="chart-tk-lbl">{tickerText(ticker)}</span></div>}
+      <div className="chart-tk-bar">
+        <span className="chart-tk-lbl">{tkText}</span>
+        {level && <span style={{ marginLeft: 10, fontSize: 11, color: 'var(--mut2)' }}>Level ฿{Number(level).toFixed(2)}</span>}
+      </div>
       <div ref={containerRef} style={{ flex: 1, minHeight: 0 }} />
     </div>
   );

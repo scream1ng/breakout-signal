@@ -23,27 +23,46 @@ def _strip_ansi(text: str) -> str:
     return ANSI_RE.sub('', text)
 
 
+_LOG_DIR = os.path.join(ROOT, 'data', 'job_logs')
+
+
 def _run(script: str, *extra_args: str, env_extra: dict | None = None) -> dict:
-    """Run a project script as a subprocess; raise on non-zero exit."""
+    """Run a project script as a subprocess, streaming stdout to a log file."""
     cmd = [sys.executable, os.path.join(ROOT, script), *extra_args]
     env = os.environ.copy()
     if env_extra:
         env.update({k: str(v) for k, v in env_extra.items() if v is not None})
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT, env=env)
-    stdout_tail = _strip_ansi((result.stdout or ''))[-4000:]
-    stderr_tail = _strip_ansi((result.stderr or ''))[-4000:]
-    if result.returncode != 0:
-        detail = (
-            f'Exit code: {result.returncode}\n\n'
-            f'STDERR:\n{stderr_tail[-2000:] or "(empty)"}\n\n'
-            f'STDOUT:\n{stdout_tail[-2000:] or "(empty)"}'
+
+    job_name = (env_extra or {}).get('ALERT_JOB_NAME')
+    log_path = None
+    if job_name:
+        os.makedirs(_LOG_DIR, exist_ok=True)
+        log_path = os.path.join(_LOG_DIR, f'{job_name}.log')
+
+    stdout_lines: list[str] = []
+    log_f = open(log_path, 'w', encoding='utf-8') if log_path else None
+    try:
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, cwd=ROOT, env=env, bufsize=1,
         )
-        raise RuntimeError(detail)
-    return {
-        'return_code': result.returncode,
-        'stdout': stdout_tail,
-        'stderr': stderr_tail,
-    }
+        for line in proc.stdout:
+            clean = _strip_ansi(line)
+            stdout_lines.append(clean)
+            if log_f:
+                log_f.write(clean)
+                log_f.flush()
+        proc.wait()
+    finally:
+        if log_f:
+            log_f.close()
+
+    stdout_tail = ''.join(stdout_lines)[-4000:]
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f'Exit code: {proc.returncode}\n\nSTDOUT:\n{stdout_tail or "(empty)"}'
+        )
+    return {'return_code': proc.returncode, 'stdout': stdout_tail}
 
 
 def _job_env(job_context: dict | None, source_fallback: str) -> dict:

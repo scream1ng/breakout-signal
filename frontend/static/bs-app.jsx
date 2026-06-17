@@ -59,8 +59,10 @@ function App() {
   const [runModal, setRunModal] = React.useState(null);
   const [refreshing, setRefreshing] = React.useState(false);
   const [chartTicker, setChartTicker] = React.useState(null);
-  const toastTimer = React.useRef(null);
-  const pollRef    = React.useRef(null);
+  const toastTimer   = React.useRef(null);
+  const pollRef      = React.useRef(null);
+  const logPollRef   = React.useRef(null);
+  const logOffsetRef = React.useRef({});
 
   React.useEffect(() => { localStorage.setItem('bs_tab', tab); }, [tab]);
 
@@ -186,14 +188,37 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
-  /* ── Poll every 5s while any job is running ──────────────── */
+  /* ── Poll system + stream job logs while any job is running ── */
   React.useEffect(() => {
     clearTimeout(pollRef.current);
-    const anyRunning = Object.values(lastRuns).some(r => r.status === 'running');
-    if (anyRunning) {
-      pollRef.current = setTimeout(loadSystem, 5000);
-    }
-    return () => clearTimeout(pollRef.current);
+    clearTimeout(logPollRef.current);
+
+    const runningJobs = Object.entries(lastRuns)
+      .filter(([, r]) => r.status === 'running')
+      .map(([name]) => name);
+
+    if (runningJobs.length === 0) return;
+
+    pollRef.current = setTimeout(loadSystem, 5000);
+
+    const pollLogs = async () => {
+      for (const jobName of runningJobs) {
+        const offset = logOffsetRef.current[jobName] || 0;
+        try {
+          const r = await fetch(`/api/jobs/log/${jobName}?offset=${offset}`);
+          if (!r.ok) continue;
+          const d = await r.json();
+          if (d.lines && d.lines.length > 0) {
+            d.lines.forEach(ln => { if (ln.trim()) pushLog(`[${jobName}] ${ln.trim()}`); });
+            logOffsetRef.current[jobName] = d.total;
+          }
+        } catch {}
+      }
+      logPollRef.current = setTimeout(pollLogs, 3000);
+    };
+    logPollRef.current = setTimeout(pollLogs, 2000);
+
+    return () => { clearTimeout(pollRef.current); clearTimeout(logPollRef.current); };
   }, [lastRuns]);
 
   /* ── Lazy load backtest / watchlist on tab switch ────────── */
@@ -209,6 +234,7 @@ function App() {
   const runJob = async (name) => {
     if (running[name]) return;
     setRunning(r => ({ ...r, [name]: true }));
+    logOffsetRef.current[name] = 0;
     const label = JOB_DEFS.find(d => d.name === name)?.label || name;
     pushLog(`Triggering job: ${name}…`);
     try {
