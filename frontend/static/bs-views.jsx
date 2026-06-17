@@ -606,18 +606,13 @@ function PortfolioView({ openChart, portfolio }) {
 
 /* ═══════════════════════ CHART ═══════════════════════ */
 function ChartView({ ticker }) {
-  if (!ticker) {
-    return (
-      <div className="chart-placeholder">
-        <div className="chart-glyph">▦</div>
-        <div className="chart-msg">Select a ticker to load its chart</div>
-      </div>
-    );
-  }
-  const src = `/chart?ticker=${encodeURIComponent(tickerFull(ticker))}`;
+  const src = ticker
+    ? `/chart?ticker=${encodeURIComponent(tickerFull(ticker))}`
+    : '/chart';
   return (
     <div className="chart-wrap">
-      <iframe src={src} title={`Chart: ${tickerText(ticker)}`} />
+      {ticker && <div className="chart-tk-bar"><span className="chart-tk-lbl">{tickerText(ticker)}</span></div>}
+      <iframe src={src} title={ticker ? `Chart: ${tickerText(ticker)}` : 'Combined Chart'} />
     </div>
   );
 }

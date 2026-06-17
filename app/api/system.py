@@ -10,7 +10,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.config import DISCORD_WEBHOOK, OPS_API_TOKEN, is_railway_runtime
+from app.config import DISCORD_WEBHOOK, OPS_API_TOKEN
 from app.notifications.discord import send_test_alert as send_discord_test_alert
 from app.storage.db import get_db
 from app.storage.models import JobRun, NotificationSend
@@ -36,15 +36,8 @@ router = APIRouter()
 
 
 def _require_ops_access(x_ops_token: str | None = Header(default=None)) -> None:
-    if OPS_API_TOKEN:
-        if x_ops_token != OPS_API_TOKEN:
-            raise HTTPException(status_code=401, detail='Invalid or missing x-ops-token')
-        return
-    if is_railway_runtime():
-        raise HTTPException(
-            status_code=503,
-            detail='Production ops endpoints are disabled until OPS_API_TOKEN is configured',
-        )
+    if OPS_API_TOKEN and x_ops_token != OPS_API_TOKEN:
+        raise HTTPException(status_code=401, detail='Invalid or missing x-ops-token')
 
 
 @router.get('/system')
