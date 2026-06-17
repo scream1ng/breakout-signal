@@ -614,15 +614,19 @@ function ChartView({ ticker }) {
     if (!el) return;
     el.innerHTML = '';
 
-    const widget = document.createElement('div');
-    widget.style.cssText = 'height:100%;width:100%';
-    el.appendChild(widget);
+    el.className = 'tradingview-widget-container';
+    el.style.cssText = 'height:100%;width:100%';
+
+    const inner = document.createElement('div');
+    inner.className = 'tradingview-widget-container__widget';
+    inner.style.cssText = 'height:calc(100% - 32px);width:100%';
+    el.appendChild(inner);
 
     const script = document.createElement('script');
     script.type = 'text/javascript';
     script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
     script.async = true;
-    script.innerHTML = JSON.stringify({
+    script.textContent = JSON.stringify({
       autosize: true,
       symbol: sym,
       interval: 'D',
@@ -636,7 +640,7 @@ function ChartView({ ticker }) {
     });
     el.appendChild(script);
 
-    return () => { el.innerHTML = ''; };
+    return () => { el.innerHTML = ''; el.className = ''; el.style.cssText = ''; };
   }, [sym]);
 
   return (
