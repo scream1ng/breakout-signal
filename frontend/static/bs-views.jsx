@@ -541,14 +541,16 @@ function PortfolioView({ openChart, portfolio }) {
             <th className="r">SL</th>
             <th className="r">TP1</th>
             <th>Status</th>
+            <th className="r">Position</th>
             <th className="r">Unrealized P&L</th>
           </tr></thead>
           <tbody>
-            {open.length === 0 && <tr><td colSpan="8" className="empty">No open positions</td></tr>}
+            {open.length === 0 && <tr><td colSpan="9" className="empty">No open positions</td></tr>}
             {open.map((p, i) => {
               const up = (p.current_close ?? p.entry_price) >= p.entry_price;
               const status = p.tp2_hit ? 'TP2 hit' : p.tp1_hit ? 'TP1 hit' : p.be_activated ? 'BE active' : '—';
               const upnl = p.unrealized_pnl ?? 0;
+              const posVal = (p.current_close ?? p.entry_price) * p.shares_remaining;
               return (
                 <tr key={i}>
                   <td><button className="tk" onClick={() => openChart(p)}>{tickerText(p)}</button></td>
@@ -558,6 +560,7 @@ function PortfolioView({ openChart, portfolio }) {
                   <td className="num r">{fmt2(p.sl)}</td>
                   <td className="num g">{fmt2(p.tp1)}</td>
                   <td><span className="dm" style={{ fontSize: 11 }}>{status}</span></td>
+                  <td className="num">฿{fmt0(posVal)}</td>
                   <td className={`num ${pnlClass(upnl)}`}>{pnlSign(upnl)}฿{fmt0(upnl)}</td>
                 </tr>
               );
