@@ -131,58 +131,78 @@ def get_scheduler() -> BackgroundScheduler:
 
 
 def _tracked(job_name: str, fn: Callable, *args, trigger_source: str = 'scheduler', **kwargs) -> None:
-    """Wrap a job function: create JobRun before, update it after."""
+    """Wrap a job function: create JobRun before, update it after.
+
+    DB sessions are short-lived and never held across fn(). A scan runs
+    ~14-16 min; a connection checked out for that whole span gets dropped by
+    the server while idle, so the final 'completed' commit would fail and the
+    row would stay 'running' even though the work finished. Insert with one
+    session, run the job holding none, then write the result with a fresh one.
+    """
+    # ── 1. Acquire lock + insert the 'running' row (short session) ────────────
     db = SessionLocal()
     _ensure_lock_table(db)
-
     if not _acquire_lock(db, job_name):
         logger.warning('Job %s skipped — duplicate (lock held by other instance)', job_name)
         db.close()
         return
 
+    started = datetime.now(timezone.utc)
+    run_id = None
     try:
-        run = JobRun(
-            job_name=job_name,
-            status='running',
-            started_at=datetime.now(timezone.utc),
-        )
+        run = JobRun(job_name=job_name, status='running', started_at=started)
         db.add(run)
         db.commit()
         db.refresh(run)
+        run_id = run.id
+    except Exception:
+        logger.exception('Job %s — failed to create JobRun row', job_name)
+    finally:
+        db.close()
 
-        result: dict = {}
+    # ── 2. Run the job WITHOUT holding a DB connection ────────────────────────
+    status = 'completed'
+    error = None
+    result: dict = {}
+    try:
+        result = fn(
+            *args,
+            job_context={'source': trigger_source, 'job_name': job_name, 'job_run_id': run_id},
+            **kwargs,
+        ) or {}
+        logger.info('Job %s completed in %.1fs', job_name,
+                    (datetime.now(timezone.utc) - started).total_seconds())
+    except Exception as exc:
+        status = 'failed'
+        error = str(exc)[:800]
+        logger.exception('Job %s failed', job_name)
         try:
-            result = fn(
-                *args,
-                job_context={
-                    'source': trigger_source,
-                    'job_name': job_name,
-                    'job_run_id': run.id,
-                },
-                **kwargs,
-            ) or {}
-            run.status = 'completed'
-            started_utc = _as_utc(run.started_at)
-            logger.info('Job %s completed in %.1fs', job_name,
-                        (datetime.now(timezone.utc) - started_utc).total_seconds())
-        except Exception as exc:
-            run.status = 'failed'
-            run.error  = str(exc)[:800]
-            logger.exception('Job %s failed', job_name)
-            try:
-                from app.notifications.discord import send_job_failure
-                send_job_failure(job_name, str(exc))
-            except Exception:
-                pass
-        finally:
-            run.finished_at = datetime.now(timezone.utc)
-            run.duration_s  = (_as_utc(run.finished_at) - _as_utc(run.started_at)).total_seconds()
+            from app.notifications.discord import send_job_failure
+            send_job_failure(job_name, str(exc))
+        except Exception:
+            pass
+
+    # ── 3. Persist final status + release lock (fresh session) ────────────────
+    finished = datetime.now(timezone.utc)
+    db = SessionLocal()
+    try:
+        run = db.get(JobRun, run_id) if run_id is not None else None
+        if run is not None:
+            run.status      = status
+            run.error       = error
+            run.finished_at = finished
+            run.duration_s  = (finished - started).total_seconds()
             for key in ('stocks_scanned', 'signals_found', 'trades_opened', 'trades_closed'):
                 if key in result:
                     setattr(run, key, result[key])
             run.result_json = json.dumps(result)
-            db.add(run)
             db.commit()
+    except Exception:
+        logger.exception('Job %s — failed to persist final status', job_name)
+        try:
+            db.rollback()
+        except Exception:
+            pass
     finally:
         _release_lock(db, job_name)
         db.close()

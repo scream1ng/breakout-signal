@@ -11,7 +11,12 @@ from app.config import DATABASE_URL
 # SQLite needs check_same_thread=False for FastAPI (multi-threaded)
 _connect_args = {'check_same_thread': False} if DATABASE_URL.startswith('sqlite') else {}
 
-engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
+# pool_recycle: discard any pooled connection older than 280s so we never reuse
+# one the server has already dropped for being idle (Railway Postgres / pgbouncer).
+engine = create_engine(
+    DATABASE_URL, connect_args=_connect_args,
+    pool_pre_ping=True, pool_recycle=280,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
