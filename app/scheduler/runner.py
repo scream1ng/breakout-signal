@@ -110,6 +110,13 @@ def sweep_stale_runs(max_age_s: int = 1800) -> int:
                 db.add(r)
                 fixed += 1
         if fixed:
+            # Release locks for swept jobs so the next run isn't blocked until
+            # the 10-min stale-lock cleanup; the owning process is already gone.
+            for name in {r.job_name for r in rows if r.status == 'failed'}:
+                try:
+                    db.execute(text("DELETE FROM job_locks WHERE job_name = :n"), {'n': name})
+                except Exception:
+                    pass
             db.commit()
         return fixed
     except Exception as exc:
