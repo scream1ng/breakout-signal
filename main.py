@@ -773,6 +773,14 @@ def main():
             )
             _mark_eod_alert_sent(DATE_STR, discord_sent=sent)
 
+    # Force clean termination. SETTRADE / other SDK clients can leave non-daemon
+    # threads alive, so the interpreter hangs after the scan completes — the
+    # scheduler's proc.wait() never returns and the JobRun stays 'running',
+    # leaving the dashboard/chart stale. Flush streams, then hard-exit 0.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
+
 
 if __name__ == '__main__':
     main()

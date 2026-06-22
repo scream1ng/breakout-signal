@@ -566,3 +566,9 @@ def run():
 
 if __name__ == '__main__':
     run()
+    # Force clean termination — SETTRADE/other SDK clients can leave non-daemon
+    # threads alive, hanging the interpreter after work completes and leaving
+    # the scheduler JobRun stuck in 'running'. Flush streams, then hard-exit 0.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)
