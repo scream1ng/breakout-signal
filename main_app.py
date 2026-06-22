@@ -113,6 +113,16 @@ def serve_chart():
     chart = os.path.join(FRONTEND_DIR, 'chart.html')
     if os.path.exists(chart):
         return FileResponse(chart)
+    # Railway's filesystem is ephemeral — a redeploy wipes the gitignored
+    # chart.html that the last EOD generated. Restore it from the DB (saved by
+    # main.py) before falling back to the stale committed docs/index.html.
+    try:
+        from app.storage.state import load_state
+        saved = load_state('chart_html')
+        if saved and saved.get('html'):
+            return HTMLResponse(saved['html'])
+    except Exception:
+        pass
     docs_index = os.path.join(DOCS_DIR, 'index.html')
     if os.path.exists(docs_index):
         return FileResponse(docs_index)

@@ -768,6 +768,16 @@ def main():
         generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
                                filename='chart.html', portfolio=portfolio_data)
         print(f'  Chart updated → python main.py --view\n')
+        # Persist chart so it survives Railway's ephemeral filesystem — a
+        # redeploy wipes the gitignored frontend/chart.html, and /chart would
+        # otherwise fall back to the stale committed docs/index.html (dark).
+        try:
+            from app.storage.state import save_state
+            with open(os.path.join(WEB_DIR, 'chart.html'), encoding='utf-8') as _cf:
+                save_state('chart_html', {'date': DATE_STR.replace('_', '-'), 'html': _cf.read()})
+            print('  Chart persisted → DB')
+        except Exception as _e:
+            print(f'  [warn] Chart DB persist skipped: {_e}')
 
     if args.discord:
         if not _claim_eod_alert(DATE_STR):
