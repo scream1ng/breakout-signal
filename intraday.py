@@ -494,7 +494,7 @@ def run():
         rsm      = rsm_for(ticker, w)
         crit     = criteria_label(rsm, proj_rv, w.get('stretch', 0))
 
-        if crit not in ('Prime', 'RVOL'):
+        if crit not in ('Prime', 'RVOL', 'STR'):
             continue
 
         key_id = _alert_key(ticker, level, w.get('kind'))
