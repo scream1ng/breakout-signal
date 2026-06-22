@@ -88,6 +88,41 @@ def _release_lock(db, job_name: str) -> None:
             pass
 
 
+def sweep_stale_runs(max_age_s: int = 1800) -> int:
+    """Mark orphaned 'running' JobRuns (older than max_age_s) as 'failed'.
+
+    A run is orphaned when its process hung or was killed mid-scan (e.g. a
+    Railway redeploy terminating the web process). Without this, the row stays
+    'running' forever and the dashboard/chart appears stuck. Returns rows fixed.
+    """
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        rows = db.query(JobRun).filter(JobRun.status == 'running').all()
+        fixed = 0
+        for r in rows:
+            age = (now - _as_utc(r.started_at)).total_seconds()
+            if age > max_age_s:
+                r.status      = 'failed'
+                r.error       = f'Orphaned — still running after {int(age)}s; marked failed on sweep.'
+                r.finished_at = now
+                r.duration_s  = age
+                db.add(r)
+                fixed += 1
+        if fixed:
+            db.commit()
+        return fixed
+    except Exception as exc:
+        logger.warning('Stale-run sweep failed: %s', exc)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return 0
+    finally:
+        db.close()
+
+
 def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:

@@ -13,11 +13,17 @@ import os
 import sys
 import json
 import re
+import signal
 import subprocess
 import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ANSI_RE = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+
+# Hard wall-clock cap for any scan subprocess. Real EOD scans run ~14-20 min;
+# 30 min leaves margin. On timeout the child (and its children) are killed so a
+# hung network call can never pin the JobRun at 'running' forever.
+SCAN_TIMEOUT_S = int(os.environ.get('SCAN_TIMEOUT_S', '1800'))
 
 
 def _strip_ansi(text: str) -> str:
@@ -42,10 +48,14 @@ def _run(script: str, *extra_args: str, env_extra: dict | None = None) -> dict:
 
     stdout_lines: list[str] = []
     log_f = open(log_path, 'w', encoding='utf-8') if log_path else None
+    # Start the child in its own process group (POSIX) so we can kill the whole
+    # tree on timeout, including grandchildren that may hold the stdout pipe.
+    popen_kwargs = {'start_new_session': True} if os.name == 'posix' else {}
+    timed_out = False
     try:
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, cwd=ROOT, env=env, bufsize=1,
+            text=True, cwd=ROOT, env=env, bufsize=1, **popen_kwargs,
         )
 
         def _reader():
@@ -58,18 +68,45 @@ def _run(script: str, *extra_args: str, env_extra: dict | None = None) -> dict:
 
         reader = threading.Thread(target=_reader, daemon=True)
         reader.start()
-        proc.wait()          # returns as soon as main process exits
+        try:
+            proc.wait(timeout=SCAN_TIMEOUT_S)   # returns when main process exits
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _kill_tree(proc)
+            try:
+                proc.wait(timeout=30)
+            except Exception:
+                pass
         reader.join(timeout=10)  # drain any buffered output
     finally:
         if log_f:
             log_f.close()
 
     stdout_tail = ''.join(stdout_lines)[-4000:]
+    if timed_out:
+        raise RuntimeError(
+            f'{script} timed out after {SCAN_TIMEOUT_S}s — process killed.'
+            f'\n\nSTDOUT:\n{stdout_tail or "(empty)"}'
+        )
     if proc.returncode != 0:
         raise RuntimeError(
             f'Exit code: {proc.returncode}\n\nSTDOUT:\n{stdout_tail or "(empty)"}'
         )
     return {'return_code': proc.returncode, 'stdout': stdout_tail}
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Kill the subprocess and its whole process group (best-effort)."""
+    try:
+        if os.name == 'posix':
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        else:
+            proc.kill()
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
 
 def _job_env(job_context: dict | None, source_fallback: str) -> dict:

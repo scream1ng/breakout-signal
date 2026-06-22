@@ -66,6 +66,14 @@ async def lifespan(app: FastAPI):
     logger.info('Initialising database …')
     init_db()
 
+    # Any run still 'running' at boot was orphaned by the previous process
+    # (redeploy/crash mid-scan). Scans take 14-16 min, so a 5-min cutoff clears
+    # leftovers fast without touching a genuinely active run.
+    from app.scheduler.runner import sweep_stale_runs
+    swept = sweep_stale_runs(max_age_s=300)
+    if swept:
+        logger.info('Swept %d orphaned running job(s) → failed', swept)
+
     logger.info('Starting scheduler …')
     scheduler = get_scheduler()
     register_jobs()
