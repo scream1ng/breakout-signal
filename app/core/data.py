@@ -99,7 +99,7 @@ def load_ticker(ticker: str, period: str = '2y', force: bool = False) -> pd.Data
         # print(f"  [data] Settrade failed for {ticker} ({e}). Falling back to yfinance.")
         try:
             raw = yf.download(ticker, period='2y', interval='1d',
-                              auto_adjust=True, progress=False)
+                              auto_adjust=True, progress=False, timeout=30)
             if raw is None or raw.empty:
                 cached = _read_cache_if_exists(path)
                 return cached if cached is not None else None
@@ -180,6 +180,7 @@ def load_intraday_ticker(
                 interval=interval,
                 auto_adjust=True,
                 progress=False,
+                timeout=30,
             )
             if raw is None or raw.empty:
                 cached = _read_cache_if_exists(path)

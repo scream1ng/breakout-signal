@@ -14,12 +14,18 @@ OPTIONS:
   --clear-cache                delete all cached price data
 """
 
-import os, sys, warnings, argparse, time, webbrowser
+import os, sys, warnings, argparse, time, webbrowser, socket
 from datetime import datetime
 import json
 import numpy as np
 import pandas as pd
 warnings.filterwarnings('ignore')
+
+# Hard ceiling on every blocking socket op in this scan process. The intraday
+# backtest downloads 5m data per stock (SETTRADE/yfinance) with no per-call
+# timeout; one stalled fetch used to freeze the whole scan, leaving the
+# scheduler JobRun stuck 'running'. 60s is generous for any single request.
+socket.setdefaulttimeout(60)
 
 # Force UTF-8 output on Windows (Thai locale uses cp874 by default,
 # which cannot encode ✓/✗/● used in the terminal reports)

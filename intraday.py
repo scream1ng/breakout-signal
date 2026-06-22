@@ -9,7 +9,8 @@ Usage:
     python intraday.py --discord   # send to Discord
 """
 
-import os, sys, json, time, argparse
+import os, sys, json, time, argparse, socket
+socket.setdefaulttimeout(60)   # bound every network call so a stalled fetch can't hang the scan
 from datetime import datetime
 import pytz
 import requests
