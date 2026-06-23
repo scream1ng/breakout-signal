@@ -27,7 +27,7 @@ app/core/rsm.py         ← calculate RS Momentum vs ^SET.BK benchmark
 main.py (EOD)           ← rank, filter, classify (Prime/RVOL/RSM/STR/SMA50)
 intraday.py (live)      ← check watchlist every 15 min against live prices
       │
-       ├─► output/chart_combined.py  ← generate docs/index.html (interactive chart)
+       ├─► output/chart_combined.py  ← generate frontend/chart.html (interactive chart)
        └─► output/notifications.py   ← Discord alerts only
              └─ Discord → intraday / fakeout / EOD alerts
       │
@@ -42,7 +42,7 @@ Browser: http://localhost:8080
   ├── /              → Dashboard tab  (scheduler status, job history, intraday/EOD signals)
   ├── /backtest      → Backtest tab   (per-stock backtest stats)
   ├── /watchlist     → Watchlist tab  (stocks near breakout level)
-  └── /docs/         → Chart view     (generated HTML chart, unchanged)
+  └── /chart         → Chart view     (generated HTML chart)
 ```
 
 ---
@@ -107,7 +107,6 @@ breakout-signal/
 │   ├── test_notifications.py
 │   └── test_settrade.py
 │
-├── docs/                   ← Auto-generated chart HTML (served at /docs/)
 └── data/
     ├── watchlist.json
     ├── alert_state.json
@@ -223,7 +222,7 @@ Open `http://localhost:8080` after starting app.
 | **Dashboard** | `/` | Scheduler status, job cards (last run / next run / duration / error), run history table |
 | **Portfolio** | `/portfolio` | Equity summary, open positions, closed trade history |
 | **Signals** | `/signals` | Today's triggered breaks, current watchlist |
-| **Charts** | `/docs/` | Auto-generated interactive chart (legacy) |
+| **Charts** | `/chart` | Auto-generated interactive chart |
 
 Dashboard auto-refreshes every 60 seconds. All data from REST API:
 

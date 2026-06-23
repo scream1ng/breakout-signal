@@ -770,7 +770,7 @@ def main():
         print(f'  Chart updated → python main.py --view\n')
         # Persist chart so it survives Railway's ephemeral filesystem — a
         # redeploy wipes the gitignored frontend/chart.html, and /chart would
-        # otherwise fall back to the stale committed docs/index.html (dark).
+        # otherwise show the "no chart yet" placeholder until the next EOD scan.
         try:
             from app.storage.state import save_state
             with open(os.path.join(WEB_DIR, 'chart.html'), encoding='utf-8') as _cf:

@@ -12,6 +12,7 @@ simultaneously — the second instance acquires no lock and exits early.
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -130,6 +131,27 @@ def sweep_stale_runs(max_age_s: int = 1800) -> int:
         db.close()
 
 
+_RETENTION_DAYS = int(os.environ.get('JOBRUN_RETENTION_DAYS', '30'))
+
+
+def _prune_old_rows(db) -> None:
+    """Delete job_runs / notification_sends older than retention window.
+
+    Postgres-only (uses NOW()/INTERVAL like the lock table). Runs once a day
+    off the EOD job so these append-only tables don't grow without bound and
+    bloat the Railway Postgres volume. Silently no-ops on SQLite / failure.
+    """
+    for table, ts_col in (('job_runs', 'started_at'), ('notification_sends', 'created_at')):
+        try:
+            db.execute(text(
+                f"DELETE FROM {table} "
+                f"WHERE {ts_col} < NOW() - INTERVAL '{_RETENTION_DAYS} days'"
+            ))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+
 def get_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is None:
@@ -204,6 +226,8 @@ def _tracked(job_name: str, fn: Callable, *args, trigger_source: str = 'schedule
                     setattr(run, key, result[key])
             run.result_json = json.dumps(result)
             db.commit()
+        if job_name == 'eod_scan':
+            _prune_old_rows(db)
     except Exception:
         logger.exception('Job %s — failed to persist final status', job_name)
         try:
