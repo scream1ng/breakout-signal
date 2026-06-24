@@ -88,6 +88,23 @@ class ScanSnapshot(Base):
         }
 
 
+# ── ChartData — one small row per ticker with its chart-render payload ────────
+class ChartData(Base):
+    """Per-ticker chart payload (get_chart_data() dict) for /api/chart/{ticker}.
+
+    Replaces the old multi-MB DailyState 'chart_html' blob. EOD scan writes one
+    small row per signal/watchlist ticker; tickers not stored are rebuilt
+    on demand (candles + MAs) from the OHLCV cache.
+    """
+    __tablename__ = 'chart_data'
+
+    ticker     = Column(String(20), primary_key=True)   # normalized, e.g. DELTA.BK
+    scan_date  = Column(String(10), nullable=True, index=True)   # YYYY-MM-DD
+    data_json  = Column(Text, nullable=False)
+    updated_at = Column(DateTime, nullable=False,
+                        default=lambda: datetime.now(timezone.utc))
+
+
 # ── DailyState — key/value store for ephemeral daily data ────────────────────
 class DailyState(Base):
     """Persists daily data that must survive Railway redeploys.

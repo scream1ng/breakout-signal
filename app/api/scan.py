@@ -168,29 +168,90 @@ def get_watchlist_detail():
     return {'date': data.get('date'), 'items': items, 'groups': groups, 'copy_str': copy_str}
 
 
-# ── GET /api/chart/{ticker} ───────────────────────────────────────────────────
-@router.get('/chart/{ticker}')
-def get_chart_ohlcv(ticker: str, period: str = Query(default='1y')):
-    """Return daily OHLCV bars for a SET ticker (lightweight-charts format)."""
+def _norm_full(ticker: str) -> str:
+    t = str(ticker or '').upper().replace('SET:', '').strip()
+    if not t:
+        return t
+    if t.startswith('^') or t.endswith('.BK') or t.endswith('.AX'):
+        return t
+    return t + '.BK'
+
+
+def _rebuild_chart_basic(ticker_full: str, period: str = '2y') -> dict | None:
+    """Fallback chart payload — candles + EMA10/EMA20/SMA50/SMA200 only.
+
+    No breakout signals/trades/levels (those exist only for stored
+    signal+watchlist tickers). Cheap pandas; no main.py / scan pipeline import.
+    Shape matches get_chart_data() so the same renderer handles it.
+    """
     from app.core.data import load_ticker
-    raw = ticker.upper().replace('SET:', '').replace('.BK', '') + '.BK'
     try:
-        df = load_ticker(raw, period=period)
+        df = load_ticker(ticker_full, period=period)
     except Exception:
         df = None
     if df is None or df.empty:
-        return {'ticker': ticker, 'data': []}
+        return None
     df.index = pd.to_datetime(df.index)
-    data = [
-        {
-            'time': str(d.date()),
-            'open': round(float(r.Open), 4),
-            'high': round(float(r.High), 4),
-            'low':  round(float(r.Low), 4),
-            'close': round(float(r.Close), 4),
-            'volume': int(r.Volume),
-        }
-        for d, r in df.iterrows()
-        if not (pd.isna(r.Open) or pd.isna(r.Close))
-    ]
-    return {'ticker': ticker, 'data': data}
+
+    close = df['Close'].astype(float)
+    vol   = df['Volume'].astype(float)
+    ema10 = close.ewm(span=10, adjust=False).mean()
+    ema20 = close.ewm(span=20, adjust=False).mean()
+    sma50 = close.rolling(50).mean()
+    sma200 = close.rolling(200).mean()
+    avgvol = vol.rolling(20).mean()
+    rvol = (vol / avgvol).replace([float('inf')], 0).fillna(0)
+    rvol_min = 1.5
+
+    def _arr(s):
+        return [None if pd.isna(v) else round(float(v), 4) for v in s]
+
+    candles = []
+    for i, (d, r) in enumerate(df.iterrows()):
+        if pd.isna(r.Open) or pd.isna(r.Close):
+            continue
+        rv = round(float(rvol.iloc[i]), 2)
+        up = float(r.Close) >= float(r.Open)
+        candles.append({
+            'i': i, 'd': str(d.date()),
+            'o': round(float(r.Open), 4), 'h': round(float(r.High), 4),
+            'l': round(float(r.Low), 4),  'c': round(float(r.Close), 4),
+            'rv': rv,
+            'col': ('#26a69a' if up else '#ef5350'),
+        })
+    if not candles:
+        return None
+
+    return {
+        'ticker': ticker_full,
+        'desc': ticker_full, 'sector': '',
+        'candles': candles,
+        'ema10': _arr(ema10), 'ema20': _arr(ema20),
+        'sma50': _arr(sma50), 'sma200': _arr(sma200),
+        'rsm': [None] * len(df), 'rvol': [round(float(v), 2) for v in rvol],
+        'rvol_min': rvol_min, 'rsm_min': 80,
+        'last_close': candles[-1]['c'],
+        'hz_fast': [], 'hz_slow': [], 'tl_fast': [], 'tl_slow': [],
+        'signals': [], 'trades': [],
+        'partial': True,   # flag: candles+MAs only, no signals/levels
+    }
+
+
+# ── GET /api/chart/{ticker} ───────────────────────────────────────────────────
+@router.get('/chart/{ticker}')
+def get_chart(ticker: str, period: str = Query(default='2y')):
+    """Return the full get_chart_data() dict for one ticker.
+
+    Stored signal/watchlist tickers come from the ChartData table (with
+    breakout signals + trade markers); any other ticker is rebuilt on the fly
+    as candles + moving averages only.
+    """
+    from app.storage.state import load_chart
+    tk = _norm_full(ticker)
+    stored = load_chart(tk)
+    if stored:
+        return stored
+    rebuilt = _rebuild_chart_basic(tk, period=period)
+    if rebuilt:
+        return rebuilt
+    return {'ticker': ticker, 'candles': [], 'signals': [], 'trades': [], 'found': False}

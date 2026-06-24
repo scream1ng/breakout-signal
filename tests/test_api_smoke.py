@@ -77,13 +77,19 @@ def test_api_smoke_endpoints():
         r = client.get('/api/portfolio')
         assert r.status_code == 200
         body = r.json()
-        assert 'message' in body
+        # paper-trading stub removed — endpoint now returns a real portfolio
+        assert 'summary' in body or 'message' in body
 
         r = client.get('/api/scan/latest')
         assert r.status_code == 200
 
         r = client.get('/api/backtest')
         assert r.status_code == 200
+
+        r = client.get('/api/chart/DELTA')
+        assert r.status_code == 200
+        body = r.json()
+        assert 'candles' in body   # full dict, partial rebuild, or empty fallback
 
         r = client.get('/api/watchlist/detail')
         assert r.status_code == 200

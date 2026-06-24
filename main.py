@@ -40,10 +40,9 @@ from app.core.rsm                import calc_rsm_series
 from app.core.scanner            import fetch_tv_stocks
 from app.core.entry              import detect_pivots
 from app.core.exit               import simulate
-from app.core.portfolio          import simulate_portfolio
 from app.core.watchlist          import build_pending_info, merge_pending_levels
 from output.chart_interactive import get_chart_data
-from output.chart_combined    import generate_combined_html
+from output.chart_combined    import generate_view_html
 
 
 # ── Persist EOD scan results so the web API can serve them ───────────────────
@@ -688,24 +687,18 @@ def main():
             r = process_ticker(stock, bench)
             if r is None:
                 sys.exit(f'  Could not load {ticker}')
-            path = generate_combined_html([r['chart_data']], [r], WEB_DIR, DATE_STR,
-                                          filename=f'{ticker.replace(".","_")}.html')
+            path = generate_view_html(r['chart_data'], WEB_DIR,
+                                      fname=f'{ticker.replace(".","_")}.html')
             webbrowser.open(f'file://{os.path.abspath(path)}')
         else:
-            index_path = os.path.join(WEB_DIR, 'chart.html')
-            if os.path.exists(index_path):
-                mtime = datetime.fromtimestamp(os.path.getmtime(index_path))
-                if mtime.date() == datetime.today().date():
-                    print(f'  Using chart from today ({mtime.strftime("%H:%M")})')
-                    webbrowser.open(f'file://{os.path.abspath(index_path)}')
-                    return
             print('  Generating chart...')
             results, _ = run_full_scan(bench)
             regime_results = [r for r in results if r.get('in_regime')]
-            stocks_data    = [r['chart_data'] for r in regime_results if r.get('chart_data')]
-            portfolio_data = simulate_portfolio(regime_results, CFG)
-            path = generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                                          filename='chart.html', portfolio=portfolio_data)
+            pick = (next((r for r in regime_results if r.get('today_signal') and r.get('chart_data')), None)
+                    or next((r for r in regime_results if r.get('chart_data')), None))
+            if not pick:
+                sys.exit('  No chart data to view')
+            path = generate_view_html(pick['chart_data'], WEB_DIR, fname='chart.html')
             webbrowser.open(f'file://{os.path.abspath(path)}')
         return
 
@@ -760,22 +753,23 @@ def main():
     except Exception as _e:
         print(f'  [warn] Watchlist DB save skipped: {_e}')
 
-    # Generate/update chart
+    # ── Persist per-ticker chart payloads (signal + watchlist only) ───────
+    # Each is a small ChartData row keyed by ticker — served on demand by
+    # /api/chart/{ticker}. Replaces the old multi-MB 'chart_html' DB blob.
+    # Tickers outside this set are rebuilt (candles + MAs) on the fly.
     regime_results = [r for r in results if r.get('in_regime')]
-    stocks_data    = [r['chart_data'] for r in regime_results if r.get('chart_data')]
-    if stocks_data:
-        portfolio_data = simulate_portfolio(regime_results, CFG)
-        generate_combined_html(stocks_data, regime_results, WEB_DIR, DATE_STR,
-                               filename='chart.html', portfolio=portfolio_data)
-        print(f'  Chart updated → python main.py --view\n')
-        # Persist chart so it survives Railway's ephemeral filesystem — a
-        # redeploy wipes the gitignored frontend/chart.html, and /chart would
-        # otherwise show the "no chart yet" placeholder until the next EOD scan.
+    chart_targets  = [r for r in regime_results
+                      if r.get('chart_data') and (r.get('today_signal') or r.get('pending'))]
+    if chart_targets:
         try:
-            from app.storage.state import save_state
-            with open(os.path.join(WEB_DIR, 'chart.html'), encoding='utf-8') as _cf:
-                save_state('chart_html', {'date': DATE_STR.replace('_', '-'), 'html': _cf.read()})
-            print('  Chart persisted → DB')
+            from app.storage.state import save_chart, prune_charts
+            written = []
+            for r in chart_targets:
+                tk = r['chart_data'].get('ticker') or r['ticker']
+                if save_chart(tk, DATE_STR.replace('_', '-'), r['chart_data']):
+                    written.append(tk)
+            prune_charts(written)
+            print(f'  Chart data persisted → DB ({len(written)} tickers)\n')
         except Exception as _e:
             print(f'  [warn] Chart DB persist skipped: {_e}')
 

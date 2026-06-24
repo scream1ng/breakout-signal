@@ -1,5 +1,5 @@
 /* bs-views.jsx — all tab view components. Data passed as props; helpers from window.BS. */
-const { fmt0, fmt1, fmt2, fmtDatetime, kindLabel, tickerText, tickerFull, CC } = window.BS;
+const { fmt0, fmt1, fmt2, fmtDatetime, kindLabel, tickerText, CC } = window.BS;
 
 const RVolCell = ({ v }) => v != null ? <span className={v >= 2 ? 'g' : 'r'}>{fmt1(v)}×</span> : <span className="dm">—</span>;
 const RsmCell  = ({ v }) => v != null ? <span className={v >= 80 ? 'g' : 'r'}>{fmt0(v)}</span> : <span className="dm">—</span>;
@@ -608,30 +608,10 @@ function PortfolioView({ openChart, portfolio }) {
 }
 
 /* ═══════════════════════ CHART ═══════════════════════ */
+/* Native lightweight-charts panel (window.ChartPanel from bt-chart.jsx),
+ * replacing the old /chart iframe + postMessage. */
 function ChartView({ ticker }) {
-  const iframeRef = React.useRef(null);
-  const loadedRef = React.useRef(false);
-  const tkFull = ticker ? tickerFull(ticker) : null;
-
-  React.useEffect(() => {
-    if (!tkFull || !iframeRef.current || !loadedRef.current) return;
-    try {
-      iframeRef.current.contentWindow.postMessage({ type: 'goto', ticker: tkFull }, '*');
-    } catch {}
-  }, [tkFull]);
-
-  const src = tkFull ? `/chart?ticker=${encodeURIComponent(tkFull)}` : '/chart';
-
-  return (
-    <div className="chart-wrap">
-      <iframe
-        ref={iframeRef}
-        src={src}
-        style={{ flex: 1, width: '100%', border: 'none', display: 'block' }}
-        onLoad={() => { loadedRef.current = true; }}
-      />
-    </div>
-  );
+  return <window.ChartPanel ticker={ticker} />;
 }
 
 /* ═══════════════════════ RUN DETAIL MODAL ═══════════════════════ */

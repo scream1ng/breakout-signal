@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chart Refactor — Per-Ticker JSON API + Native React lightweight-charts</title>
+<style>
+:root {
+  --green: #22c55e; --red: #ef4444; --yellow: #f59e0b; --blue: #60a5fa;
+  --purple: #a78bfa; --orange: #fb923c;
+  --bg: #0f172a; --surface: #1e293b; --surface2: #0f172a;
+  --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); max-width:1100px; margin:0 auto; padding:2rem; line-height:1.6; }
+a { color:var(--blue); }
+.plan-header { border-left:4px solid var(--blue); padding:1rem 1.5rem; background:var(--surface); border-radius:0 8px 8px 0; margin-bottom:2.5rem; }
+.plan-header h1 { font-size:1.5rem; margin-bottom:0.75rem; }
+.meta { display:flex; flex-wrap:wrap; gap:1.25rem; color:var(--muted); font-size:0.85rem; }
+.badge { display:inline-block; padding:0.2rem 0.65rem; border-radius:999px; font-size:0.75rem; font-weight:600; }
+.badge-low { background:#14532d; color:#86efac; }
+.badge-med { background:#78350f; color:#fcd34d; }
+.badge-high { background:#7f1d1d; color:#fca5a5; }
+.badge-planned { background:#1e3a5f; color:#93c5fd; }
+.badge-done { background:#14532d; color:#86efac; }
+section { margin:2.5rem 0; }
+h2 { font-size:0.8rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); border-bottom:1px solid var(--border); padding-bottom:0.6rem; margin-bottom:1.5rem; }
+
+/* ── Section 1 — Flowchart ── */
+.flowchart { display:flex; flex-direction:column; align-items:center; gap:0; }
+.flow-layer { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem 1.25rem; position:relative; }
+.flow-layer-label { font-size:0.7rem; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin-bottom:0.75rem; font-weight:600; }
+.flow-boxes { display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; }
+.flow-box { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; padding:0.45rem 0.85rem; border-radius:6px; font-size:0.8rem; font-weight:600; min-width:5rem; text-align:center; border:2px solid transparent; }
+.flow-box.added    { background:rgba(34,197,94,0.15);  border-color:var(--green);  color:var(--green); }
+.flow-box.removed  { background:rgba(239,68,68,0.1);   border-color:var(--red);    color:var(--red);   opacity:0.6; text-decoration:line-through; }
+.flow-box.changed  { background:rgba(245,158,11,0.12); border-color:var(--yellow); color:var(--yellow); }
+.flow-box.unchanged{ background:var(--surface2); border-color:var(--border); color:var(--muted); }
+.flow-box.trigger  { background:rgba(96,165,250,0.15); border-color:var(--blue);   color:var(--blue); }
+.flow-box sub { font-size:0.65rem; font-weight:400; opacity:0.8; margin-top:0.15rem; }
+.flow-connector { display:flex; align-items:center; justify-content:center; gap:0.75rem; width:100%; padding:0.4rem 0; }
+.flow-connector-line { flex:1; height:1px; background:var(--border); max-width:6rem; }
+.flow-connector-label { font-size:0.72rem; color:var(--muted); white-space:nowrap; }
+.flow-connector-arrow { color:var(--blue); font-size:1.1rem; line-height:1; }
+.flow-legend { display:flex; gap:1.25rem; margin-top:1rem; font-size:0.75rem; color:var(--muted); flex-wrap:wrap; }
+.flow-legend-item { display:flex; align-items:center; gap:0.4rem; }
+.flow-legend-dot { width:8px; height:8px; border-radius:2px; }
+
+/* ── Section 2 — Before/After Table ── */
+.ba-table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+.ba-table th { padding:0.65rem 1rem; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); border-bottom:2px solid var(--border); }
+.ba-table th.col-before { border-bottom-color:var(--red); }
+.ba-table th.col-after  { border-bottom-color:var(--green); }
+.ba-table th.col-benefit{ border-bottom-color:var(--blue); }
+.ba-table th.col-risk   { border-bottom-color:var(--yellow); }
+.ba-table td { padding:0.7rem 1rem; vertical-align:top; border-bottom:1px solid var(--border); line-height:1.5; }
+.ba-table tr:last-child td { border-bottom:none; }
+.ba-table tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
+.ba-table td.col-before { color:var(--muted); }
+.ba-table td.col-after  { color:var(--green); }
+.ba-table td.col-benefit{ color:var(--blue); }
+.ba-table td.col-risk   { color:var(--yellow); }
+.ba-table td.col-risk .mitigation { font-size:0.76rem; color:var(--muted); margin-top:0.3rem; }
+.ba-table td.col-risk .mitigation::before { content:"↳ "; }
+
+/* ── Section 3 — Steps ── */
+.steps { display:flex; flex-direction:column; gap:0.75rem; }
+.step { display:flex; gap:1rem; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem; }
+.step-num { width:1.75rem; height:1.75rem; min-width:1.75rem; background:var(--blue); color:#0f172a; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700; }
+.step-body { flex:1; min-width:0; }
+.step-body h4 { font-size:0.9rem; margin-bottom:0.35rem; }
+.step-desc { font-size:0.82rem; color:var(--muted); margin-bottom:0.6rem; }
+.step-files { display:flex; flex-wrap:wrap; gap:0.3rem; margin-bottom:0.5rem; }
+.file-tag { font-family:monospace; font-size:0.72rem; background:var(--surface2); padding:0.15rem 0.5rem; border-radius:4px; color:var(--blue); }
+.step-meta { display:flex; gap:1rem; font-size:0.75rem; color:var(--muted); }
+.step.done { opacity:0.6; }
+.step.done .step-num { background:var(--green); }
+
+/* ── Section 4 & 5 — Checklists ── */
+.checklist { list-style:none; padding:0; display:flex; flex-direction:column; gap:0.4rem; }
+.checklist li { padding:0.55rem 0.75rem; background:var(--surface); border-radius:6px; font-size:0.85rem; display:flex; align-items:flex-start; gap:0.6rem; }
+.checklist li::before { content:"☐"; color:var(--blue); font-size:1rem; line-height:1.2; flex-shrink:0; }
+.checklist li.done::before { content:"☑"; color:var(--green); }
+
+/* ── Section 5 — Rollback ── */
+.rollback { background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--yellow); border-radius:0 8px 8px 0; padding:1rem 1.25rem; font-size:0.85rem; }
+.rollback h4 { font-size:0.8rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--yellow); margin-bottom:0.5rem; }
+.rollback p { margin:0.25rem 0; }
+.rollback code { font-family:monospace; background:var(--surface2); padding:0.1rem 0.4rem; border-radius:4px; color:var(--blue); }
+
+/* ── Impl note ── */
+.impl-note { background:rgba(96,165,250,0.08); border:1px solid rgba(96,165,250,0.2); border-radius:8px; padding:1rem; font-size:0.82rem; color:var(--muted); margin-bottom:1rem; }
+.impl-note strong { color:var(--blue); }
+</style>
+</head>
+<body>
+
+<div class="plan-header">
+  <h1>📋 Chart Refactor — Per-Ticker JSON API + Native React lightweight-charts</h1>
+  <div class="meta">
+    <span>📅 2026-06-24</span>
+    <span>📁 breakout-signal</span>
+    <span>⏱️ Effort: <strong>~1 day</strong></span>
+    <span>Risk: <span class="badge badge-med">MEDIUM RISK</span></span>
+    <span>Status: <span class="badge badge-planned" id="plan-status">PLANNED</span></span>
+  </div>
+</div>
+
+<div class="impl-note" style="margin-bottom:2rem">
+  <strong>Scope:</strong> chart <em>data + render</em> refactor only. The wider "Breakout Terminal" redesign
+  (slim nav rail, 4 tabs, FAQ drawer, new color tokens) is a separate plan. This one swaps the
+  monolithic generated <code>chart.html</code> + Postgres mega-blob for a small per-ticker JSON store and a
+  native React lightweight-charts panel. <strong>The data-builder <code>get_chart_data()</code> stays as-is.</strong>
+  <br><br>
+  <strong>Note:</strong> <code>GET /api/chart/{ticker}</code> already exists in <code>scan.py</code> but returns only bare
+  OHLCV (recomputed, no EMA/SMA/signals/markers). This plan <em>replaces its body</em> to serve the rich dict.
+</div>
+
+<!-- ═══════════════════════════ SECTION 1 ═══════════════════════════ -->
+<section id="s1">
+  <h2>🗺️ Section 1 — Architecture &amp; Flow</h2>
+  <div class="flowchart">
+
+    <div class="flow-layer">
+      <div class="flow-layer-label">— Trigger —</div>
+      <div class="flow-boxes">
+        <div class="flow-box changed">main.py EOD scan<sub>writes per-ticker rows</sub></div>
+        <div class="flow-box trigger">User clicks ticker<sub>SPA Chart tab</sub></div>
+        <div class="flow-box trigger">main.py --view<sub>local CLI</sub></div>
+      </div>
+    </div>
+
+    <div class="flow-connector">
+      <div class="flow-connector-line"></div><div class="flow-connector-arrow">↓</div>
+      <div class="flow-connector-label">builds per-stock dict</div><div class="flow-connector-line"></div>
+    </div>
+
+    <div class="flow-layer">
+      <div class="flow-layer-label">— Data build (Python) —</div>
+      <div class="flow-boxes">
+        <div class="flow-box unchanged">chart_interactive.get_chart_data()<sub>candles/ema/sma/signals/trades</sub></div>
+        <div class="flow-box removed">chart_combined.generate_combined_html()<sub>987-line monolith</sub></div>
+        <div class="flow-box removed">chart_interactive.draw_interactive_chart()<sub>dead canvas drawer</sub></div>
+      </div>
+    </div>
+
+    <div class="flow-connector">
+      <div class="flow-connector-line"></div><div class="flow-connector-arrow">↓</div>
+      <div class="flow-connector-label">persist small JSON / ticker</div><div class="flow-connector-line"></div>
+    </div>
+
+    <div class="flow-layer">
+      <div class="flow-layer-label">— Storage (Postgres → SQLite fallback) —</div>
+      <div class="flow-boxes">
+        <div class="flow-box added">ChartData table<sub>1 row/ticker, signal+watchlist</sub></div>
+        <div class="flow-box removed">DailyState 'chart_html'<sub>multi-MB blob</sub></div>
+        <div class="flow-box unchanged">ScanSnapshot<sub>per-date</sub></div>
+        <div class="flow-box unchanged">disk OHLCV cache<sub>fallback source</sub></div>
+      </div>
+    </div>
+
+    <div class="flow-connector">
+      <div class="flow-connector-line"></div><div class="flow-connector-arrow">↑</div>
+      <div class="flow-connector-label">GET /api/chart/{ticker}</div><div class="flow-connector-line"></div>
+    </div>
+
+    <div class="flow-layer">
+      <div class="flow-layer-label">— API (FastAPI) —</div>
+      <div class="flow-boxes">
+        <div class="flow-box changed">scan.py /api/chart/{ticker}<sub>rich dict, store→rebuild fallback</sub></div>
+        <div class="flow-box removed">main_app.py /chart DB-restore<sub>blob fallback branch</sub></div>
+      </div>
+    </div>
+
+    <div class="flow-connector">
+      <div class="flow-connector-line"></div><div class="flow-connector-arrow">↓</div>
+      <div class="flow-connector-label">fetch JSON (KB)</div><div class="flow-connector-line"></div>
+    </div>
+
+    <div class="flow-layer">
+      <div class="flow-layer-label">— Frontend (React SPA) —</div>
+      <div class="flow-boxes">
+        <div class="flow-box added">bt-chart.jsx ChartPanel<sub>React wrapper</sub></div>
+        <div class="flow-box added">lwc-render.js<sub>shared vanilla renderer</sub></div>
+        <div class="flow-box changed">bs-views.jsx ChartView<sub>iframe → panel</sub></div>
+        <div class="flow-box changed">index.html<sub>+lightweight-charts +scripts</sub></div>
+      </div>
+    </div>
+
+  </div>
+  <div class="flow-legend">
+    <span class="flow-legend-item"><span class="flow-legend-dot" style="background:var(--blue)"></span> Trigger</span>
+    <span class="flow-legend-item"><span class="flow-legend-dot" style="background:var(--green)"></span> Added</span>
+    <span class="flow-legend-item"><span class="flow-legend-dot" style="background:var(--yellow)"></span> Modified</span>
+    <span class="flow-legend-item"><span class="flow-legend-dot" style="background:var(--red)"></span> Removed</span>
+    <span class="flow-legend-item"><span class="flow-legend-dot" style="background:var(--border)"></span> Unchanged</span>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SECTION 2 ═══════════════════════════ -->
+<section id="s2">
+  <h2>⚖️ Section 2 — Before / After / Benefit / Risk</h2>
+  <table class="ba-table">
+    <thead>
+      <tr>
+        <th class="col-before">Before</th>
+        <th class="col-after">After</th>
+        <th class="col-benefit">Benefit</th>
+        <th class="col-risk">Risk &amp; Mitigation</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="col-before">Whole multi-MB chart.html stored as one <code>DailyState 'chart_html'</code> row each EOD.</td>
+        <td class="col-after">Small per-ticker JSON in new <code>ChartData</code> table — only signal + watchlist tickers (tens).</td>
+        <td class="col-benefit">Postgres footprint cut ~100×; redeploy still restores charts.</td>
+        <td class="col-risk">Stale ticker rows linger after they leave the watchlist.
+          <div class="mitigation">Upsert by ticker PK + prune rows not in current scan set; on-demand fallback covers any miss.</div></td>
+      </tr>
+      <tr>
+        <td class="col-before">All ~600 stocks (each 250–500 candles) inlined into one HTML, though one shows at a time.</td>
+        <td class="col-after"><code>GET /api/chart/{ticker}</code> returns exactly one stock's dict as JSON.</td>
+        <td class="col-benefit">Payload is KB not MB; loads on demand; no upfront 600-stock bundle.</td>
+        <td class="col-risk">Requested ticker has no stored row (e.g. clicked from Backtest tab).
+          <div class="mitigation">Fallback: rebuild via <code>get_chart_data()</code> from cached OHLCV on the fly.</div></td>
+      </tr>
+      <tr>
+        <td class="col-before">~700 lines of chart JS embedded in a Python f-string with <code>{{ }}</code> escaping.</td>
+        <td class="col-after">Vanilla <code>lwc-render.js</code> + thin React <code>ChartPanel</code>; no JS-in-Python.</td>
+        <td class="col-benefit">Lintable, syntax-highlighted, debuggable; single render path.</td>
+        <td class="col-risk">Render parity gaps (markers, level lines, MA colors) vs current output.
+          <div class="mitigation">Port <code>renderChart()</code> logic 1:1 from chart_combined.py; visual diff against current chart.</div></td>
+      </tr>
+      <tr>
+        <td class="col-before">Chart is an <code>&lt;iframe src="/chart"&gt;</code>; navigation via cross-frame postMessage 'goto'.</td>
+        <td class="col-after">React state drives the panel directly; same document, no iframe.</td>
+        <td class="col-benefit">No postMessage hack, no duplicate chrome, simpler data flow.</td>
+        <td class="col-risk">lightweight-charts instance leak on rapid ticker switches.
+          <div class="mitigation">Destroy chart in cleanup on unmount + before each re-render (mirror existing _destroyChart).</div></td>
+      </tr>
+      <tr>
+        <td class="col-before"><code>main.py --view</code> opens the full combined monolith locally.</td>
+        <td class="col-after">Slim single-ticker HTML that loads <code>lwc-render.js</code> + inlines one stock's dict.</td>
+        <td class="col-benefit">Tiny standalone file; reuses the same renderer as the SPA.</td>
+        <td class="col-risk">--view workflow regresses for local debugging.
+          <div class="mitigation">Keep a small generator function; smoke-test <code>python main.py --view --ticker DELTA</code>.</div></td>
+      </tr>
+      <tr>
+        <td class="col-before">Two chart engines: chart_combined (LWC) + chart_interactive canvas drawer.</td>
+        <td class="col-after">One render path; dead canvas drawer + monolith generator removed.</td>
+        <td class="col-benefit">~1800 LOC deleted; single source of truth for rendering.</td>
+        <td class="col-risk">A hidden caller still imports the removed functions.
+          <div class="mitigation">grep for <code>generate_combined_html</code> / <code>draw_interactive_chart</code> before delete; remove only if unreferenced.</div></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════════════════ SECTION 3 ═══════════════════════════ -->
+<section id="s3">
+  <h2>🤖 Section 3 — Implementation Plan (AI)</h2>
+  <div class="impl-note">
+    Run <strong>/implement-plan</strong> to execute these steps automatically.
+    Each step is atomic — verify before proceeding to the next.
+    <br><strong>Build backend first (1–4), confirm the API returns a rich dict, then frontend (5–8), then cleanup (9–12).</strong>
+  </div>
+  <div class="steps" id="impl-steps">
+
+    <div class="step" data-step="1" data-files="app/storage/models.py" data-action="edit" data-effort="S">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>Add ChartData model</h4>
+        <p class="step-desc">In app/storage/models.py add <code>class ChartData(Base)</code>, table <code>chart_data</code>:
+          <code>ticker = Column(String(20), primary_key=True)</code> (normalized, e.g. DELTA.BK),
+          <code>scan_date = Column(String(10), index=True)</code>,
+          <code>data_json = Column(Text, nullable=False)</code>,
+          <code>updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))</code>.
+          No <code>to_dict</code> needed. Table auto-creates via existing <code>Base.metadata.create_all</code> in init_db — no migration tool.</p>
+        <div class="step-files"><span class="file-tag">app/storage/models.py</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: S</span><span>⚠️ schema change (additive)</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="2" data-files="app/storage/state.py" data-action="edit" data-effort="S">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>Add chart-store helpers</h4>
+        <p class="step-desc">In app/storage/state.py (mirror existing load_state/save_state pattern, same try/except-DB-unavailable guard) add:
+          <code>save_chart(ticker, scan_date, data)</code> — upsert ChartData by ticker PK;
+          <code>load_chart(ticker)</code> — return parsed <code>data_json</code> dict or None;
+          <code>prune_charts(keep_tickers)</code> — delete ChartData rows whose ticker not in the set.
+          All silently no-op when DB unavailable (return None/False) so local dev without DATABASE_URL still works.</p>
+        <div class="step-files"><span class="file-tag">app/storage/state.py</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: S</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="3" data-files="main.py" data-action="edit" data-effort="M">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>EOD scan: write per-ticker rows, drop chart_html blob</h4>
+        <p class="step-desc">In main.py replace the chart-persist block (~lines 763–780). Remove <code>generate_combined_html(...)</code> for the
+          scheduled path and the <code>save_state('chart_html', ...)</code> persist. Instead iterate <code>regime_results</code>; for each r where
+          <code>r.get('today_signal') or r.get('pending')</code> and <code>r.get('chart_data')</code>, call
+          <code>save_chart(norm_ticker, DATE_STR, r['chart_data'])</code>. After the loop call
+          <code>prune_charts(set_of_written_tickers)</code>. Keep watchlist.json + ScanSnapshot logic untouched.</p>
+        <div class="step-files"><span class="file-tag">main.py</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: M</span><span>⚠️ stable code</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="4" data-files="app/api/scan.py" data-action="edit" data-effort="M">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h4>Rewrite GET /api/chart/{ticker} to serve the rich dict</h4>
+        <p class="step-desc">Replace the existing bare-OHLCV body of <code>get_chart_ohlcv</code>. New logic:
+          (1) normalize ticker (strip SET:/.BK, re-add .BK);
+          (2) <code>load_chart(ticker)</code> from ChartData → return it if present;
+          (3) fallback: rebuild on the fly — load OHLCV from cache, compute indicators, call <code>get_chart_data()</code>, return that (do not persist).
+          Return <code>{ticker, found, data}</code> or the dict directly to match what the frontend expects. Keep the route path unchanged so no router edits needed.</p>
+        <div class="step-files"><span class="file-tag">app/api/scan.py</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: M</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="5" data-files="frontend/static/lwc-render.js" data-action="create" data-effort="L">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h4>Create shared vanilla renderer</h4>
+        <p class="step-desc">New frontend/static/lwc-render.js exposing <code>window.renderLwcChart(container, D)</code> and
+          <code>window.destroyLwcChart()</code>, ported 1:1 from chart_combined.py <code>renderChart()</code>: candlestick series,
+          EMA10 (#6366f1) / EMA20 (#f59e0b dashed) / SMA50 (#ef4444) line series, RVOL volume histogram + threshold,
+          hz/tl segmented level lines, buy markers (signals arrowUp, color by criteria Prime/RVOL/RSM/STR/SMA50),
+          sell markers (trades arrowDown TP1/TP2/MA10/SL), 1-year default visible range, ResizeObserver. Return a handle so
+          callers can destroy it. Plain JS (no JSX) so it is reusable by both the SPA and the --view standalone.</p>
+        <div class="step-files"><span class="file-tag">frontend/static/lwc-render.js</span></div>
+        <div class="step-meta"><span>Action: create</span><span>Effort: L</span><span>port carefully — parity critical</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="6" data-files="frontend/static/bt-chart.jsx" data-action="create" data-effort="M">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <h4>Create React ChartPanel</h4>
+        <p class="step-desc">New frontend/static/bt-chart.jsx exporting <code>window.ChartPanel</code>. Props: <code>{ticker}</code>.
+          On ticker change: <code>fetch('/api/chart/'+tickerFull)</code> → on success call <code>window.renderLwcChart(ref, data)</code>;
+          cleanup calls <code>destroyLwcChart()</code> on unmount and before re-render. Render header (symbol, last close, % vs level),
+          MA legend, and the chart container div. Loading + empty states. No iframe.</p>
+        <div class="step-files"><span class="file-tag">frontend/static/bt-chart.jsx</span></div>
+        <div class="step-meta"><span>Action: create</span><span>Effort: M</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="7" data-files="frontend/index.html" data-action="edit" data-effort="S">
+      <div class="step-num">7</div>
+      <div class="step-body">
+        <h4>Wire scripts into index.html</h4>
+        <p class="step-desc">Add the lightweight-charts standalone production script
+          (<code>https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js</code>),
+          then <code>&lt;script src="/static/lwc-render.js"&gt;</code>, then <code>&lt;script type="text/babel" src="/static/bt-chart.jsx"&gt;</code>
+          before bs-app.jsx. (Terminal redesign chrome/CSS is out of scope for this plan.)</p>
+        <div class="step-files"><span class="file-tag">frontend/index.html</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: S</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="8" data-files="frontend/static/bs-views.jsx" data-action="edit" data-effort="S">
+      <div class="step-num">8</div>
+      <div class="step-body">
+        <h4>Replace iframe ChartView with ChartPanel</h4>
+        <p class="step-desc">In bs-views.jsx, swap the <code>ChartView</code> body: drop the <code>&lt;iframe&gt;</code> + postMessage useEffect,
+          render <code>&lt;window.ChartPanel ticker={ticker} /&gt;</code> instead. The existing <code>openChart(item)</code> flow in bs-app.jsx
+          (sets chartTicker, switches tab) stays unchanged — it now feeds the panel directly.</p>
+        <div class="step-files"><span class="file-tag">frontend/static/bs-views.jsx</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: S</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="9" data-files="main_app.py" data-action="edit" data-effort="S">
+      <div class="step-num">9</div>
+      <div class="step-body">
+        <h4>Simplify /chart route</h4>
+        <p class="step-desc">In main_app.py remove the <code>load_state('chart_html')</code> DB-restore branch in <code>serve_chart</code>.
+          Since the SPA no longer iframes /chart, either delete the route or keep it returning the slim standalone for direct links.
+          Decision: keep route but have it 302-redirect to the SPA Chart tab (or return the placeholder) — no more blob.</p>
+        <div class="step-files"><span class="file-tag">main_app.py</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: S</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="10" data-files="main.py,output/chart_combined.py" data-action="edit" data-effort="M">
+      <div class="step-num">10</div>
+      <div class="step-body">
+        <h4>Rework --view to slim single-ticker HTML</h4>
+        <p class="step-desc">Replace the two <code>generate_combined_html(...)</code> calls in main.py --view (~lines 691, 707) with a small new
+          <code>generate_view_html(chart_data, charts_dir, fname)</code> (put in output/chart_combined.py or a new output/chart_view.py):
+          emits a minimal HTML that loads lightweight-charts + lwc-render.js (or inlines the render fn) and inlines the single stock dict,
+          then opens it in the browser. The no-ticker --view branch can open one signal stock or the SPA URL.</p>
+        <div class="step-files"><span class="file-tag">main.py</span><span class="file-tag">output/chart_combined.py</span></div>
+        <div class="step-meta"><span>Action: edit</span><span>Effort: M</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="11" data-files="output/chart_combined.py,output/chart_interactive.py" data-action="delete" data-effort="S">
+      <div class="step-num">11</div>
+      <div class="step-body">
+        <h4>Retire dead chart code (grep-gated)</h4>
+        <p class="step-desc">Run <code>grep -rn "generate_combined_html\|draw_interactive_chart" .</code>. Once only the slim --view path remains:
+          delete <code>generate_combined_html</code> (the 987-line monolith) and <code>draw_interactive_chart</code> (canvas drawer) plus their
+          now-orphaned helpers. <strong>Keep</strong> <code>get_chart_data</code> / <code>_build_chart_data</code> / <code>ma_series</code>. Remove dead imports.</p>
+        <div class="step-files"><span class="file-tag">output/chart_combined.py</span><span class="file-tag">output/chart_interactive.py</span></div>
+        <div class="step-meta"><span>Action: delete</span><span>Effort: S</span><span>verify unreferenced first</span></div>
+      </div>
+    </div>
+
+    <div class="step" data-step="12" data-files="tests/test_api_smoke.py" data-action="run" data-effort="S">
+      <div class="step-num">12</div>
+      <div class="step-body">
+        <h4>Preflight checks</h4>
+        <p class="step-desc">Run <code>py -m compileall app main_app.py output</code> and <code>py -m pytest -q tests/test_api_smoke.py</code>.
+          Add/extend a smoke test asserting <code>GET /api/chart/&lt;ticker&gt;</code> returns 200 with a <code>candles</code> key. Fix any failures before commit.</p>
+        <div class="step-files"><span class="file-tag">tests/test_api_smoke.py</span></div>
+        <div class="step-meta"><span>Action: run</span><span>Effort: S</span></div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════ SECTION 4 ═══════════════════════════ -->
+<section id="s4">
+  <h2>🧪 Section 4 — Testing Checklist</h2>
+  <ul class="checklist" id="test-checklist">
+    <li>Run <code>py -m compileall app main_app.py output</code> — zero errors.</li>
+    <li>Run <code>py -m pytest -q tests/test_api_smoke.py</code> — all pass.</li>
+    <li>Start app; <code>GET /api/chart/DELTA</code> → JSON contains <code>candles</code>, <code>ema10</code>, <code>ema20</code>, <code>sma50</code>, <code>signals</code>, <code>trades</code>.</li>
+    <li><code>GET /api/chart/&lt;ticker-not-in-store&gt;</code> → fallback rebuild returns a populated dict (not empty).</li>
+    <li>SPA Chart tab: click a watchlist ticker → candles render with EMA10 / EMA20 / SMA50 lines visible.</li>
+    <li>Buy markers (arrowUp) appear colored by criteria; sell markers (TP1 / TP2 / MA10 / SL arrowDown) present — matches old chart.</li>
+    <li>Breakout level dashed line + entry/SL/TP price lines render on signal select.</li>
+    <li>Switch tickers rapidly → no console errors, no leaked/overlapping charts, old instance destroyed.</li>
+    <li>Click ticker from Backtest tab (no stored row) → panel still renders via fallback.</li>
+    <li><code>python main.py --view --ticker DELTA</code> → slim chart opens in browser and renders.</li>
+    <li>Run a local EOD scan → <code>chart_data</code> rows written only for signal + watchlist tickers; <strong>no</strong> <code>chart_html</code> row created.</li>
+    <li>Confirm <code>prune_charts</code> removed rows for tickers that left the watchlist.</li>
+    <li>Redeploy sim: delete <code>frontend/chart.html</code>, restart → <code>/api/chart/{ticker}</code> still serves from DB.</li>
+    <li>Criteria colors on markers/badges match the existing scheme (Prime / RVOL / RSM / STR / SMA50).</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════ SECTION 5 ═══════════════════════════ -->
+<section id="s5">
+  <h2>🔄 Section 5 — Rollback Plan</h2>
+  <div class="rollback">
+    <h4>⚠️ If something breaks</h4>
+    <p>1. Revert the commit: <code>git revert HEAD</code> (changes are additive — old combined-HTML + iframe path returns intact).</p>
+    <p>2. Redeploy previous Railway build.</p>
+    <p>3. The new <code>chart_data</code> table is harmless if unused; no need to drop it. Optionally <code>DROP TABLE chart_data;</code> later.</p>
+    <p>4. No data migration was performed — the old <code>DailyState 'chart_html'</code> row is left untouched and will be re-populated by the reverted main.py on the next EOD scan.</p>
+    <p>5. If only the frontend panel is broken: temporarily restore the <code>&lt;iframe src="/chart"&gt;</code> in bs-views.jsx (backend API can stay).</p>
+  </div>
+</section>
+
+<section id="s6" style="display:none">
+  <h2>📝 Section 6 — Implementation Log</h2>
+  <div id="impl-log"></div>
+</section>
+
+</body>
+</html>
