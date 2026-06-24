@@ -10,9 +10,8 @@
  * container auto-destroys the previous chart first.
  */
 (function () {
-  const CRIT_COLOR = {
-    Prime: '#ff6ec7', RVOL: '#3b82f6', STR: '#ef4444', RSM: '#f97316', SMA50: '#f59e0b',
-  };
+  /* criteria→color: shared from window.BS when present (SPA); fallback for the standalone --view file */
+  const CRIT_FALLBACK = { Prime: '#ec4899', RVOL: '#2563eb', RSM: '#eab308', STR: '#dc2626', SMA50: '#64748b' };
 
   function destroyOn(container) {
     if (container && container._lwc) {
@@ -100,9 +99,10 @@
     (D.tl_slow || []).forEach(seg => addSegLine(seg, 'rgba(253,186,116,0.75)', 1.5, LWC.LineStyle.Solid));
 
     // ── Markers: buy (signals, arrowUp by criteria) + sell (trades, arrowDown) ──
+    const CRIT_COLOR = (window.BS && window.BS.CRIT_COLOR) || CRIT_FALLBACK;
     const markers = [];
     (D.signals || []).forEach(s => {
-      const col = CRIT_COLOR[s.filter_type] || s.col || '#ff6ec7';
+      const col = CRIT_COLOR[s.filter_type] || s.col || CRIT_FALLBACK.Prime;
       markers.push({
         time: s.date, position: 'belowBar', color: col, shape: 'arrowUp',
         text: (s.filter_type && s.filter_type !== 'Below') ? s.filter_type : '', size: 1,

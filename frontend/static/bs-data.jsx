@@ -32,6 +32,8 @@ const tickerFull = (item) => {
 };
 
 const CC = { Prime: 'P', RVOL: 'RV', RSM: 'RS', STR: 'ST', SMA50: 'S5' };
+/* single source for criteria colors — used by table tints (bs-views) and chart markers (lwc-render) */
+const CRIT_COLOR = { Prime: '#ec4899', RVOL: '#2563eb', RSM: '#eab308', STR: '#dc2626', SMA50: '#64748b' };
 
 const bkkDateIso = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
 
@@ -41,5 +43,5 @@ const isMarketOpenOrLater = () => {
 };
 
 Object.assign(window, {
-  BS: { fmt0, fmt1, fmt2, fmtDatetime, kindLabel, tickerText, tickerFull, CC, bkkDateIso, isMarketOpenOrLater }
+  BS: { fmt0, fmt1, fmt2, fmtDatetime, kindLabel, tickerText, tickerFull, CC, CRIT_COLOR, bkkDateIso, isMarketOpenOrLater }
 });

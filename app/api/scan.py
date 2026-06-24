@@ -168,15 +168,6 @@ def get_watchlist_detail():
     return {'date': data.get('date'), 'items': items, 'groups': groups, 'copy_str': copy_str}
 
 
-def _norm_full(ticker: str) -> str:
-    t = str(ticker or '').upper().replace('SET:', '').strip()
-    if not t:
-        return t
-    if t.startswith('^') or t.endswith('.BK') or t.endswith('.AX'):
-        return t
-    return t + '.BK'
-
-
 def _rebuild_chart_basic(ticker_full: str, period: str = '2y') -> dict | None:
     """Fallback chart payload — candles + EMA10/EMA20/SMA50/SMA200 only.
 
@@ -246,8 +237,8 @@ def get_chart(ticker: str, period: str = Query(default='2y')):
     breakout signals + trade markers); any other ticker is rebuilt on the fly
     as candles + moving averages only.
     """
-    from app.storage.state import load_chart
-    tk = _norm_full(ticker)
+    from app.storage.state import load_chart, _norm_ticker
+    tk = _norm_ticker(ticker)
     stored = load_chart(tk)
     if stored:
         return stored

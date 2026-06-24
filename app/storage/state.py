@@ -39,11 +39,14 @@ def _norm_ticker(t: str) -> str:
 
 
 def load_chart(ticker: str) -> dict | None:
-    """Return the stored get_chart_data() dict for *ticker*, or None."""
+    """Return the stored get_chart_data() dict for *ticker*, or None.
+
+    No init_db() here — this is the /api/chart hot path; the web process
+    creates tables once at startup (main_app lifespan).
+    """
     try:
-        from app.storage.db import SessionLocal, init_db
+        from app.storage.db import SessionLocal
         from app.storage.models import ChartData
-        init_db()
         db = SessionLocal()
         try:
             row = db.query(ChartData).filter_by(ticker=_norm_ticker(ticker)).first()
@@ -92,13 +95,11 @@ def prune_charts(keep_tickers) -> int:
         from app.storage.models import ChartData
         init_db()
         keep = {_norm_ticker(t) for t in keep_tickers}
+        if not keep:
+            return 0   # never wipe the whole table on an empty keep-set
         db = SessionLocal()
         try:
-            n = 0
-            for row in db.query(ChartData).all():
-                if row.ticker not in keep:
-                    db.delete(row)
-                    n += 1
+            n = db.query(ChartData).filter(ChartData.ticker.notin_(keep)).delete(synchronize_session=False)
             db.commit()
             return n
         finally:

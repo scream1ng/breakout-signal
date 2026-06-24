@@ -27,24 +27,22 @@ app/core/rsm.py         ← calculate RS Momentum vs ^SET.BK benchmark
 main.py (EOD)           ← rank, filter, classify (Prime/RVOL/RSM/STR/SMA50)
 intraday.py (live)      ← check watchlist every 15 min against live prices
       │
-       ├─► output/chart_combined.py  ← generate docs/index.html (interactive chart)
-       ├─► app/core/paper_trade.py   ← open/close/check positions (paper ledger)
-       └─► output/notifications.py   ← current scheduled notification path
-             ├─ Discord → intraday / fakeout / EOD alerts
-             └─ LINE    → paper-trade entry / exit / summary
+       ├─► output/chart_interactive.py ← build per-stock chart dict (candles/EMA/SMA/signals/trades)
+       │                                  → saved to ChartData table (one small row per signal/watchlist ticker)
+       └─► output/notifications.py   ← Discord alerts (intraday / fakeout / EOD)
       │
       ▼
 app/scheduler/runner.py ← APScheduler calls main.py + intraday.py on schedule
       │                    writes JobRun row to DB on every execution
       ▼
 main_app.py             ← FastAPI serves web dashboard + REST API
-      │
+      │                    GET /api/chart/{ticker} serves one stock's chart JSON on demand
       ▼
-Browser: http://localhost:8080
-  ├── /              → Dashboard tab  (scheduler status, job history)
-  ├── /portfolio     → Portfolio tab  (positions, P&L, trade history)
-  ├── /signals       → Signals tab    (today's breaks, watchlist)
-  └── /docs/         → Chart view     (generated HTML chart, unchanged)
+Browser: http://localhost:8080  (single-page React app — slim icon rail, 4 tabs + FAQ drawer)
+  ├── Chart      → chart panel (native lightweight-charts) + watchlist / alerts / fakeouts / EOD
+  ├── Portfolio  → equity KPIs, open positions, closed trades
+  ├── Backtest   → per-symbol breakout stats
+  └── Jobs       → scheduler status, manual runs, live console (merged old Tools)
 ```
 
 ---
@@ -92,25 +90,30 @@ breakout-signal/
 │   │   ├── system.py       ← GET /api/system
 │   │   ├── portfolio.py    ← GET /api/portfolio
 │   │   ├── signals.py      ← GET /api/signals
+│   │   ├── scan.py         ← GET /api/scan/latest, /api/backtest, /api/watchlist/detail, /api/chart/{ticker}
 │   │   └── trades.py       ← POST /api/trades/close
 │   │
 │   ├── storage/
-│   │   ├── models.py       ← SQLAlchemy models (JobRun)
+│   │   ├── models.py       ← SQLAlchemy models (JobRun, ScanSnapshot, ChartData, DailyState, NotificationSend)
+│   │   ├── state.py        ← DB key/value + per-ticker chart store (save_chart/load_chart/prune_charts)
 │   │   └── db.py           ← DB session (Postgres → SQLite fallback)
 │   │
 │   └── logs/               ← Structured job logs (future use)
 │
-├── frontend/               ← Web dashboard SPA
-│   ├── index.html          ← Alpine.js + Tailwind — 3 tabs
+├── frontend/               ← Web dashboard SPA (React 18 via CDN + Babel, no build step)
+│   ├── index.html          ← Terminal CSS + font/script wiring
 │   └── static/
-│       ├── app.js          ← All fetch + UI logic
-│       └── style.css       ← Custom overrides
+│       ├── bs-data.jsx     ← shared helpers (formatters, tickerText/Full, CC, CRIT_COLOR)
+│       ├── bs-app.jsx      ← app shell: topbar, slim nav rail, 4 tabs, all API/state
+│       ├── bs-views.jsx    ← views: chart workspace, portfolio, backtest, jobs, FAQ drawer
+│       ├── bt-chart.jsx    ← React chart panel (fetches /api/chart/{ticker})
+│       └── lwc-render.js   ← shared lightweight-charts renderer (also inlined by --view)
 │
-├── output/                 ← Chart generation (unchanged)
-│   ├── chart_interactive.py
-│   ├── chart_combined.py
+├── output/                 ← Chart data builder + CLI --view
+│   ├── chart_interactive.py ← get_chart_data() → per-stock dict (candles/EMA/SMA/signals/trades)
+│   ├── chart_combined.py    ← generate_view_html() — slim single-ticker standalone for `main.py --view`
 │   ├── report.py
-│   └── notifications.py    ← Legacy — Discord + LINE (still used by CLI scripts)
+│   └── notifications.py     ← Discord (used by CLI scripts)
 │
 ├── tests/
 │   ├── test_notifications.py
@@ -235,23 +238,29 @@ cp .env.example .env   # fill in your keys
 
 ## WEB DASHBOARD
 
-Open `http://localhost:8080` after starting the app.
+Open `http://localhost:8080` after starting the app. Single-page React app — slim 66px icon rail, four tabs, FAQ as a slide-out drawer.
 
-| Tab | URL | Content |
-|---|---|---|
-| **Dashboard** | `/` | Scheduler status, job cards (last run / next run / duration / error), run history table |
-| **Portfolio** | `/portfolio` | Equity summary, open positions, closed trade history |
-| **Signals** | `/signals` | Today's triggered breaks, current watchlist |
-| **Charts** | `/docs/` | Auto-generated interactive chart (legacy, same HTML as before) |
+| Tab | Content |
+|---|---|
+| **Chart** | Chart panel (native lightweight-charts: candles, EMA10/EMA20/SMA50, buy/sell markers, breakout level) + tabbed right panel: Watchlist (grouped by MA10/MA20/MA50) / Alerts / Fakeouts / EOD. Click any row to load its chart. |
+| **Portfolio** | Equity / Open P&L / Realized / Exposure KPIs, open positions, closed trades |
+| **Backtest** | Per-symbol breakout stats, criteria filter (Prime/STR/RVOL/RSM/SMA50) |
+| **Jobs** | Scheduler job cards (Run now), recent runs, live console, Discord notify test (merged old Tools) |
 
-The dashboard auto-refreshes every 60 seconds. All data comes from the REST API:
+Auto-refreshes every 60 seconds. All data comes from the REST API:
 
 | Endpoint | Returns |
 |---|---|
 | `GET /api/system` | Scheduler running, next run times, job run history |
 | `GET /api/portfolio` | Positions, equity, win rate, recent closed trades |
 | `GET /api/signals` | Watchlist + today's triggered breaks |
-| `POST /api/trades/close` | Manually close a position (paper mode only) |
+| `GET /api/scan/latest` | Latest EOD scan summary + signals |
+| `GET /api/backtest` | Per-ticker backtest rows + overall stats |
+| `GET /api/watchlist/detail` | Watchlist grouped by MA position + TradingView copy string |
+| `GET /api/chart/{ticker}` | One stock's chart JSON — stored ChartData row, else live candles+MA rebuild |
+| `POST /api/trades/close` | Manually close a position |
+
+Charts render natively in the SPA from `/api/chart/{ticker}`. The EOD scan writes one small `ChartData` row per signal/watchlist ticker (survives Railway redeploys); any other ticker is rebuilt on demand from cached OHLCV. The legacy `/chart` URL now redirects into the SPA.
 
 ---
 
