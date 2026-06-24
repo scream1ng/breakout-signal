@@ -135,11 +135,23 @@
     const ro = new ResizeObserver(() => { try { chart.timeScale().fitContent(); } catch (e) {} });
     ro.observe(container);
 
-    const handle = { chart, candle, ro, destroy: () => destroyOn(container) };
+    const lc = D.candles[D.candles.length - 1];
+    const handle = { chart, candle, ro, lastBar: { time: lc.d, open: lc.o, high: lc.h, low: lc.l, close: lc.c }, destroy: () => destroyOn(container) };
     container._lwc = handle;
     return handle;
   }
 
+  /* overlay the latest live price onto the chart's last candle (intraday breakout) */
+  function updateLwcLast(container, close) {
+    const h = container && container._lwc;
+    if (!h || !h.candle || !h.lastBar || close == null) return;
+    const b = h.lastBar;
+    try {
+      h.candle.update({ time: b.time, open: b.open, high: Math.max(b.high, close), low: Math.min(b.low, close), close });
+    } catch (e) {}
+  }
+
   window.renderLwcChart = renderLwcChart;
   window.destroyLwcChart = destroyOn;
+  window.updateLwcLast = updateLwcLast;
 })();

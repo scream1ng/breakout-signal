@@ -1,6 +1,6 @@
 /* bs-app.jsx — Terminal shell with real API integration. */
 const { Topbar, NavRail, ChartWorkspace, BacktestView, PortfolioView, JobsView, HelpDrawer, RunModal } = window;
-const { bkkDateIso, isMarketOpenOrLater } = window.BS;
+const { bkkDateIso, isMarketOpenOrLater, tickerText } = window.BS;
 
 const TABS = ['chart', 'portfolio', 'backtest', 'jobs'];
 
@@ -78,9 +78,14 @@ function App() {
   const eod = scanLatest?.signals || [];
   const jobs = React.useMemo(() => buildJobs(lastRuns, nextRuns), [lastRuns, nextRuns]);
 
-  /* default chart selection once data arrives */
-  const chartSelected = selected
-    || intraday[0] || (watchlist?.items || [])[0] || eod[0] || null;
+  /* chart selection: re-match the picked ticker against the latest live data each
+   * poll so its price stays current (drives the live last-candle overlay); fall
+   * back to the snapshot, then to the first available row. */
+  const chartSelected = React.useMemo(() => {
+    const pool = [...intraday, ...(watchlist?.items || []), ...eod];
+    const fresh = selected ? pool.find(x => tickerText(x) === tickerText(selected)) : null;
+    return fresh || selected || intraday[0] || (watchlist?.items || [])[0] || eod[0] || null;
+  }, [selected, intraday, watchlist, eod]);
 
   /* ── Helpers ─────────────────────────────────────────────── */
   const pushLog = (msg) => {

@@ -36,6 +36,15 @@ function ChartPanel({ item }) {
     return () => { if (wrapRef.current) window.destroyLwcChart(wrapRef.current); };
   }, [state.data]);   // redraw only when the payload changes, not on every status flip
 
+  /* live overlay: when the selected row's price updates (each intraday scan),
+   * push it onto the chart's last candle so you watch it cross the level */
+  const liveClose = item ? (item.close ?? null) : null;
+  React.useEffect(() => {
+    if (state.status === 'ready' && liveClose != null && wrapRef.current) {
+      window.updateLwcLast(wrapRef.current, liveClose);
+    }
+  }, [liveClose, state.status]);
+
   if (!item) {
     return (
       <div className="cc-panel cc-empty">
