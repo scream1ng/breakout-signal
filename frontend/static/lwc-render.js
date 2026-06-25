@@ -141,13 +141,26 @@
     return handle;
   }
 
-  /* overlay the latest live price onto the chart's last candle (intraday breakout) */
-  function updateLwcLast(container, close) {
+  /* TradingView-style live candle (intraday breakout).
+   * bar = { date, o, h, l, c }. If date is newer than the last stored candle,
+   * append a fresh today bar that forms live; otherwise update it in place,
+   * growing high/low across successive intraday scans. */
+  function updateLwcLast(container, bar) {
     const h = container && container._lwc;
-    if (!h || !h.candle || !h.lastBar || close == null) return;
-    const b = h.lastBar;
+    if (!h || !h.candle || !h.lastBar || !bar || bar.c == null) return;
+    const last = h.lastBar;
+    const isNewDay = bar.date && bar.date > last.time;
+    // live bar persists across scans so wicks accumulate
+    const cur = (h.liveBar && h.liveBar.time === bar.date) ? h.liveBar : null;
+    const open = isNewDay ? (cur ? cur.open : (bar.o != null ? bar.o : bar.c)) : last.open;
+    const seedHi = isNewDay ? (cur ? cur.high : -Infinity) : last.high;
+    const seedLo = isNewDay ? (cur ? cur.low  :  Infinity) : last.low;
+    const high = Math.max(seedHi, bar.h != null ? bar.h : bar.c, bar.c);
+    const low  = Math.min(seedLo, bar.l != null ? bar.l : bar.c, bar.c);
+    const time = isNewDay ? bar.date : last.time;
     try {
-      h.candle.update({ time: b.time, open: b.open, high: Math.max(b.high, close), low: Math.min(b.low, close), close });
+      h.candle.update({ time, open, high, low, close: bar.c });
+      h.liveBar = { time, open, high, low, close: bar.c };
     } catch (e) {}
   }
 

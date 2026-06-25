@@ -366,8 +366,15 @@ def run():
                 quote = market.get_quote_symbol(symbol)
                 last_price = quote.get('last') or quote.get('close') or quote.get('result', {}).get('last')
                 vol = quote.get('totalVolume') or quote.get('volume') or quote.get('result', {}).get('totalVolume')
+                o = quote.get('open') or quote.get('result', {}).get('open')
+                h = quote.get('high') or quote.get('result', {}).get('high')
+                l = quote.get('low')  or quote.get('result', {}).get('low')
                 if last_price:
-                    data[ticker] = dict(close=float(last_price), volume=float(vol))
+                    c = float(last_price)
+                    data[ticker] = dict(close=c, volume=float(vol),
+                                        open=float(o) if o else c,
+                                        high=float(h) if h else c,
+                                        low=float(l)  if l else c)
             except Exception:
                 continue
         if not data:
@@ -392,7 +399,9 @@ def run():
                     if isinstance(df.columns, pd.MultiIndex):
                         df.columns = [c[0] for c in df.columns]
                     last = df.iloc[-1]
-                    data[ticker] = dict(close=float(last['Close']), volume=float(last['Volume']))
+                    data[ticker] = dict(close=float(last['Close']), volume=float(last['Volume']),
+                                        open=float(last['Open']), high=float(last['High']),
+                                        low=float(last['Low']))
                 except Exception:
                     continue
         except Exception as e:
@@ -428,7 +437,10 @@ def run():
             _log(f'{short} → BREAK → {crit}  RVol {proj_rv:.1f}×  RSM {int(rsm)}')
             broke_tickers.append(short)
         live_data[ticker] = dict(close=round(float(d['close']), 4), rvol=proj_rv,
-                                 cur_rvol=cur_rv, proj_rvol=proj_rv, broke=broke)
+                                 cur_rvol=cur_rv, proj_rvol=proj_rv, broke=broke,
+                                 open=round(float(d.get('open', d['close'])), 4),
+                                 high=round(float(d.get('high', d['close'])), 4),
+                                 low=round(float(d.get('low',  d['close'])), 4))
 
     below = len(tickers) - len(broke_tickers) - len(no_data_tickers)
     summary_parts = [f'{below} below level']
