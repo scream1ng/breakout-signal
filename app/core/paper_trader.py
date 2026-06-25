@@ -198,7 +198,6 @@ def check_exits(open_positions, exit_data, now, cfg):
     """
     commission = cfg.get('commission', 0.0015)
     be_days = cfg.get('be_after_days', 3)
-    capital = cfg.get('capital', 100_000)
 
     still_open, newly_closed = [], []
 
@@ -264,7 +263,7 @@ def check_exits(open_positions, exit_data, now, cfg):
                 exit_date=now.strftime('%Y-%m-%d'),
                 shares_remaining=0,
                 total_pnl=exit_pnl,
-                pnl_pct=round(exit_pnl / capital * 100, 2),
+                pnl_pct=round(exit_pnl / (pos['entry_price'] * pos['shares']) * 100, 2) if pos['shares'] else 0,
                 realized_pnl=exit_pnl,
                 updated_at=now.isoformat(timespec='seconds'),
             )
@@ -284,7 +283,6 @@ def fakeout_exits(open_positions, fakeout_tickers, prices, now, cfg):
     Returns (still_open, newly_closed).
     """
     commission = cfg.get('commission', 0.0015)
-    capital = cfg.get('capital', 100_000)
     fakeout_set = set(fakeout_tickers)
     still_open, newly_closed = [], []
 
@@ -307,7 +305,7 @@ def fakeout_exits(open_positions, fakeout_tickers, prices, now, cfg):
             exit_date=now.strftime('%Y-%m-%d'),
             shares_remaining=0,
             total_pnl=exit_pnl,
-            pnl_pct=round(exit_pnl / capital * 100, 2),
+            pnl_pct=round(exit_pnl / (pos['entry_price'] * pos['shares']) * 100, 2) if pos['shares'] else 0,
             realized_pnl=exit_pnl,
             updated_at=now.isoformat(timespec='seconds'),
         )
@@ -330,10 +328,14 @@ def portfolio_summary(open_positions, closed_trades, cfg):
     realized = sum(t.get('total_pnl', 0) or 0 for t in closed_trades)
     n_closed = len(closed_trades)
     n_wins = sum(1 for t in closed_trades if (t.get('total_pnl') or 0) > 0)
+    cash = capital + realized - deployed
+    equity = capital + realized + unrealized
     return {
         'capital':        capital,
         'deployed':       round(deployed, 2),
-        'available':      round(max(0.0, capital - deployed), 2),
+        'available':      round(cash, 2),
+        'cash':           round(cash, 2),
+        'equity':         round(equity, 2),
         'realized_pnl':   round(realized, 2),
         'realized_pct':   round(realized / capital * 100, 2) if capital else 0,
         'unrealized_pnl': round(unrealized, 2),

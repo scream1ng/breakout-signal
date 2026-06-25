@@ -50,6 +50,16 @@ def _alert_key(ticker, level, kind=None):
     return f'{ticker}|{kind_part}|{float(level):.4f}'
 
 
+def _refresh_alert(alerted, key_id, proj_rv, cur_rv, close):
+    """Update live RVol on an already-fired alert record (keeps frozen fire-time proj_rvol)."""
+    for a in alerted:
+        if a.get('key') == key_id:
+            a['proj_rvol_now'] = round(proj_rv, 2)
+            a['cur_rvol_now']  = round(cur_rv, 2)
+            a['close']         = round(float(close), 4)
+            return
+
+
 def _normalize_alert_state(saved: dict, date_str: str) -> dict:
     state = {'date': date_str, 'alerted': [], 'failed': []}
     if saved.get('date') != date_str:
@@ -70,6 +80,8 @@ def _normalize_alert_state(saved: dict, date_str: str) -> dict:
                     close=item.get('close'),
                     cur_rvol=item.get('cur_rvol'),
                     proj_rvol=item.get('proj_rvol'),
+                    cur_rvol_now=item.get('cur_rvol_now'),
+                    proj_rvol_now=item.get('proj_rvol_now'),
                     rsm=item.get('rsm'),
                     stretch=item.get('stretch'),
                     key=item.get('key') or _alert_key(ticker, level, item.get('kind')),
@@ -406,6 +418,7 @@ def run():
             no_data_tickers.append(short)
             continue
         avg_vol  = w_items[0].get('avg_volume', 0) if w_items else 0
+        cur_rv   = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0.0
         proj_rv  = proj_volume(d['volume'], avg_vol, now) if avg_vol > 0 else 0.0
         rsm      = rsm_for(ticker, w_items[0]) if w_items else 0
         stretch  = w_items[0].get('stretch', 0) if w_items else 0
@@ -414,7 +427,8 @@ def run():
             crit = criteria_label(rsm, proj_rv, stretch)
             _log(f'{short} → BREAK → {crit}  RVol {proj_rv:.1f}×  RSM {int(rsm)}')
             broke_tickers.append(short)
-        live_data[ticker] = dict(close=round(float(d['close']), 4), rvol=proj_rv, broke=broke)
+        live_data[ticker] = dict(close=round(float(d['close']), 4), rvol=proj_rv,
+                                 cur_rvol=cur_rv, proj_rvol=proj_rv, broke=broke)
 
     below = len(tickers) - len(broke_tickers) - len(no_data_tickers)
     summary_parts = [f'{below} below level']
@@ -493,13 +507,15 @@ def run():
         cur_rvol = round(d['volume'] / avg_vol, 2) if avg_vol > 0 else 0
         proj_rv  = proj_volume(d['volume'], avg_vol, now)
         rsm      = rsm_for(ticker, w)
-        crit     = criteria_label(rsm, proj_rv, w.get('stretch', 0))
+        key_id   = _alert_key(ticker, level, w.get('kind'))
 
-        if crit not in ('Prime', 'RVOL', 'STR'):
+        # Already fired today → refresh live RVol on the stored record, no re-send.
+        if key_id in alerted_keys:
+            _refresh_alert(alert_state['alerted'], key_id, proj_rv, cur_rvol, d['close'])
             continue
 
-        key_id = _alert_key(ticker, level, w.get('kind'))
-        if key_id in alerted_keys:
+        crit = criteria_label(rsm, proj_rv, w.get('stretch', 0))
+        if crit not in ('Prime', 'RVOL', 'STR'):
             continue
 
         alert_state['alerted'].append(dict(
@@ -512,6 +528,8 @@ def run():
             close=round(float(d['close']), 4),
             cur_rvol=cur_rvol,
             proj_rvol=proj_rv,
+            cur_rvol_now=cur_rvol,
+            proj_rvol_now=proj_rv,
             rsm=rsm,
             stretch=w.get('stretch', 0),
             key=key_id,

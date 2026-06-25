@@ -80,7 +80,10 @@ def get_signals():
             ticker = item.get('ticker', '')
             lp = live_prices.get(ticker)
             if lp:
-                item = dict(item, close=lp['close'], rvol=lp['rvol'], broke=lp.get('broke', False))
+                item = dict(item, close=lp['close'],
+                            rvol=lp.get('rvol', lp.get('proj_rvol')),
+                            cur_rvol=lp.get('cur_rvol'), proj_rvol=lp.get('proj_rvol'),
+                            broke=lp.get('broke', False))
             merged.append(item)
         watchlist_stocks = merged
 

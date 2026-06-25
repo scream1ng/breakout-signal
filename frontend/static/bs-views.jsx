@@ -126,7 +126,7 @@ function WatchRow({ s, selected, onSelect }) {
 function SignalRow({ s, selected, onSelect, fk }) {
   const crit = s.criteria || s.filter_type;
   return <Row s={s} selected={selected} onSelect={onSelect}
-    lvl={s.level ?? s.bp ?? null} rvol={s.proj_rvol ?? s.rvol ?? null}
+    lvl={s.level ?? s.bp ?? null} rvol={s.proj_rvol_now ?? s.proj_rvol ?? s.rvol ?? null}
     badgeCrit={crit} tintCrit={!fk && HILITE[crit] ? crit : null} fk={fk} />;
 }
 
@@ -322,17 +322,17 @@ function PortfolioView({ portfolio, onSelect }) {
   const fmtDate = (iso) => { if (!iso) return '—'; try { return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); } catch { return iso; } };
 
   const invested = open.reduce((s, p) => s + (p.current_close ?? p.entry_price) * (p.shares_remaining || 0), 0);
-  const equity = (summary.available ?? 0) + invested;
-  const openPnl = summary.unrealized_pnl ?? open.reduce((s, p) => s + (p.unrealized_pnl || 0), 0);
+  const cash = summary.available ?? 0;
+  const equity = summary.equity ?? (cash + invested);
   const exposure = equity > 0 ? invested / equity * 100 : 0;
   const winners = open.filter(p => (p.unrealized_pnl ?? 0) > 0).length;
-  const closedWins = closed.filter(c => (c.pnl_pct ?? 0) > 0).length;
+  const closedWins = closed.filter(c => (c.total_pnl ?? 0) > 0).length;
 
   const SC = [
     { l: 'Equity', v: `฿${fmt0(equity)}`, c: 'var(--navy)' },
-    { l: 'Open P&L', v: `${sign(openPnl)}฿${fmt0(Math.abs(openPnl))}`, c: openPnl >= 0 ? 'var(--green)' : 'var(--red)', s: `${(summary.unrealized_pct ?? 0) >= 0 ? '+' : ''}${fmt2(summary.unrealized_pct)}%` },
-    { l: 'Realized (30d)', v: `${(summary.realized_pct ?? 0) >= 0 ? '+' : ''}${fmt2(summary.realized_pct)}%`, c: (summary.realized_pnl ?? 0) >= 0 ? 'var(--green)' : 'var(--red)', s: `${sign(summary.realized_pnl)}฿${fmt0(Math.abs(summary.realized_pnl || 0))}` },
-    { l: 'Open positions', v: fmt0(open.length), c: 'var(--navy)', s: `${winners} in profit` },
+    { l: 'Cash', v: `฿${fmt0(cash)}`, c: 'var(--navy)', s: 'available to trade' },
+    { l: 'Realized', v: `${sign(summary.realized_pnl)}฿${fmt0(Math.abs(summary.realized_pnl || 0))}`, c: (summary.realized_pnl ?? 0) >= 0 ? 'var(--green)' : 'var(--red)', s: 'closed P&L' },
+    { l: 'Realized %', v: `${(summary.realized_pct ?? 0) >= 0 ? '+' : ''}${fmt2(summary.realized_pct)}%`, c: (summary.realized_pct ?? 0) >= 0 ? 'var(--green)' : 'var(--red)', s: 'of capital' },
     { l: 'Exposure', v: `${fmt0(exposure)}%`, c: 'var(--navy)', s: `฿${fmt0(invested)} deployed` },
   ];
 
@@ -343,7 +343,7 @@ function PortfolioView({ portfolio, onSelect }) {
     <div className="page">
       <div className="page-head">
         <div><h1 className="page-t">Portfolio</h1><p className="page-sub">{open.length} open · {winners} in profit · ฿{fmt0(summary.available)} cash available</p></div>
-        <div className="pf-winrate"><span className="k">Win rate (30d)</span><span className={`v mono ${(summary.win_rate ?? 0) >= 50 ? 'g' : 'r'}`}>{fmt0(summary.win_rate)}%</span></div>
+        <div className="pf-winrate"><span className="k">Win rate</span><span className={`v mono ${(summary.win_rate ?? 0) >= 50 ? 'g' : 'r'}`}>{fmt0(summary.win_rate)}%</span></div>
       </div>
 
       <div className="sc-row" style={{ gridTemplateColumns: 'repeat(5,1fr)' }}>
@@ -363,6 +363,8 @@ function PortfolioView({ portfolio, onSelect }) {
             {open.map((p, i) => {
               const up = (p.current_close ?? p.entry_price) >= p.entry_price;
               const upnl = p.unrealized_pnl ?? 0;
+              const cost = (p.entry_price || 0) * (p.shares || 0);
+              const upct = cost ? upnl / cost * 100 : 0;
               const stg = stageOf(p);
               return (
                 <tr key={i}>
@@ -372,7 +374,7 @@ function PortfolioView({ portfolio, onSelect }) {
                   <td className="r mono dm">{fmt0(p.shares_remaining)}</td>
                   <td className="r mono" style={{ color: 'var(--ink)' }}>{fmt2(p.entry_price)}</td>
                   <td className="r mono"><span className={up ? 'g' : 'r'}>{fmt2(p.current_close)}</span></td>
-                  <td className="r mono"><span className={pnlCls(upnl)}>{sign(upnl)}฿{fmt0(Math.abs(upnl))} <span className="pf-pct">({(p.pnl_pct ?? 0) >= 0 ? '+' : ''}{fmt1(p.pnl_pct)}%)</span></span></td>
+                  <td className="r mono"><span className={pnlCls(upnl)}>{sign(upnl)}฿{fmt0(Math.abs(upnl))} <span className="pf-pct">({upct >= 0 ? '+' : ''}{fmt1(upct)}%)</span></span></td>
                   <td className="r"><span className={`pf-stage ${stg}`}>{stageTxt[stg]}</span></td>
                 </tr>);
             })}
@@ -381,7 +383,7 @@ function PortfolioView({ portfolio, onSelect }) {
       </div>
 
       <div className="mt-card">
-        <div className="card-head"><span className="card-head-t">Closed · last 30 days</span><span className="card-head-c">{closedWins}/{closed.length} wins</span></div>
+        <div className="card-head"><span className="card-head-t">Closed</span><span className="card-head-c">{closedWins}/{closed.length} wins</span></div>
         <table className="mt" style={{ tableLayout: 'fixed' }}>
           {PF_COLS}
           <thead><tr>
@@ -391,7 +393,9 @@ function PortfolioView({ portfolio, onSelect }) {
           <tbody>
             {closed.length === 0 && <tr><td colSpan="8" style={{ textAlign: 'center', color: 'var(--mut3)', padding: 22 }}>No closed trades yet</td></tr>}
             {closed.map((t, i) => {
-              const win = (t.pnl_pct ?? 0) >= 0;
+              const win = (t.total_pnl ?? 0) > 0;
+              const cCost = (t.entry_price || 0) * (t.shares || 0);
+              const cPct = cCost ? (t.total_pnl || 0) / cCost * 100 : 0;
               return (
                 <tr key={i}>
                   <td className="mono dm">{fmtDate(t.exit_date)}</td>
@@ -400,8 +404,8 @@ function PortfolioView({ portfolio, onSelect }) {
                   <td className="r mono dm">{fmt0(t.shares)}</td>
                   <td className="r mono" style={{ color: 'var(--ink)' }}>{fmt2(t.entry_price)}</td>
                   <td className="r mono"><span className={t.exit_price >= t.entry_price ? 'g' : 'r'}>{fmt2(t.exit_price)}</span></td>
-                  <td className="r mono"><span className={pnlCls(t.total_pnl)}>{sign(t.total_pnl)}฿{fmt0(Math.abs(t.total_pnl || 0))} <span className="pf-pct">({win ? '+' : ''}{fmt1(t.pnl_pct)}%)</span></span></td>
-                  <td className="r"><span className={`pf-stage ${win ? 'tp1' : 'be'}`}>{t.exit_reason ?? '—'}</span></td>
+                  <td className="r mono"><span className={pnlCls(t.total_pnl)}>{sign(t.total_pnl)}฿{fmt0(Math.abs(t.total_pnl || 0))} <span className="pf-pct">({cPct >= 0 ? '+' : ''}{fmt1(cPct)}%)</span></span></td>
+                  <td className="r"><span className={`pf-stage ${win ? 'tp1' : 'loss'}`}>{t.exit_reason ?? '—'}</span></td>
                 </tr>);
             })}
           </tbody>

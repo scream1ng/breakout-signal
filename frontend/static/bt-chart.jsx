@@ -60,7 +60,9 @@ function ChartPanel({ item }) {
   const level  = item.level ?? item.bp ?? item.levels?.[0]?.level ?? null;
   const chg    = (level && close) ? ((close - level) / level) * 100 : null;
   const above  = level == null ? true : (close ?? 0) >= level;
-  const rvol   = item.proj_rvol ?? item.rvol ?? null;
+  const firedProj = item.proj_rvol_now != null ? (item.proj_rvol ?? null) : null;  // frozen fire-time (alerts only)
+  const projNow   = item.proj_rvol_now ?? item.proj_rvol ?? item.rvol ?? null;     // live projected RVol
+  const rawRvol   = item.cur_rvol_now ?? item.cur_rvol ?? null;                    // raw current RVol
   const rsm    = item.rsm ?? null;
   const str    = item.stretch ?? null;
   const crit   = item.criteria || item.filter_type || null;
@@ -83,7 +85,9 @@ function ChartPanel({ item }) {
           </div>
         </div>
         <div className="cc-hstats">
-          <div className="cc-hstat"><span className="l">RVol</span><span className="v mono" style={{ color: rvol >= 2 ? 'var(--green)' : 'var(--navy)' }}>{rvol != null ? _f1(rvol) + '×' : '—'}</span></div>
+          {firedProj != null && <div className="cc-hstat"><span className="l">Fired</span><span className="v mono" style={{ color: 'var(--mut)' }}>{_f1(firedProj)}×</span></div>}
+          <div className="cc-hstat"><span className="l">Proj RVol</span><span className="v mono" style={{ color: projNow >= 2 ? 'var(--green)' : 'var(--navy)' }}>{projNow != null ? _f1(projNow) + '×' : '—'}</span></div>
+          <div className="cc-hstat"><span className="l">RVol</span><span className="v mono" style={{ color: 'var(--navy)' }}>{rawRvol != null ? _f1(rawRvol) + '×' : '—'}</span></div>
           <div className="cc-hstat"><span className="l">RSM</span><span className="v mono" style={{ color: rsm >= 80 ? 'var(--green)' : 'var(--navy)' }}>{rsm != null ? Math.round(rsm) : '—'}</span></div>
           <div className="cc-hstat"><span className="l">STR</span><span className="v mono" style={{ color: str > 4 ? 'var(--red)' : 'var(--navy)' }}>{str != null ? _f1(str) + '×' : '—'}</span></div>
         </div>
