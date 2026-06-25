@@ -36,14 +36,15 @@ function ChartPanel({ item }) {
     return () => { if (wrapRef.current) window.destroyLwcChart(wrapRef.current); };
   }, [state.data]);   // redraw only when the payload changes, not on every status flip
 
-  /* live overlay: when the selected row's price updates (each intraday scan),
-   * push it onto the chart's last candle so you watch it cross the level */
-  const liveClose = item ? (item.close ?? null) : null;
+  /* live today candle: the chart payload carries today's forming bar (data.live,
+   * written by the intraday scan). Append/grow it TradingView-style. Re-applies
+   * after every render since renderLwcChart rebuilds from stored candles only. */
+  const live = state.data && state.data.live;
   React.useEffect(() => {
-    if (state.status === 'ready' && liveClose != null && wrapRef.current) {
-      window.updateLwcLast(wrapRef.current, liveClose);
+    if (state.status === 'ready' && live && wrapRef.current) {
+      window.updateLwcLast(wrapRef.current, live);
     }
-  }, [liveClose, state.status]);
+  }, [live, state.status, state.data]);
 
   if (!item) {
     return (

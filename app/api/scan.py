@@ -239,10 +239,19 @@ def get_chart(ticker: str, period: str = Query(default='2y')):
     """
     from app.storage.state import load_chart, _norm_ticker
     tk = _norm_ticker(ticker)
-    stored = load_chart(tk)
-    if stored:
-        return stored
-    rebuilt = _rebuild_chart_basic(tk, period=period)
-    if rebuilt:
-        return rebuilt
-    return {'ticker': ticker, 'candles': [], 'signals': [], 'trades': [], 'found': False}
+    payload = load_chart(tk) or _rebuild_chart_basic(tk, period=period)
+    if not payload:
+        return {'ticker': ticker, 'candles': [], 'signals': [], 'trades': [], 'found': False}
+    payload['live'] = _live_bar(tk)   # today's forming bar from intraday scan, or None
+    return payload
+
+
+def _live_bar(ticker_full: str) -> dict | None:
+    """Today's live OHLC bar for one ticker, written by intraday.py. None if absent."""
+    lp = _read_live_prices().get(ticker_full)
+    if not lp:
+        return None
+    today = datetime.now(pytz.timezone('Asia/Bangkok')).strftime('%Y-%m-%d')
+    c = lp['close']
+    return {'date': today, 'o': lp.get('open', c), 'h': lp.get('high', c),
+            'l': lp.get('low', c), 'c': c}
