@@ -50,11 +50,14 @@ function tail(key, ratio, mom) {
 }
 
 /* ── the map ── */
-function RotationMap({ nodes, showTails, dotR, labelKeys, selected, onSelect, onActivate, interactive }) {
+function RotationMap({ nodes, showTails, dotR, labelKeys, selected, onSelect, onActivate, interactive, medX, medY, gainX, gainY }) {
   const cx = sx(100), cy = sy(100);
   const ticks = [94, 97, 100, 103, 106];
   const dim = selected != null;
   const labelSet = labelKeys;
+  // map a plot-unit gridline back to a real RSM rating (inverse of rrg.py's
+  // plot = 100 + (rsm - median) * gain). Falls back to the plot unit if unknown.
+  const rsmLabel = (g, med, gain) => (gain ? Math.round(med + (g - 100) / gain) : g);
   return (
     <svg viewBox={`0 0 ${PLOT.w} ${PLOT.h}`} className="qd-svg" preserveAspectRatio="xMidYMid meet">
       <rect x={cx} y={PLOT.t} width={PLOT.l + iw - cx} height={cy - PLOT.t} fill={QUAD.leading.tint} />
@@ -65,16 +68,16 @@ function RotationMap({ nodes, showTails, dotR, labelKeys, selected, onSelect, on
       {ticks.map((g) => <g key={'t' + g}>
         <line x1={sx(g)} y1={PLOT.t} x2={sx(g)} y2={PLOT.t + ih} stroke={g === 100 ? '#c4ccd6' : '#eef1f5'} strokeWidth="1" strokeDasharray={g === 100 ? '4 4' : undefined} />
         <line x1={PLOT.l} y1={sy(g)} x2={PLOT.l + iw} y2={sy(g)} stroke={g === 100 ? '#c4ccd6' : '#eef1f5'} strokeWidth="1" strokeDasharray={g === 100 ? '4 4' : undefined} />
-        <text x={sx(g)} y={PLOT.t + ih + 13} className="qd-tick" textAnchor="middle">{g}</text>
-        <text x={PLOT.l - 7} y={sy(g) + 3} className="qd-tick" textAnchor="end">{g}</text>
+        <text x={sx(g)} y={PLOT.t + ih + 13} className="qd-tick" textAnchor="middle">{rsmLabel(g, medX, gainX)}</text>
+        <text x={PLOT.l - 7} y={sy(g) + 3} className="qd-tick" textAnchor="end">{rsmLabel(g, medY, gainY)}</text>
       </g>)}
 
       <text x={PLOT.l + iw - 6} y={PLOT.t + 14} className="qd-qlbl" textAnchor="end" fill={QUAD.leading.color}>LEADING ↗</text>
       <text x={PLOT.l + 6} y={PLOT.t + 14} className="qd-qlbl" textAnchor="start" fill={QUAD.improving.color}>IMPROVING</text>
       <text x={PLOT.l + iw - 6} y={PLOT.t + ih - 7} className="qd-qlbl" textAnchor="end" fill={QUAD.weakening.color}>WEAKENING</text>
       <text x={PLOT.l + 6} y={PLOT.t + ih - 7} className="qd-qlbl" textAnchor="start" fill={QUAD.lagging.color}>LAGGING</text>
-      <text x={PLOT.l + iw / 2} y={PLOT.h - 4} className="qd-axt" textAnchor="middle">JdK RS-Ratio  (strength vs SET Index)  →</text>
-      <text x={12} y={PLOT.t + ih / 2} className="qd-axt" textAnchor="middle" transform={`rotate(-90 12 ${PLOT.t + ih / 2})`}>JdK RS-Momentum  ↑</text>
+      <text x={PLOT.l + iw / 2} y={PLOT.h - 4} className="qd-axt" textAnchor="middle">RSM-100 · established strength  →</text>
+      <text x={12} y={PLOT.t + ih / 2} className="qd-axt" textAnchor="middle" transform={`rotate(-90 12 ${PLOT.t + ih / 2})`}>RSM-21 · recent strength  ↑</text>
 
       {/* non-interactive cloud: plain circles, no per-dot handlers (scales to 1000s) */}
       {!interactive && nodes.map((n) => (
@@ -116,8 +119,8 @@ function SectorRow({ s, rank, selected, onSelect, onActivate }) {
          onMouseEnter={() => onSelect(s.id)} onMouseLeave={() => onSelect(null)} onClick={() => onActivate(s)}>
       <span className="ld-rank mono">{rank}</span>
       <span className="ld-tk">{s.name}<span className="ld-sector">{s.members.length} stocks · {s.members.filter((m) => quadOf(m.ratio, m.mom).key === 'leading').length} leading</span></span>
-      <span className="ld-rs mono" style={{ color: q.color }}>{sf1(s.ratio)}</span>
-      <span className={`ld-mo mono ${up ? 'g' : 'r'}`}>{up ? '▲' : '▼'}{sf1(s.mom)}</span>
+      <span className="ld-rs mono" style={{ color: q.color }}>{sf0(s.rsm100)}</span>
+      <span className={`ld-mo mono ${up ? 'g' : 'r'}`}>{up ? '▲' : '▼'}{sf0(s.rsm21)}</span>
       <span className="ld-drill">›</span>
     </div>
   );
@@ -129,8 +132,8 @@ function StockRow({ s, rank, selected, onSelect }) {
          onMouseEnter={() => onSelect(s.tk)} onMouseLeave={() => onSelect(null)}>
       <span className="ld-rank mono">{rank}</span>
       <span className="ld-tk">{s.tk}<span className="ld-sector">{s.sectorName}</span></span>
-      <span className="ld-rs mono" style={{ color: q.color }}>{sf1(s.ratio)}</span>
-      <span className={`ld-mo mono ${up ? 'g' : 'r'}`}>{up ? '▲' : '▼'}{sf1(s.mom)}</span>
+      <span className="ld-rs mono" style={{ color: q.color }}>{sf0(s.rsm100)}</span>
+      <span className={`ld-mo mono ${up ? 'g' : 'r'}`}>{up ? '▲' : '▼'}{sf0(s.rsm21)}</span>
       <span className={`ld-m1 mono ${s.m1 >= 0 ? 'g' : 'r'}`}>{s.m1 > 0 ? '+' : ''}{sf1(s.m1)}%</span>
       <span className="ld-flag">{nh ? <span className="ld-newhi">NEW HIGH</span> : s.st > 0 ? <span className="ld-streak">▲{s.st}w</span> : <span className="ld-streak flat">—</span>}</span>
     </div>
@@ -150,15 +153,15 @@ function ScreenerPage({ UNIV }) {
 
   // universe-wide stats
   const stats = React.useMemo(() => {
-    const beating = UNIV.stocks.filter((s) => s.ratio > 100).length;
+    const strong = UNIV.stocks.filter((s) => s.rsm100 >= 80).length;
     const lead = UNIV.stocks.filter((s) => quadOf(s.ratio, s.mom).key === 'leading').length;
     const nh = UNIV.stocks.filter(isNewHigh).length;
-    return { beating, lead, nh };
+    return { strong, lead, nh };
   }, [UNIV]);
 
   const SC = [
     { l: 'Universe', v: UNIV.total.toLocaleString(), c: 'var(--navy)' },
-    { l: 'Beating the SET', v: UNIV.total ? `${Math.round(stats.beating / UNIV.total * 100)}%` : '—', c: 'var(--green)' },
+    { l: 'Strong (RSM-100 ≥ 80)', v: stats.strong.toLocaleString(), c: 'var(--green)' },
     { l: 'In Leading quadrant', v: stats.lead.toLocaleString(), c: 'var(--navy)' },
     { l: 'New 52-week highs', v: stats.nh.toLocaleString(), c: '#b8860b' },
   ];
@@ -196,7 +199,7 @@ function ScreenerPage({ UNIV }) {
   return (
     <div className="page">
       <div className="page-head">
-        <div><h1 className="page-t">Screener</h1><p className="page-sub">Relative Rotation Graph over the {UNIV.total.toLocaleString()}-stock SET tradable universe · sectors roll up; drill in for names. Top-right &amp; rising = beating the market and still accelerating.</p></div>
+        <div><h1 className="page-t">Screener</h1><p className="page-sub">Rotation map of the {UNIV.total.toLocaleString()}-stock SET tradable universe · axes = RSM-100 (established) × RSM-21 (recent), median-centered. Top-right = strongest vs peers and still accelerating.</p></div>
       </div>
 
       <div className="sc-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
@@ -217,9 +220,10 @@ function ScreenerPage({ UNIV }) {
               <div className="scr-legend"><span><i className="scr-lg ring" /> new high</span></div>
             </div>
           </div>
-          <div className="qd-subline">{isSectorView ? 'Each dot is a sector (member-averaged) with its 9-week rotation tail — the clean overview.' : isAll ? 'Every stock in the universe as a density cloud — hover the leaderboard to isolate one.' : `${boardCount} stocks in ${sectorObj.name} · leaders labeled, hover any dot for its tail.`}</div>
+          <div className="qd-subline">{isSectorView ? 'Each dot is a sector (member-averaged RSM) with its rotation tail — the clean overview.' : isAll ? 'Every stock in the universe as a density cloud — hover the leaderboard to isolate one.' : `${boardCount} stocks in ${sectorObj.name} · leaders labeled, hover any dot for its tail.`}</div>
           <RotationMap nodes={nodes} showTails={tails && !isAll} dotR={dotR} labelKeys={labelKeys}
-            selected={sel} onSelect={setSel} onActivate={isSectorView ? drillSector : null} interactive={interactive} />
+            selected={sel} onSelect={setSel} onActivate={isSectorView ? drillSector : null} interactive={interactive}
+            medX={UNIV.median_rsm100} medY={UNIV.median_rsm21} gainX={UNIV.gain_x} gainY={UNIV.gain_y} />
           <div className="qd-foot">
             {isSectorView ? <span>Click a sector to drill into its stocks.</span>
               : <span>Showing <b>{boardCount.toLocaleString()}</b> {isAll ? 'stocks' : 'names'}{q ? ` matching “${q}”` : ''}.</span>}
@@ -228,13 +232,16 @@ function ScreenerPage({ UNIV }) {
 
         <div className="mt-card ld-card">
           <div className="ld-head">
-            <span className="ld-h-title">{isSectorView ? 'Sector strength' : sectorObj ? sectorObj.name : 'All stocks'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              {!isSectorView && <button className="ld-back" onClick={goSector}>‹ Sectors</button>}
+              <span className="ld-h-title">{isSectorView ? 'Sector strength' : sectorObj ? sectorObj.name : 'All stocks'}</span>
+            </div>
             {boardKind === 'stock'
               ? <input className="ld-search" placeholder="Search ticker…" value={q} onChange={(e) => setQ(e.target.value)} />
-              : <span className="ld-h-sub">RS-Ratio + Momentum</span>}
+              : <span className="ld-h-sub">RSM-100 / RSM-21</span>}
           </div>
           <div className={`ld-cols ${boardKind}`}>
-            <span>#</span><span>{isSectorView ? 'Sector' : 'Symbol'}</span><span className="r">Ratio</span><span className="r">Mom</span>
+            <span>#</span><span>{isSectorView ? 'Sector' : 'Symbol'}</span><span className="r">RSM100</span><span className="r">RSM21</span>
             {boardKind === 'stock' ? <><span className="r">1M</span><span className="r">Signal</span></> : <span className="r">→</span>}
           </div>
           <div className="ld-body">
