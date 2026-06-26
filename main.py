@@ -15,6 +15,7 @@ OPTIONS:
 """
 
 import os, sys, warnings, argparse, time, webbrowser, socket
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import json
 import numpy as np
@@ -47,7 +48,8 @@ from output.chart_combined    import generate_view_html
 
 # ── Persist EOD scan results so the web API can serve them ───────────────────
 def save_scan_snapshot(results: list, today_signals: list,
-                       pending_list: list, date_str: str, cfg: dict) -> None:
+                       pending_list: list, date_str: str, cfg: dict,
+                       screener: dict | None = None) -> None:
     """Write data/scan_results.json and upsert a ScanSnapshot DB row."""
     from datetime import timezone
 
@@ -151,6 +153,7 @@ def save_scan_snapshot(results: list, today_signals: list,
         intraday_bt = intraday_bt,
         watchlist   = wl_rows,
         signals     = today_signals,
+        screener    = screener,
     )
 
     # ── Write JSON file (always available, no DB needed) ─────────────────
@@ -210,6 +213,7 @@ ap.add_argument('--capital',     type=float, default=_cfg('capital',         100
 ap.add_argument('--rsm',         type=float, default=_cfg('rs_momentum_min', 70))
 ap.add_argument('--min-turnover',type=float, default=_cfg('min_turnover',    5_000_000))
 ap.add_argument('--benchmark',   type=str,   default=_cfg('benchmark',       '^SET.BK'))
+ap.add_argument('--workers',     type=int,   default=_cfg('scan_workers',    8))
 args = ap.parse_args()
 
 CFG = dict(
@@ -624,12 +628,24 @@ def run_full_scan(bench):
     if not tv_stocks:
         sys.exit('  No stocks passed pre-screen.')
     results = []; skipped = 0; total = len(tv_stocks)
-    print(f'\n  Scanning {total} stocks...\n')
-    for i, stock in enumerate(tv_stocks):
-        ticker = stock['ticker']
-        print(f'  [{i+1:>3}/{total}] {ticker:<14}', end='', flush=True)
+    workers = max(1, args.workers)
+    print(f'\n  Scanning {total} stocks ({workers} workers)...\n')
+
+    def _work(stock):
+        # Run in worker thread; never raise — return (result, error).
         try:
-            r = process_ticker(stock, bench)
+            return process_ticker(stock, bench), None
+        except Exception as e:
+            return None, e
+
+    # ThreadPoolExecutor.map yields in submission order, so the live feed
+    # stays ordered while fetches run in parallel.
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        for i, (stock, (r, err)) in enumerate(zip(tv_stocks, ex.map(_work, tv_stocks))):
+            ticker = stock['ticker']
+            print(f'  [{i+1:>3}/{total}] {ticker:<14}', end='', flush=True)
+            if err is not None:
+                skipped += 1; print(f'  ERROR: {err}'); continue
             if r is None:
                 skipped += 1; print('  skipped'); continue
             sig    = 'B' if r.get('today_signal') else ('W' if r.get('pending') else ' ')
@@ -638,10 +654,7 @@ def run_full_scan(bench):
                   f'{r["total_trades"]:>2}T  WR {wr_str:>4}  '
                   f'PnL {r["total_pnl"]:>+10,.0f}')
             results.append(r)
-            time.sleep(0.2)
-        except Exception as e:
-            skipped += 1; print(f'  ERROR: {e}')
-    return results, skipped
+    return results, skipped, tv_stocks
 
 
 def print_scan_results(today_signals, pending_list, results, date_str):
@@ -692,7 +705,7 @@ def main():
             webbrowser.open(f'file://{os.path.abspath(path)}')
         else:
             print('  Generating chart...')
-            results, _ = run_full_scan(bench)
+            results, _, _ = run_full_scan(bench)
             regime_results = [r for r in results if r.get('in_regime')]
             pick = (next((r for r in regime_results if r.get('today_signal') and r.get('chart_data')), None)
                     or next((r for r in regime_results if r.get('chart_data')), None))
@@ -703,14 +716,24 @@ def main():
         return
 
     # ── Default scan (+ optional --discord) ──────────────────────────────
-    results, _ = run_full_scan(bench)
+    results, _, tv_stocks = run_full_scan(bench)
     today_signals = [r['today_signal'] for r in results if r.get('today_signal')]
     pending_list  = [r['pending']       for r in results if r.get('pending')]
 
     print_scan_results(today_signals, pending_list, results, DATE_STR)
 
+    # ── Build RRG screener universe (cache-only, no extra downloads) ──────
+    screener = None
+    try:
+        from app.core.rrg import build_screener
+        screener = build_screener(tv_stocks, bench, period=PERIOD)
+        print(f'  Screener universe built → {screener["total"]} stocks, {len(screener["sectors"])} sectors')
+    except Exception as _e:
+        print(f'  [warn] Screener build skipped: {_e}')
+
     # ── Persist scan snapshot (API + DB) ──────────────────────────────────
-    save_scan_snapshot(results, today_signals, pending_list, DATE_STR, CFG)
+    save_scan_snapshot(results, today_signals, pending_list, DATE_STR, CFG,
+                       screener=screener)
 
     # ── Save watchlist.json for intraday scanner ──────────────────────────
     watchlist = []

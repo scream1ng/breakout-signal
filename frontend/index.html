@@ -275,6 +275,74 @@
     .term-lbl { font-size: 11px; color: var(--mut); margin: 14px 0 6px; font-weight: 600; }
     .term { background: #0f172a; border-radius: 7px; padding: 12px 14px; font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.65; color: #cbd5e1; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; }
     .term.err { color: #fca5a5; }
+
+    /* ───────── screener (relative rotation map + leaderboard) ───────── */
+    .scr-legend { display: flex; align-items: center; gap: 14px; font-size: 10.5px; color: var(--mut); }
+    .scr-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .scr-lg { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
+    .scr-lg.ring { background: transparent; border: 1.6px solid #d99a2b; border-radius: 50%; }
+    .sc-v.sm { font-size: 18px; letter-spacing: -0.01em; }
+
+    .scr-grid { display: grid; grid-template-columns: 1fr 412px; gap: 14px; align-items: start; }
+
+    /* rotation map card */
+    .qd-card { padding: 16px 16px 12px; display: flex; flex-direction: column; }
+    .qd-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+    .qd-crumb { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .qd-cb { font-family: inherit; font-size: 12px; font-weight: 600; color: var(--mut); background: none; border: none; padding: 2px 0; cursor: pointer; }
+    .qd-cb:hover { color: var(--navy); }
+    .qd-cb.on { color: var(--navy); font-weight: 700; }
+    .qd-sep { color: var(--mut3); font-size: 12px; }
+    .qd-tools { display: flex; align-items: center; gap: 14px; }
+    .qd-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: var(--mut); cursor: pointer; user-select: none; }
+    .qd-toggle input { accent-color: var(--blue); cursor: pointer; }
+    .qd-subline { font-size: 10.5px; color: var(--mut2); margin-bottom: 4px; }
+    .qd-title { font-size: 14px; font-weight: 700; color: var(--navy); }
+    .qd-svg { display: block; width: 100%; height: auto; }
+    .qd-qlbl { font-size: 9px; font-weight: 800; letter-spacing: 0.07em; opacity: 0.85; }
+    .qd-axt { font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; fill: var(--mut2); text-transform: uppercase; }
+    .qd-tick { font-size: 8px; font-weight: 600; fill: var(--mut3); }
+    .qd-tk { font-size: 10px; font-weight: 700; fill: var(--navy); paint-order: stroke; stroke: #fff; stroke-width: 2.5px; stroke-linejoin: round; }
+    .qd-tk.sel { font-size: 11px; fill: #0b1f33; }
+    .qd-foot { font-size: 11px; color: var(--mut2); margin-top: 9px; }
+    .qd-foot b { color: var(--navy); }
+
+    /* leaderboard card */
+    .ld-card { overflow: hidden; }
+    .ld-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 18px 11px; }
+    .ld-h-title { font-size: 14px; font-weight: 700; color: var(--navy); letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ld-h-sub { font-size: 10.5px; color: var(--mut2); white-space: nowrap; }
+    .ld-search { font-family: inherit; font-size: 11.5px; color: var(--ink); background: var(--head); border: 1px solid var(--bd-soft); border-radius: 7px; padding: 5px 9px; width: 130px; outline: none; }
+    .ld-search:focus { border-color: var(--blue); background: var(--card); }
+    .ld-cols.stock, .ld-row.st { grid-template-columns: 24px 1fr 50px 58px 52px 80px; }
+    .ld-cols.sector, .ld-row.sec { grid-template-columns: 24px 1fr 56px 64px 16px; }
+    .ld-cols { display: grid; align-items: center; gap: 11px; padding: 0 18px 8px; border-bottom: 1px solid var(--bd-soft); }
+    .ld-cols span { font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mut3); }
+    .ld-cols span.r { text-align: right; }
+    .ld-body { display: flex; flex-direction: column; max-height: 466px; overflow-y: auto; }
+    .ld-body::-webkit-scrollbar { width: 8px; }
+    .ld-body::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 4px; border: 2px solid var(--card); }
+    .ld-row { display: grid; align-items: center; gap: 11px; position: relative; padding: 10px 18px; border-bottom: 1px solid var(--row); cursor: pointer; transition: background .12s; }
+    .ld-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--q); opacity: 0; transition: opacity .12s; }
+    .ld-row:last-child { border-bottom: none; }
+    .ld-row:hover, .ld-row.sel { background: var(--blue-soft); }
+    .ld-row:hover::before, .ld-row.sel::before { opacity: 1; }
+    .ld-rank { font-size: 11px; color: var(--mut3); font-weight: 600; text-align: right; }
+    .ld-tk { font-size: 13.5px; font-weight: 700; color: var(--navy); display: flex; flex-direction: column; gap: 2px; line-height: 1.05; min-width: 0; }
+    .ld-row.sec .ld-tk { font-size: 13px; }
+    .ld-sector { font-size: 9.5px; font-weight: 500; color: var(--mut2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ld-rs { font-size: 14px; font-weight: 700; text-align: right; letter-spacing: -0.01em; }
+    .ld-mo { font-size: 12px; font-weight: 700; text-align: right; }
+    .ld-mo.g { color: var(--green); } .ld-mo.r { color: var(--red); }
+    .ld-m1 { font-size: 12px; font-weight: 600; text-align: right; color: var(--ink); }
+    .ld-m1.g { color: var(--green); } .ld-m1.r { color: var(--red); }
+    .ld-drill { font-size: 15px; color: var(--mut3); text-align: right; font-weight: 400; }
+    .ld-row.sec:hover .ld-drill { color: var(--blue); }
+    .ld-flag { text-align: right; }
+    .ld-newhi { font-size: 8.5px; font-weight: 800; letter-spacing: 0.05em; color: #fff; background: #d99a2b; border-radius: 3px; padding: 2px 7px; white-space: nowrap; }
+    .ld-streak { font-size: 10px; font-weight: 700; color: #15803d; background: #e7f6ec; border: 1px solid #b7e3c4; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+    .ld-streak.flat { color: var(--mut3); background: transparent; border-color: transparent; }
+    .ld-more { padding: 12px 18px; font-size: 11px; color: var(--mut2); text-align: center; }
   </style>
 </head>
 <body>
@@ -283,6 +351,7 @@
   <script src="/static/lwc-render.js"></script>
   <script type="text/babel" src="/static/bt-chart.jsx"></script>
   <script type="text/babel" src="/static/bs-views.jsx"></script>
+  <script type="text/babel" src="/static/bt-screener.jsx"></script>
   <script type="text/babel" src="/static/bs-app.jsx"></script>
 </body>
 </html>

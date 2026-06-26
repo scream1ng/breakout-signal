@@ -49,6 +49,7 @@ def _frontend_asset_version() -> str:
         os.path.join(STATIC_DIR, 'style.css'),
         os.path.join(STATIC_DIR, 'bs-data.jsx'),
         os.path.join(STATIC_DIR, 'bs-views.jsx'),
+        os.path.join(STATIC_DIR, 'bt-screener.jsx'),
         os.path.join(STATIC_DIR, 'bs-app.jsx'),
     ]
     latest_mtime = 0
@@ -127,7 +128,7 @@ def spa(full_path: str = ''):
             html = f.read()
 
         asset_version = _frontend_asset_version()
-        for fname in ('style.css', 'app.js', 'bs-data.jsx', 'bs-views.jsx', 'bs-app.jsx'):
+        for fname in ('style.css', 'app.js', 'bs-data.jsx', 'bs-views.jsx', 'bt-screener.jsx', 'bs-app.jsx'):
             html = html.replace(f'/static/{fname}', f'/static/{fname}?v={asset_version}')
         return HTMLResponse(html)
     return {'detail': 'Frontend not found — run from project root'}
