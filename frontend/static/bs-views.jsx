@@ -51,6 +51,8 @@ function NavIcon({ id }) {
   const p = { width: 21, height: 21, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' };
   if (id === 'chart')
     return (<svg {...p}><line x1="7" y1="4" x2="7" y2="20"/><rect x="4.5" y="8" width="5" height="7" rx="1"/><line x1="16" y1="3" x2="16" y2="21"/><rect x="13.5" y="7" width="5" height="9" rx="1"/></svg>);
+  if (id === 'screener')
+    return (<svg {...p}><circle cx="12" cy="12" r="9"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="12" y1="3" x2="12" y2="21"/><circle cx="16" cy="8" r="1.6" fill="currentColor" stroke="none"/></svg>);
   if (id === 'backtest')
     return (<svg {...p}><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 7 7 7"/><polyline points="12 8 12 12 15 14"/></svg>);
   if (id === 'portfolio')
@@ -60,6 +62,7 @@ function NavIcon({ id }) {
 
 const NAV = [
   { id: 'chart', label: 'Chart' },
+  { id: 'screener', label: 'Screener' },
   { id: 'portfolio', label: 'Portfolio' },
   { id: 'backtest', label: 'Backtest' },
   { id: 'jobs', label: 'Jobs' },

@@ -87,6 +87,18 @@ def get_scan_latest():
     return {k: data[k] for k in keys if k in data}
 
 
+# ── GET /api/screener ─────────────────────────────────────────────────────────
+@router.get('/screener')
+def get_screener():
+    """RRG universe (sectors + stocks) built by the EOD scan. Empty when none."""
+    data = _read_scan()
+    screener = (data or {}).get('screener')
+    if not screener:
+        return {'date': (data or {}).get('date'), 'sectors': [], 'stocks': [],
+                'total': 0, 'generated_at': None}
+    return {'date': (data or {}).get('date'), **screener}
+
+
 # ── GET /api/backtest ─────────────────────────────────────────────────────────
 @router.get('/backtest')
 def get_backtest():
