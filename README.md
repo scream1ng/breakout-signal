@@ -38,8 +38,9 @@ app/scheduler/runner.py ← APScheduler calls main.py + intraday.py on schedule
 main_app.py             ← FastAPI serves web dashboard + REST API
       │                    GET /api/chart/{ticker} serves one stock's chart JSON on demand
       ▼
-Browser: http://localhost:8080  (single-page React app — slim icon rail, 4 tabs + FAQ drawer)
+Browser: http://localhost:8080  (single-page React app — slim icon rail, 5 tabs + FAQ drawer)
   ├── Chart      → chart panel (native lightweight-charts) + watchlist / alerts / fakeouts / EOD
+  ├── Screener   → Relative Rotation Graph over the above-SMA50 tradable universe (sector roll-up → drill)
   ├── Portfolio  → equity KPIs, open positions, closed trades
   ├── Backtest   → per-symbol breakout stats
   └── Jobs       → scheduler status, manual runs, live console (merged old Tools)
@@ -71,6 +72,7 @@ breakout-signal/
 │   │   ├── paper_trade.py  ← Live paper trade ledger (Postgres or JSON)
 │   │   ├── portfolio.py    ← Cash-aware backtest portfolio
 │   │   ├── rsm.py          ← RS Momentum vs benchmark
+│   │   ├── rrg.py          ← Screener Relative Rotation Graph universe (RSM-100 × RSM-21, median-centered)
 │   │   └── scanner.py      ← TradingView pre-screen
 │   │
 │   ├── trade_engine/       ← Abstraction layer (swap paper → live via env var)
@@ -90,7 +92,7 @@ breakout-signal/
 │   │   ├── system.py       ← GET /api/system
 │   │   ├── portfolio.py    ← GET /api/portfolio
 │   │   ├── signals.py      ← GET /api/signals
-│   │   ├── scan.py         ← GET /api/scan/latest, /api/backtest, /api/watchlist/detail, /api/chart/{ticker}
+│   │   ├── scan.py         ← GET /api/scan/latest, /api/backtest, /api/watchlist/detail, /api/chart/{ticker}, /api/screener
 │   │   └── trades.py       ← POST /api/trades/close
 │   │
 │   ├── storage/
@@ -107,6 +109,7 @@ breakout-signal/
 │       ├── bs-app.jsx      ← app shell: topbar, slim nav rail, 4 tabs, all API/state
 │       ├── bs-views.jsx    ← views: chart workspace, portfolio, backtest, jobs, FAQ drawer
 │       ├── bt-chart.jsx    ← React chart panel (fetches /api/chart/{ticker})
+│       ├── bt-screener.jsx ← Screener RRG view (sector roll-up → drill → click symbol opens its chart)
 │       └── lwc-render.js   ← shared lightweight-charts renderer (also inlined by --view)
 │
 ├── output/                 ← Chart data builder + CLI --view
@@ -238,11 +241,12 @@ cp .env.example .env   # fill in your keys
 
 ## WEB DASHBOARD
 
-Open `http://localhost:8080` after starting the app. Single-page React app — slim 66px icon rail, four tabs, FAQ as a slide-out drawer.
+Open `http://localhost:8080` after starting the app. Single-page React app — slim 66px icon rail, five tabs, FAQ as a slide-out drawer.
 
 | Tab | Content |
 |---|---|
 | **Chart** | Chart panel (native lightweight-charts: candles, EMA10/EMA20/SMA50, buy/sell markers, breakout level) + tabbed right panel: Watchlist (grouped by MA10/MA20/MA50) / Alerts / Fakeouts / EOD. Click any row to load its chart. |
+| **Screener** | Relative Rotation Graph of the **above-SMA50 tradable universe** (every liquid SET stock above SMA50, not just watchlist/breakout names). Axes = RSM-100 (established) × RSM-21 (recent), median-centered. Default = sector roll-up; click a sector (dot or row) to drill into its members; click a symbol to open its chart. Built by the EOD scan, served from `/api/screener`. |
 | **Portfolio** | Equity / Open P&L / Realized / Exposure KPIs, open positions, closed trades |
 | **Backtest** | Per-symbol breakout stats, criteria filter (Prime/STR/RVOL/RSM/SMA50) |
 | **Jobs** | Scheduler job cards (Run now), recent runs, live console, Discord notify test (merged old Tools) |
@@ -258,6 +262,7 @@ Auto-refreshes every 60 seconds. All data comes from the REST API:
 | `GET /api/backtest` | Per-ticker backtest rows + overall stats |
 | `GET /api/watchlist/detail` | Watchlist grouped by MA position + TradingView copy string |
 | `GET /api/chart/{ticker}` | One stock's chart JSON — stored ChartData row, else live candles+MA rebuild |
+| `GET /api/screener` | RRG universe (sectors + member stocks, RSM-100/RSM-21, median + axis gains) from the latest EOD scan |
 | `POST /api/trades/close` | Manually close a position |
 
 Charts render natively in the SPA from `/api/chart/{ticker}`. The EOD scan writes one small `ChartData` row per signal/watchlist ticker (survives Railway redeploys); any other ticker is rebuilt on demand from cached OHLCV. The legacy `/chart` URL now redirects into the SPA.

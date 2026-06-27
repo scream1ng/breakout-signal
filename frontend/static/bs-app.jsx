@@ -274,7 +274,7 @@ function App() {
         {tab === 'chart' &&
           <ChartWorkspace selected={chartSelected} onSelect={setSelected}
             watchlist={watchlist} intraday={intraday} fakeouts={fakeouts} eod={eod} />}
-        {tab === 'screener'  && <ScreenerView universe={screener} />}
+        {tab === 'screener'  && <ScreenerView universe={screener} onSelect={openChart} />}
         {tab === 'portfolio' && <PortfolioView portfolio={portfolio} onSelect={openChart} />}
         {tab === 'backtest'  && <BacktestView backtest={backtest} onSelect={openChart} />}
         {tab === 'jobs'      &&
