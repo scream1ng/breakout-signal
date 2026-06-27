@@ -125,11 +125,11 @@ function SectorRow({ s, rank, selected, onSelect, onActivate }) {
     </div>
   );
 }
-function StockRow({ s, rank, selected, onSelect }) {
+function StockRow({ s, rank, selected, onSelect, onActivate }) {
   const q = quadOf(s.ratio, s.mom), up = s.mom >= 100, nh = isNewHigh(s);
   return (
-    <div className={`ld-row st ${selected === s.tk ? 'sel' : ''}`} style={{ '--q': q.color }}
-         onMouseEnter={() => onSelect(s.tk)} onMouseLeave={() => onSelect(null)}>
+    <div className={`ld-row st ${selected === s.tk ? 'sel' : ''}`} style={{ '--q': q.color, cursor: 'pointer' }}
+         onMouseEnter={() => onSelect(s.tk)} onMouseLeave={() => onSelect(null)} onClick={() => onActivate(s)}>
       <span className="ld-rank mono">{rank}</span>
       <span className="ld-tk">{s.tk}<span className="ld-sector">{s.sectorName}</span></span>
       <span className="ld-rs mono" style={{ color: q.color }}>{sf0(s.rsm100)}</span>
@@ -143,7 +143,7 @@ function StockRow({ s, rank, selected, onSelect }) {
 const STRENGTH = (x) => x.ratio + x.mom;
 const ROW_CAP = 150;
 
-function ScreenerPage({ UNIV }) {
+function ScreenerPage({ UNIV, onSelect }) {
   const [view, setView] = React.useState({ level: 'sector', sector: null }); // sector | stock(sector) | stock(null=all)
   const [sel, setSel] = React.useState(null);
   const [tails, setTails] = React.useState(true);
@@ -172,7 +172,7 @@ function ScreenerPage({ UNIV }) {
 
   let nodes, labelKeys, dotR, board, boardKind, boardCount;
   if (isSectorView) {
-    nodes = UNIV.sectors.map((s) => ({ key: s.id, tk: s.abbr, ratio: s.ratio, mom: s.mom, color: quadOf(s.ratio, s.mom).color, big: true }));
+    nodes = UNIV.sectors.map((s) => ({ key: s.id, id: s.id, tk: s.abbr, ratio: s.ratio, mom: s.mom, color: quadOf(s.ratio, s.mom).color, big: true }));
     labelKeys = new Set(nodes.map((n) => n.key));
     dotR = 7;
     board = [...UNIV.sectors].sort((a, b) => STRENGTH(b) - STRENGTH(a));
@@ -180,7 +180,7 @@ function ScreenerPage({ UNIV }) {
   } else {
     const scope = isAll ? UNIV.stocks : (sectorObj ? sectorObj.members : []);
     const filtered = q ? scope.filter((s) => s.tk.toLowerCase().includes(q.toLowerCase())) : scope;
-    nodes = filtered.map((s) => ({ key: s.tk, tk: s.tk, ratio: s.ratio, mom: s.mom, color: quadOf(s.ratio, s.mom).color, newHigh: isNewHigh(s) && !isAll, big: false }));
+    nodes = filtered.map((s) => ({ key: s.tk, tk: s.tk, ratio: s.ratio, mom: s.mom, color: quadOf(s.ratio, s.mom).color, newHigh: isNewHigh(s) && !isAll, big: false, sectorName: s.sectorName, rsm21: s.rsm21 }));
     // label only the strongest handful (+ hovered) to avoid clutter
     const lead = [...filtered].sort((a, b) => STRENGTH(b) - STRENGTH(a)).slice(0, isAll ? 0 : 14);
     labelKeys = new Set(lead.map((s) => s.tk));
@@ -195,6 +195,7 @@ function ScreenerPage({ UNIV }) {
   const goSector = () => { setView({ level: 'sector', sector: null }); setSel(null); setQ(''); };
   const drillSector = (s) => { setView({ level: 'stock', sector: s.id }); setSel(null); setQ(''); };
   const goAll = () => { setView({ level: 'stock', sector: null }); setSel(null); setQ(''); };
+  const openStock = (x) => onSelect && onSelect({ symbol: x.tk, sector: x.sectorName, rsm: x.rsm21 });
 
   return (
     <div className="page">
@@ -222,7 +223,7 @@ function ScreenerPage({ UNIV }) {
           </div>
           <div className="qd-subline">{isSectorView ? 'Each dot is a sector (member-averaged RSM) with its rotation tail — the clean overview.' : isAll ? 'Every stock in the universe as a density cloud — hover the leaderboard to isolate one.' : `${boardCount} stocks in ${sectorObj.name} · leaders labeled, hover any dot for its tail.`}</div>
           <RotationMap nodes={nodes} showTails={tails && !isAll} dotR={dotR} labelKeys={labelKeys}
-            selected={sel} onSelect={setSel} onActivate={isSectorView ? drillSector : null} interactive={interactive}
+            selected={sel} onSelect={setSel} onActivate={isSectorView ? drillSector : openStock} interactive={interactive}
             medX={UNIV.median_rsm100} medY={UNIV.median_rsm21} gainX={UNIV.gain_x} gainY={UNIV.gain_y} />
           <div className="qd-foot">
             {isSectorView ? <span>Click a sector to drill into its stocks.</span>
@@ -247,7 +248,7 @@ function ScreenerPage({ UNIV }) {
           <div className="ld-body">
             {boardKind === 'sector'
               ? board.map((s, i) => <SectorRow key={s.id} s={s} rank={i + 1} selected={sel} onSelect={setSel} onActivate={drillSector} />)
-              : boardRows.map((s, i) => <StockRow key={s.tk} s={s} rank={i + 1} selected={sel} onSelect={setSel} />)}
+              : boardRows.map((s, i) => <StockRow key={s.tk} s={s} rank={i + 1} selected={sel} onSelect={setSel} onActivate={openStock} />)}
             {boardKind === 'stock' && boardCount > ROW_CAP && <div className="ld-more">+ {(boardCount - ROW_CAP).toLocaleString()} more · refine with search</div>}
             {boardKind === 'stock' && boardCount === 0 && <div className="ld-more">No tickers match “{q}”</div>}
           </div>
@@ -259,7 +260,7 @@ function ScreenerPage({ UNIV }) {
 
 /* Top-level tab view: handles the loading / empty universe states, then renders
  * the rotation map once real data is in. */
-function ScreenerView({ universe }) {
+function ScreenerView({ universe, onSelect }) {
   if (universe === null || universe === undefined) {
     return <div className="page"><div className="loading">Loading screener…</div></div>;
   }
@@ -274,7 +275,7 @@ function ScreenerView({ universe }) {
       </div>
     );
   }
-  return <ScreenerPage UNIV={universe} />;
+  return <ScreenerPage UNIV={universe} onSelect={onSelect} />;
 }
 
 Object.assign(window, { ScreenerView });
