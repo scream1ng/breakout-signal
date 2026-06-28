@@ -40,7 +40,7 @@ main_app.py             ← FastAPI serves web dashboard + REST API
       ▼
 Browser: http://localhost:8080  (single-page React app — slim icon rail, 5 tabs + FAQ drawer)
   ├── Chart      → chart panel (native lightweight-charts) + watchlist / alerts / fakeouts / EOD
-  ├── Screener   → Relative Rotation Graph over the above-SMA50 tradable universe (sector roll-up → drill)
+  ├── Screener   → RRG over the above-SMA50 tradable universe — chart-style 2-pane (map + sector leaderboard); click a stock to chart it in-place
   ├── Portfolio  → equity KPIs, open positions, closed trades
   ├── Backtest   → per-symbol breakout stats
   └── Jobs       → scheduler status, manual runs, live console (merged old Tools)
@@ -109,7 +109,7 @@ breakout-signal/
 │       ├── bs-app.jsx      ← app shell: topbar, slim nav rail, 4 tabs, all API/state
 │       ├── bs-views.jsx    ← views: chart workspace, portfolio, backtest, jobs, FAQ drawer
 │       ├── bt-chart.jsx    ← React chart panel (fetches /api/chart/{ticker})
-│       ├── bt-screener.jsx ← Screener RRG view (sector roll-up → drill → click symbol opens its chart)
+│       ├── bt-screener.jsx ← Screener RRG view (chart-style 2-pane: RRG map + sector leaderboard; click a stock → chart loads in the left pane)
 │       └── lwc-render.js   ← shared lightweight-charts renderer (also inlined by --view)
 │
 ├── output/                 ← Chart data builder + CLI --view
@@ -246,7 +246,7 @@ Open `http://localhost:8080` after starting the app. Single-page React app — s
 | Tab | Content |
 |---|---|
 | **Chart** | Chart panel (native lightweight-charts: candles, EMA10/EMA20/SMA50, buy/sell markers, breakout level) + tabbed right panel: Watchlist (grouped by MA10/MA20/MA50) / Alerts / Fakeouts / EOD. Click any row to load its chart. |
-| **Screener** | Relative Rotation Graph of the **above-SMA50 tradable universe** (every liquid SET stock above SMA50, not just watchlist/breakout names). Axes = RSM-100 (established) × RSM-21 (recent), median-centered. Default = sector roll-up; click a sector (dot or row) to drill into its members; click a symbol to open its chart. Built by the EOD scan, served from `/api/screener`. |
+| **Screener** | Relative Rotation Graph of the **above-SMA50 tradable universe** (every liquid SET stock above SMA50, not just watchlist/breakout names). Chart-style 2-pane: RRG map left + sector-strength leaderboard right. Axes = RSM-100 (established) × RSM-21 (recent), median-centered; each sector dot carries a rotation tail (toggle). Default = sector roll-up; click a sector (dot or row) to drill into its members; click a stock to swap the left pane to its chart in-place (no tab switch; `‹ Back to rotation map` returns). Built by the EOD scan, served from `/api/screener`. |
 | **Portfolio** | Equity / Open P&L / Realized / Exposure KPIs, open positions, closed trades |
 | **Backtest** | Per-symbol breakout stats, criteria filter (Prime/STR/RVOL/RSM/SMA50) |
 | **Jobs** | Scheduler job cards (Run now), recent runs, live console, Discord notify test (merged old Tools) |
