@@ -8,6 +8,8 @@
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -353,6 +355,78 @@
     .ld-streak { font-size: 10px; font-weight: 700; color: #15803d; background: #e7f6ec; border: 1px solid #b7e3c4; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
     .ld-streak.flat { color: var(--mut3); background: transparent; border-color: transparent; }
     .ld-more { padding: 12px 18px; font-size: 11px; color: var(--mut2); text-align: center; }
+
+    /* ───────── macro map ───────── */
+    .mm-gauges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 14px; }
+    .mm-gauge { background: var(--card); border: 1px solid var(--bd-soft); border-radius: var(--radius); box-shadow: var(--shadow); padding: 13px 15px; display: flex; flex-direction: column; gap: 4px; }
+    .mm-gauge .g-l { font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--mut2); }
+    .mm-gauge .g-v { font-size: 23px; font-weight: 700; letter-spacing: -0.02em; color: var(--navy); }
+    .mm-gauge .g-c { font-size: 11px; font-weight: 600; }
+    .mm-gauge .g-c.up { color: var(--green); } .mm-gauge .g-c.dn { color: var(--red); } .mm-gauge .g-c.dm { color: var(--mut); }
+
+    .mm-grid { display: grid; grid-template-columns: 1.55fr 1fr; gap: 14px; margin-bottom: 14px; align-items: stretch; }
+    .mm-card { background: var(--card); border: 1px solid var(--bd-soft); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .mm-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 16px 11px; border-bottom: 1px solid var(--bd-soft); }
+    .mm-card-t { font-size: 13px; font-weight: 700; color: var(--navy); letter-spacing: -0.01em; }
+    .mm-card-sub { font-size: 10.5px; color: var(--mut2); margin-top: 2px; }
+
+    .mm-map-card { display: flex; flex-direction: column; }
+    .mm-map-card .mm-mapwrap { flex: 1; display: flex; align-items: center; }
+    .mm-mapwrap { position: relative; padding: 8px 10px 2px; }
+    .mm-svg { width: 100%; height: auto; display: block; }
+    .mm-sphere { fill: #f3f6fb; }
+    .mm-grat { fill: none; stroke: #e2e8f0; stroke-width: 0.4; }
+    .mm-country { stroke: #fff; stroke-width: 0.5; transition: opacity .12s; }
+    .mm-country.hl { stroke: var(--navy); stroke-width: 1.1; }
+    .mm-th-ring { fill: none; stroke: var(--blue); stroke-width: 1.6; }
+    .mm-th-lbl { font-size: 9px; font-weight: 800; letter-spacing: 0.04em; fill: var(--blue); paint-order: stroke; stroke: #fff; stroke-width: 2.4px; stroke-linejoin: round; }
+    .mm-maploading { height: 300px; display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--mut3); font-size: 12.5px; }
+    .mm-mapspin { width: 15px; height: 15px; border: 2px solid var(--bd); border-top-color: var(--blue); border-radius: 50%; animation: mmspin .7s linear infinite; }
+    @keyframes mmspin { to { transform: rotate(360deg); } }
+    .mm-readout { position: absolute; bottom: 14px; left: 18px; background: rgba(255,255,255,0.95); border: 1px solid var(--bd-soft); border-radius: 10px; padding: 10px 13px; min-width: 156px; box-shadow: var(--shadow); backdrop-filter: blur(2px); }
+    .mm-ro-ctry { font-size: 13px; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 7px; }
+    .mm-ro-home { font-size: 7.5px; font-weight: 800; letter-spacing: 0.05em; color: #fff; background: var(--blue); border-radius: 3px; padding: 1px 5px; }
+    .mm-ro-idx { font-size: 10.5px; color: var(--mut); margin: 1px 0 7px; }
+    .mm-ro-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+    .mm-ro-last { font-size: 17px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+    .mm-ro-chg { font-size: 13px; font-weight: 700; }
+    .mm-ro-chg.up { color: var(--green); } .mm-ro-chg.dn { color: var(--red); }
+    .mm-ro-wk { font-size: 10px; color: var(--mut2); margin-top: 3px; }
+    .mm-ro-histo { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
+    .mm-ro-histo-lbl { font-size: 9px; font-weight: 600; letter-spacing: 0.03em; color: var(--mut2); }
+    .mm-legend { display: flex; align-items: center; gap: 8px; padding: 4px 16px 13px; font-size: 10px; color: var(--mut2); }
+    .mm-legbar { height: 8px; width: 156px; border-radius: 4px; background: linear-gradient(90deg, #e0545f, #e3a72e 50%, #0c9b7d); }
+    .mm-leg-sep { color: var(--bd); margin: 0 2px; }
+    .mm-leg-nd { width: 11px; height: 11px; border-radius: 3px; background: #eef2f6; border: 1px solid #dde4ec; display: inline-block; }
+
+    .mm-idx-card { align-self: stretch; }
+    .mm-idx { max-height: 470px; overflow-y: auto; }
+    .mm-idx::-webkit-scrollbar { width: 8px; }
+    .mm-idx::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 4px; border: 2px solid var(--card); }
+    .mm-reg { position: sticky; top: 0; z-index: 1; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); background: var(--head); padding: 6px 16px; border-bottom: 1px solid var(--bd-soft); }
+    .mm-irow { display: grid; grid-template-columns: 1fr 88px 52px 48px; gap: 8px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--row); }
+    .mm-irow:hover { background: var(--head); }
+    .mm-irow.sub { padding-top: 5px; padding-bottom: 5px; background: #fbfcfe; }
+    .mm-iname { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .mm-iidx { font-size: 12.5px; font-weight: 700; color: var(--navy); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .mm-irow.sub .mm-iidx { font-size: 11px; font-weight: 500; color: var(--mut); padding-left: 10px; }
+    .mm-home-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+    .mm-ictry { font-size: 9.5px; color: var(--mut2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mm-ilast { font-size: 11.5px; text-align: right; color: var(--ink); }
+    .mm-ichg { font-size: 11.5px; text-align: right; font-weight: 600; }
+    .mm-ichg.up { color: var(--green); } .mm-ichg.dn { color: var(--red); }
+    .mm-histo { justify-self: center; display: block; }
+
+    .mm-bottom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .mm-brow { display: grid; grid-template-columns: 1fr 76px 56px 50px; gap: 9px; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--row); }
+    .mm-brow:last-child { border-bottom: none; }
+    .mm-brow:hover { background: var(--head); }
+    .mm-bname { font-size: 12.5px; font-weight: 600; color: var(--navy); display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+    .mm-bunit { font-size: 9px; font-weight: 600; color: var(--mut3); letter-spacing: 0.02em; }
+    .mm-blast { font-size: 11.5px; text-align: right; color: var(--ink); }
+    .mm-bchg { font-size: 11.5px; text-align: right; font-weight: 600; }
+    .mm-bchg.up { color: var(--green); } .mm-bchg.dn { color: var(--red); }
+    .mm-hot { font-size: 8.5px; font-weight: 800; letter-spacing: 0.03em; color: #9a3412; background: #ffedd5; border: 1px solid #fdba74; border-radius: 999px; padding: 1px 6px; white-space: nowrap; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -362,6 +436,7 @@
   <script type="text/babel" src="/static/bt-chart.jsx"></script>
   <script type="text/babel" src="/static/bs-views.jsx"></script>
   <script type="text/babel" src="/static/bt-screener.jsx"></script>
+  <script type="text/babel" src="/static/bt-macro.jsx"></script>
   <script type="text/babel" src="/static/bs-app.jsx"></script>
 </body>
 </html>

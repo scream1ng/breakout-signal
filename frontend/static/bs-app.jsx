@@ -1,8 +1,8 @@
 /* bs-app.jsx — Terminal shell with real API integration. */
-const { Topbar, NavRail, ChartWorkspace, BacktestView, PortfolioView, JobsView, ScreenerView, HelpDrawer, RunModal } = window;
+const { Topbar, NavRail, ChartWorkspace, BacktestView, PortfolioView, JobsView, ScreenerView, MacroPage, HelpDrawer, RunModal } = window;
 const { bkkDateIso, isMarketOpenOrLater, tickerText } = window.BS;
 
-const TABS = ['chart', 'screener', 'portfolio', 'backtest', 'jobs'];
+const TABS = ['chart', 'screener', 'macro', 'portfolio', 'backtest', 'jobs'];
 
 const JOB_DEFS = [
   { name: 'intraday_scan', label: 'Intraday Scan',  next_key: 'intraday_scan' },
@@ -47,6 +47,7 @@ function App() {
   const [scanLatest, setScanLatest] = React.useState({ date: null, signals: [] });
   const [backtest, setBacktest] = React.useState(null);
   const [screener, setScreener] = React.useState(null);
+  const [macro, setMacro] = React.useState(null);
   const [watchlist, setWatchlist] = React.useState(null);
   const [portfolio, setPortfolio] = React.useState(null);
   const [running, setRunning] = React.useState({});
@@ -152,6 +153,15 @@ function App() {
     } catch (e) { pushLog(`ERROR loadScreener: ${e.message}`); setScreener(false); return false; }
   };
 
+  const loadMacro = async () => {
+    try {
+      const r = await fetch('/api/macro');
+      if (!r.ok) throw new Error(r.statusText);
+      setMacro(await r.json());
+      return true;
+    } catch (e) { pushLog(`ERROR loadMacro: ${e.message}`); setMacro(false); return false; }
+  };
+
   const loadWatchlist = async () => {
     try {
       const r = await fetch('/api/watchlist/detail');
@@ -212,6 +222,7 @@ function App() {
   React.useEffect(() => {
     if (tab === 'chart'     && watchlist === null) loadWatchlist();
     if (tab === 'screener'  && screener  === null) loadScreener();
+    if (tab === 'macro'     && macro     === null) loadMacro();
     if (tab === 'backtest'  && backtest  === null) loadBacktest();
     if (tab === 'portfolio' && portfolio === null) loadPortfolio();
   }, [tab]);
@@ -253,6 +264,7 @@ function App() {
     try {
       const tasks = [loadCore(), loadWatchlist()];
       if (tab === 'screener')  tasks.push(loadScreener());
+      if (tab === 'macro')     tasks.push(loadMacro());
       if (tab === 'backtest')  tasks.push(loadBacktest());
       if (tab === 'portfolio') tasks.push(loadPortfolio());
       const ok = (await Promise.all(tasks)).every(Boolean);
@@ -275,6 +287,7 @@ function App() {
           <ChartWorkspace selected={chartSelected} onSelect={setSelected}
             watchlist={watchlist} intraday={intraday} fakeouts={fakeouts} eod={eod} />}
         {tab === 'screener'  && <ScreenerView universe={screener} />}
+        {tab === 'macro'     && <MacroPage macro={macro} />}
         {tab === 'portfolio' && <PortfolioView portfolio={portfolio} onSelect={openChart} />}
         {tab === 'backtest'  && <BacktestView backtest={backtest} onSelect={openChart} />}
         {tab === 'jobs'      &&
