@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.storage.db import init_db
 from app.scheduler.runner import get_scheduler, register_jobs
-from app.api import system, portfolio, signals, trades, scan
+from app.api import system, portfolio, signals, trades, scan, macro
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,6 +50,7 @@ def _frontend_asset_version() -> str:
         os.path.join(STATIC_DIR, 'bs-data.jsx'),
         os.path.join(STATIC_DIR, 'bs-views.jsx'),
         os.path.join(STATIC_DIR, 'bt-screener.jsx'),
+        os.path.join(STATIC_DIR, 'bt-macro.jsx'),
         os.path.join(STATIC_DIR, 'bs-app.jsx'),
     ]
     latest_mtime = 0
@@ -100,6 +101,7 @@ app.include_router(portfolio.router, prefix='/api', tags=['Portfolio'])
 app.include_router(signals.router,   prefix='/api', tags=['Signals'])
 app.include_router(trades.router,    prefix='/api', tags=['Trades'])
 app.include_router(scan.router,      prefix='/api', tags=['Scan'])
+app.include_router(macro.router,     prefix='/api', tags=['Macro'])
 
 # ── Static file mounts ────────────────────────────────────────────────────────
 app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')
@@ -128,7 +130,7 @@ def spa(full_path: str = ''):
             html = f.read()
 
         asset_version = _frontend_asset_version()
-        for fname in ('style.css', 'app.js', 'bs-data.jsx', 'bs-views.jsx', 'bt-screener.jsx', 'bs-app.jsx'):
+        for fname in ('style.css', 'app.js', 'bs-data.jsx', 'bs-views.jsx', 'bt-screener.jsx', 'bt-macro.jsx', 'bs-app.jsx'):
             html = html.replace(f'/static/{fname}', f'/static/{fname}?v={asset_version}')
         return HTMLResponse(html)
     return {'detail': 'Frontend not found — run from project root'}

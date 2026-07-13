@@ -57,12 +57,15 @@ function NavIcon({ id }) {
     return (<svg {...p}><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 7 7 7"/><polyline points="12 8 12 12 15 14"/></svg>);
   if (id === 'portfolio')
     return (<svg {...p}><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="3" y1="12.5" x2="21" y2="12.5"/></svg>);
+  if (id === 'macro')
+    return (<svg {...p}><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/><path d="M4.5 7.5a13 13 0 0 0 15 0"/><path d="M4.5 16.5a13 13 0 0 1 15 0"/></svg>);
   return (<svg {...p}><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><polyline points="3 5.5 4 6.5 5.5 4.5"/><polyline points="3 11.5 4 12.5 5.5 10.5"/><circle cx="4" cy="18" r="0.6" fill="currentColor"/></svg>);
 }
 
 const NAV = [
   { id: 'chart', label: 'Chart' },
   { id: 'screener', label: 'Screener' },
+  { id: 'macro', label: 'Macro' },
   { id: 'portfolio', label: 'Portfolio' },
   { id: 'backtest', label: 'Backtest' },
   { id: 'jobs', label: 'Jobs' },
