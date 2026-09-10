@@ -80,7 +80,11 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     logger.info('Scheduler started — %d jobs registered', len(scheduler.get_jobs()))
 
-    yield   # ← app is running
+    # The MCP streamable endpoint (dispatched at /mcp by asgi.py) needs its
+    # session manager task group running, stateless or not.
+    from mcp_server import session_manager_lifespan
+    async with session_manager_lifespan():
+        yield   # ← app is running
 
     # ── Shutdown ─────────────────────────────────────────────────────────────
     logger.info('Shutting down scheduler …')
