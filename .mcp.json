@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "breakout-signal": {
+      "command": "/Users/oakky/Projects/breakout-signal/.venv/bin/python",
+      "args": ["/Users/oakky/Projects/breakout-signal/mcp_server.py"]
+    }
+  }
+}
