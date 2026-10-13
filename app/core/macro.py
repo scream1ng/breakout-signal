@@ -83,6 +83,8 @@ FX = [
 def _fetch_close(ticker: str, period: str = '6mo') -> pd.Series | None:
     """Daily close series, indexed by date (kept — needed to align against the
     benchmark's own dates, since different markets trade different calendars)."""
+    if ticker == '^SET.BK':
+        return _fetch_set_close()
     try:
         df = yf.download(ticker, period=period, interval='1d', progress=False, auto_adjust=True)
         if df is None or df.empty:
@@ -91,6 +93,22 @@ def _fetch_close(ticker: str, period: str = '6mo') -> pd.Series | None:
         if isinstance(closes, pd.DataFrame):   # yfinance sometimes returns a 1-col frame
             closes = closes.iloc[:, 0]
         closes.index = pd.DatetimeIndex(closes.index).tz_localize(None)
+        return closes if len(closes) >= 2 else None
+    except Exception:
+        return None
+
+
+def _fetch_set_close() -> pd.Series | None:
+    """SET index via the project's loader (SETTRADE → yfinance fallback) —
+    yfinance alone returns only ~1 bar for ^SET.BK. SETTRADE stamps daily
+    bars at 00:00 BKK expressed as UTC (17:00 prior day), so shift to BKK dates."""
+    from app.core.data import load_ticker
+    try:
+        df = load_ticker('^SET.BK')
+        if df is None or df.empty:
+            return None
+        closes = df['Close'].dropna()
+        closes.index = (pd.DatetimeIndex(closes.index) + pd.Timedelta(hours=7)).normalize()
         return closes if len(closes) >= 2 else None
     except Exception:
         return None
