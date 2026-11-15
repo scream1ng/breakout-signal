@@ -288,19 +288,32 @@ def _build_intraday_embed(signals: list, time_str: str, cfg: dict) -> dict:
         ir = _icon_rsm(round(rsm), rsm_min)
         is_ = _icon_str(stretch)
 
+        act = '🟢' if s.get('action') == 'BUY' else '⚪'
         lines.append(
-            f'`{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<10}` `{crit:<8}` '
+            f'{act} `{ticker:<8}` `{level_s:>7}` `{price:>7}` `{kind:<10}` `{crit:<8}` '
             f'{iv}`{rvol:.1f}x` {ir}`{round(rsm)}` {is_}`{stretch:.1f}x`'
         )
 
     chart_url = get_chart_url()
-    header_line = '`TICKER  ` `  LEVEL` `  PRICE` `TYPE      ` `CRIT    ` `RVOL ` `RSM` `STR `'
-    desc = header_line + '\n' + '\u2500' * 60 + '\n' + '\n'.join(lines) + f'\n\n\U0001f517 [View dashboard]({chart_url})'
+    header_line = '   `TICKER  ` `  LEVEL` `  PRICE` `TYPE      ` `CRIT    ` `RVOL ` `RSM` `STR `'
+    desc = header_line + '\n' + '\u2500' * 60 + '\n' + '\n'.join(lines)
+
+    buys = [s for s in sorted_sigs if s.get('action') == 'BUY']
+    watch = [s for s in sorted_sigs if s.get('action') != 'BUY']
+    if buys:
+        desc += '\n\n**🟢 BUY now (paper bought at this price)**\n' + '\n'.join(
+            f"`{s.get('ticker', '').replace('.BK', ''):<8}` {s.get('shares', 0):,} sh @ `{_fmt(s.get('close'))}`"
+            f" · stop `{_fmt(s.get('sl'))}` · TP1 `{_fmt(s.get('tp1'))}` · exit < SMA50"
+            for s in buys)
+    if watch:
+        desc += '\n\n**⚪ Watch only — not bought**\n' + '\n'.join(
+            f"`{s.get('ticker', '').replace('.BK', ''):<8}` {s.get('reason', '—')}" for s in watch)
+    desc += f'\n\n\U0001f517 [View dashboard]({chart_url})'
 
     return {
         'color':  DISCORD_COLOR_INTRADAY,
-        'author': {'name': f'▲ Live breakout signals · {len(signals)} stocks · {time_str} BKK'},
-        'title':  'Intraday scan — active breakouts',
+        'author': {'name': f'▲ Live breakouts · {len(buys)} BUY · {len(watch)} watch · {time_str} BKK'},
+        'title':  'Intraday scan — BUY = paper trade opened',
         'description': desc,
         'footer': {'text': f'Intraday sniper · next scan in 15 min'},
     }
@@ -321,7 +334,7 @@ def _build_fakeout_embed(signals: list, time_str: str) -> dict:
             f'Level `{level}` | Close `{close}` ({chg_pct:+.1f}%) | Gap `{gap}`'
         )
 
-    desc = '\n\n'.join(blocks) + '\n\n⚡ Closed below pivot — consider exiting open positions'
+    desc = '\n\n'.join(blocks) + '\n\n⚪ Info only — paper trades keep holding; the stop / SMA50 exit decides'
 
     return {
         'color':  DISCORD_COLOR_FAKEOUT,
@@ -754,16 +767,17 @@ def send_review_alert(signals: list, now, cfg: dict) -> bool:
 
 
 def send_eod_alert(today_signals: list, pending_list: list, results: list,
-                   date_str: str, cfg: dict, intraday_recap=None) -> bool:
+                   date_str: str, cfg: dict, intraday_recap=None, market_note: str = '') -> bool:
     """Discord only — EOD embed with full metrics table."""
     date_fmt = date_str.replace('_', '-')
+    market_line = f'\n\n{market_note}' if market_note else ''
     if not today_signals:
         # Send a brief no-signal summary
         embed = {
             'color':  DISCORD_COLOR_EOD,
             'author': {'name': f'◑ End-of-day scan · {date_fmt}'},
             'title':  'No breakouts today',
-            'description': f'{len(pending_list)} stocks on watchlist for tomorrow.',
+            'description': f'{len(pending_list)} stocks on watchlist for tomorrow.' + market_line,
             'footer': {'text': f'EOD scanner · {get_chart_url()}'},
         }
         ok = _send_discord(f'EOD {date_fmt}', embed)
@@ -771,6 +785,7 @@ def send_eod_alert(today_signals: list, pending_list: list, results: list,
         return ok
 
     embed = _build_eod_embed(today_signals, cfg, date_fmt, intraday_recap=intraday_recap)
+    embed['description'] += market_line
     # Add watchlist count to footer
     embed['footer']['text'] = (
         f'EOD scanner · {len(pending_list)} on watchlist · {get_chart_url()}'
@@ -780,3 +795,27 @@ def send_eod_alert(today_signals: list, pending_list: list, results: list,
     return ok
 
 
+def send_paper_exits(events: list, now) -> bool:
+    """Discord — paper SELL messages from the 16:25 review (partials + full exits)."""
+    if not events:
+        return False
+    lines = []
+    for e in events:
+        tk = str(e.get('ticker', '')).replace('.BK', '')
+        if e.get('shares'):
+            lines.append(f"🟡 **{tk}** sell {e['shares']:,} sh @ `{_fmt(e.get('price'))}` · {e['kind']} (partial)")
+        else:
+            pnl = e.get('total_pnl') or 0
+            icon = '🟢' if pnl >= 0 else '🔴'
+            lines.append(f"{icon} **{tk}** sell all @ `{_fmt(e.get('price'))}` · {e['kind']} · "
+                         f"P/L ฿{pnl:+,.0f} ({(e.get('pnl_pct') or 0):+.1f}%)")
+    embed = {
+        'color':  DISCORD_COLOR_FAKEOUT,
+        'author': {'name': f"▼ Paper sells · {now.strftime('%Y-%m-%d %H:%M')} BKK"},
+        'title':  'SELL — paper trades closed / trimmed at the close',
+        'description': '\n'.join(lines) + f'\n\n\U0001f517 [View portfolio]({get_chart_url()})',
+        'footer': {'text': 'Rules: stop 2×ATR · TP1 +2 ATR · TP2 +4 ATR · exit on close < SMA50'},
+    }
+    ok = _send_discord(f"PAPER SELL {now.strftime('%H:%M')}", embed)
+    print(f'  {"Discord sent" if ok else "Discord failed"} — {len(events)} paper sell(s)')
+    return ok

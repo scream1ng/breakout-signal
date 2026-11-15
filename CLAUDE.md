@@ -132,18 +132,24 @@ breakout-signal/
 
 ---
 
-## PAPER TRADE EXIT LOGIC
+## PAPER TRADE LOGIC (v2 — evidence in `backtest_research.py`)
 
-Checked every intraday scan. Size formula: `capital × risk_pct / (ATR × sl_mult)`
+**Entry:** the 15-min intraday scan decides at that moment and buys at the live price when a watchlist
+level breaks with RSM ≥ 80, stretch ≤ 4 (Prime or RSM label; volume not required) and the last EOD scan
+saw SET above a **rising** SMA50 (higher than 20 days ago). Discord 🟢 BUY lines == paper buys; ⚪ watch lines show why not bought.
+Fakeouts are held (no 16:25 fakeout exit — the 2×ATR stop handles them).
+Size formula: `capital × paper_risk_pct (0.5%) / (ATR × paper_sl_atr_mult (2))`; cash includes realized P/L.
+
+**Exits:** checked once a day at the 16:25 review (not every 15 min); each sell is posted to Discord.
 
 | Exit | Trigger | Action |
 |---|---|---|
 | **TP1** | close ≥ entry + 2×ATR | Sell 30% |
-| **Breakeven** | After `be_days` (3) bars | Move SL → entry |
 | **TP2** | close ≥ entry + 4×ATR | Sell ~30% of remaining |
-| **EMA10 trail** | close < EMA10 | Exit remaining |
-| **SL** | close ≤ stop | Exit all |
-| **False breakout** | 16:25 review: close < pivot | Exit all |
+| **SMA50 trail** | close < SMA50 | Exit remaining |
+| **SL** | close ≤ entry − 2×ATR | Exit all |
+
+Reset: `python -m app.core.paper_trader --reset` (archives to `paper_trades_archive_<date>`).
 
 ---
 
