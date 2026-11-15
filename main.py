@@ -776,6 +776,25 @@ def main():
     except Exception as _e:
         print(f'  [warn] Watchlist DB save skipped: {_e}')
 
+    # ── Market filter for tomorrow's 15-min paper buys (SET vs SMA50) ─────
+    market_note = ''
+    try:
+        from app.core import paper_trader
+        set_sma50 = bench.rolling(50).mean()
+        stale = (datetime.today() - pd.Timestamp(bench.index[-1]).to_pydatetime().replace(tzinfo=None)).days > 4
+        sma50_rising = bool(set_sma50.iloc[-1] > set_sma50.iloc[-21])   # flat/falling = sideways market
+        market = dict(date=str(bench.index[-1])[:10], set_close=round(float(bench.iloc[-1]), 2),
+                      set_sma50=round(float(set_sma50.iloc[-1]), 2), sma50_rising=sma50_rising, stale=stale,
+                      up=bool(bench.iloc[-1] > set_sma50.iloc[-1]) and sma50_rising and not stale)   # stale SET → no buys
+        paper_trader.save_market(market)
+        market_note = (f"**Market {'UP 🟢 — BUY alerts active tomorrow' if market['up'] else 'DOWN 🔴 — no buys tomorrow (watch only)'}**"
+                       f" · SET {market['set_close']:,.0f} vs SMA50 {market['set_sma50']:,.0f}"
+                       f" ({'rising' if sma50_rising else 'flat/falling'})")
+        print(f"  Market: SET {market['set_close']:.0f} ({market['date']}) vs SMA50 {market['set_sma50']:.0f} → "
+              f"{'UP — buys allowed' if market['up'] else 'DOWN — no buys'}")
+    except Exception as _e:
+        print(f'  [warn] Market state skipped: {_e}')
+
     # ── Persist per-ticker chart payloads (signal + watchlist only) ───────
     # Each is a small ChartData row keyed by ticker — served on demand by
     # /api/chart/{ticker}. Replaces the old multi-MB 'chart_html' DB blob.
@@ -803,6 +822,7 @@ def main():
             sent = send_eod_alert(
                 today_signals, pending_list, results, DATE_STR, CFG,
                 intraday_recap=build_intraday_recap(today_signals, DATE_STR),
+                market_note=market_note,
             )
             _mark_eod_alert_sent(DATE_STR, discord_sent=sent)
 

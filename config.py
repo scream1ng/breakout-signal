@@ -59,4 +59,11 @@ CFG = {
 
     "rvol_period": 20,     # lookback bars for relative volume
     "rvol_min":    2.0,    # min RVol to qualify as high-conviction break
+
+    # --- Paper trading (v2 rules — see backtest_research.py) ---
+    # Entries: EOD-confirmed Prime only, only while SET > SMA50, bought next session.
+    "paper_risk_pct":      0.005,   # 2×ATR stop already halves position size vs v1
+    "paper_sl_atr_mult":   2,       # initial stop = entry − 2×ATR
+    "paper_trail":         "SMA50", # exit remaining shares on close below this MA
+    "paper_be_after_days": None,    # None = no breakeven move
 }

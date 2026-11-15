@@ -24,7 +24,7 @@ from app.scheduler.windows import is_allowed_intraday_scheduler_slot, scheduler_
 from app.core.data import load_ticker, load_benchmark
 from app.core.rsm import calc_live_rsm
 from output.report import print_intraday
-from output.notifications import send_intraday_alert, send_review_alert
+from output.notifications import send_intraday_alert, send_review_alert, send_paper_exits
 
 BKK     = pytz.timezone('Asia/Bangkok')
 WL_PATH = os.path.join(ROOT, 'data', 'watchlist.json')
@@ -197,64 +197,71 @@ def criteria_label(rsm, rvol, stretch=0):
     return 'SMA50'
 
 
-def _run_paper_update(signals, data, now):
-    """Check paper exits for open positions; open new ones for Prime signals."""
+def _run_paper_buys(signals, now):
+    """
+    15-min scan: decide BUY / watch for each new breakout and open paper trades
+    at the live price. Annotates each signal with action/reason (+ shares/sl/tp1)
+    so the Discord alert shows exactly what the paper account did.
+    """
     try:
         from app.core import paper_trader
+        market = paper_trader.load_market() or {}
+        market_up = bool(market.get('up'))
         pt = paper_trader.load_trades()
-        open_pos = list(pt.get('open', []))
-        newly_closed = []
-
-        if open_pos:
-            exit_data = paper_trader.fetch_exit_data(open_pos)
-            open_pos, newly_closed = paper_trader.check_exits(open_pos, exit_data, now, CFG)
-            pt['closed'] = pt.get('closed', []) + newly_closed
-            for p in newly_closed:
-                sign = '+' if (p.get('total_pnl') or 0) >= 0 else ''
-                _log(f'[paper] CLOSED {p["ticker"].replace(".BK","")} {p["exit_reason"]} '
-                     f'pnl={sign}฿{(p.get("total_pnl") or 0):.0f}')
-
-        prime = [s for s in (signals or []) if s.get('criteria') == 'Prime']
-        opened = 0
-        for sig in prime:
-            trade, err = paper_trader.open_position(sig, CFG, now, open_pos)
+        pt.setdefault('open', [])
+        bought = 0
+        for s in signals:
+            trade, reason = paper_trader.buy_decision(s, market_up, pt, CFG, now)
             if trade:
-                open_pos.append(trade)
-                opened += 1
-                tk = sig.get('ticker_full', sig.get('ticker', '?')).replace('.BK', '')
-                _log(f'[paper] OPENED {tk} @ {trade["entry_price"]:.2f} × {trade["shares"]} '
+                bought += 1
+                s.update(action='BUY', shares=trade['shares'], sl=trade['sl'], tp1=trade['tp1'])
+                _log(f'[paper] BUY {s["ticker"]} @ {trade["entry_price"]:.2f} × {trade["shares"]} '
                      f'SL={trade["sl"]:.2f} TP1={trade["tp1"]:.2f}')
-            elif err:
-                _log(f'[paper] skip — {err}')
-
-        if newly_closed or opened:
-            pt['open'] = open_pos
+            else:
+                s.update(action='WATCH', reason=reason)
+                _log(f'[paper] watch {s["ticker"]} — {reason}')
+        if bought:
             paper_trader.save_trades(pt)
     except Exception as e:
         _log(f'[paper] error: {e}')
+        for s in signals:
+            s.setdefault('action', 'WATCH')
+            s.setdefault('reason', 'paper error')
 
 
-def _run_paper_fakeout(signals, data, now):
-    """Exit paper positions that faked out (close < level at 16:25 review)."""
+def _run_paper_exits(now):
+    """16:25 review: apply SL / TP / trail-MA exits once a day, near the close."""
     try:
         from app.core import paper_trader
         pt = paper_trader.load_trades()
         open_pos = list(pt.get('open', []))
         if not open_pos:
             return
-        fakeout_tickers = {s.get('ticker_full', s.get('ticker', '')) for s in signals}
-        prices_map = {t: {'close': d['close']} for t, d in data.items()}
-        still_open, newly_closed = paper_trader.fakeout_exits(open_pos, fakeout_tickers, prices_map, now, CFG)
-        if newly_closed:
-            pt['open'] = still_open
-            pt['closed'] = pt.get('closed', []) + newly_closed
-            paper_trader.save_trades(pt)
-            for p in newly_closed:
-                sign = '+' if (p.get('total_pnl') or 0) >= 0 else ''
-                _log(f'[paper] FAKEOUT {p["ticker"].replace(".BK","")} '
-                     f'pnl={sign}฿{(p.get("total_pnl") or 0):.0f}')
+        before = {p['ticker']: (p.get('tp1_shares_sold', 0), p.get('tp2_shares_sold', 0)) for p in open_pos}
+        exit_data = paper_trader.fetch_exit_data(open_pos, CFG)
+        still_open, newly_closed = paper_trader.check_exits(open_pos, exit_data, now, CFG)
+        pt['open'] = still_open
+        pt['closed'] = pt.get('closed', []) + newly_closed
+        paper_trader.save_trades(pt)
+
+        events = []
+        for p in still_open + newly_closed:
+            b1, b2 = before.get(p['ticker'], (0, 0))
+            for tag, sold, prev, px in (('TP1', p.get('tp1_shares_sold', 0), b1, p.get('tp1')),
+                                        ('TP2', p.get('tp2_shares_sold', 0), b2, p.get('tp2'))):
+                if sold and not prev:
+                    events.append(dict(ticker=p['ticker'], kind=tag, shares=sold, price=px,
+                                       entry_price=p['entry_price']))
+        for p in newly_closed:
+            events.append(dict(ticker=p['ticker'], kind=p['exit_reason'], shares=None,
+                               price=p['exit_price'], entry_price=p['entry_price'],
+                               total_pnl=p.get('total_pnl'), pnl_pct=p.get('pnl_pct')))
+        for e in events:
+            _log(f'[paper] SELL {e["ticker"].replace(".BK","")} {e["kind"]} @ {e["price"]}')
+        if events and args.discord:
+            send_paper_exits(events, now)
     except Exception as e:
-        _log(f'[paper] fakeout error: {e}')
+        _log(f'[paper] exit error: {e}')
 
 
 def build_live_rsm_map(tickers, data, now):
@@ -320,6 +327,9 @@ def run():
             scan_kind = 'review' if args.review else 'intraday'
             _log(f'Scheduler {scan_kind} slot {slot} BKK is not allowed — skipping')
             return
+
+    if args.review:
+        _run_paper_exits(now)   # independent of watchlist / price download below
 
     alert_state = _load_alert_state(date_str)
     alerted_keys = {item.get('key') for item in alert_state['alerted']}
@@ -527,7 +537,7 @@ def run():
             continue
 
         crit = criteria_label(rsm, proj_rv, w.get('stretch', 0))
-        if crit not in ('Prime', 'RVOL', 'STR'):
+        if crit not in ('Prime', 'RSM', 'RVOL', 'STR'):
             continue
 
         alert_state['alerted'].append(dict(
@@ -573,11 +583,10 @@ def run():
         if args.discord:
             _log(f'Sending Discord → fakeout review')
             send_review_alert(signals, now, CFG)
-        _run_paper_fakeout(signals, data, now)
         _log(f'Done. {len(signals)} fakeout(s)')
         return
 
-    _run_paper_update(signals, data, now)
+    _run_paper_buys(signals, now)
 
     if not signals:
         _log(f'No breakouts. Done.')
